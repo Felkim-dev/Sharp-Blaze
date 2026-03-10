@@ -1,6 +1,6 @@
-# Unificated_Game | Distributed RTS Simulator 🎮🛰️
+# Sharp Blaze | Distributed RTS Simulator 🎮🛰️
 
-**Unificated_Game** is a real-time strategy (RTS) simulator designed as a comprehensive integration platform for five core Computer Science disciplines. Developed over a 12-week timeframe by a two-person team in their seventh semester, the project simulates a networked environment where "data packets" compete for resources within a distributed, highly optimized, and containerized ecosystem.
+**Sharp Blaze** is a real-time strategy (RTS) simulator designed as a comprehensive integration platform for five core Computer Science disciplines. Developed over a 12-week timeframe by a two-person team in their seventh semester, the project simulates a networked environment where "data packets" compete for resources within a distributed, highly optimized, and containerized ecosystem.
 
 ---
 
