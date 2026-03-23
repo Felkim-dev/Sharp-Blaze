@@ -66,4 +66,6 @@ The project is divided into 6 Sprints of 2 weeks each:
 - Lead Developer A - Backend, Networking & Infrastructure - Steve Tene.
 
 - Lead Developer B - Frontend, AI & Optimization Logic - Felipe Quilumbango.
+
+- Lead Developer C - AI impleemntation - Kevin Sánchez.
 --- 
