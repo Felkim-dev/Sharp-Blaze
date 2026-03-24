@@ -2,7 +2,7 @@
 import pygame
 import sys
 from ui.connection_screen import ConnectionScreen
-
+from ui.main_screen import MainScreen
 
 def main():
     pygame.init()
@@ -11,7 +11,7 @@ def main():
     clock = pygame.time.Clock()
 
     # Cargamos la pantalla inicial
-    current_screen = ConnectionScreen(screen)
+    current_screen = MainScreen(screen)
 
     running = True
     while running:
