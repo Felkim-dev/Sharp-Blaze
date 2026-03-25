@@ -21,7 +21,7 @@ class GAME:
         
         self.screens = {
             "MAIN": MainScreen(self,self.screen),
-            # "HOST": HostScreen(self,self.screen),
+            "HOST": HostScreen(self,self.screen),
             # "JOIN": JoinScreen(self,self.screen),
                         }
         
