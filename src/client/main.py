@@ -4,15 +4,16 @@ import sys
 from ui.connection_screen import ConnectionScreen
 from ui.main_screen import MainScreen
 
+WIDTH=1280
+HEIGHT=720
+
 def main():
     pygame.init()
-    screen = pygame.display.set_mode((1280, 720))
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Sharp Blaze - Connection")
     clock = pygame.time.Clock()
-
     # Cargamos la pantalla inicial
     current_screen = MainScreen(screen)
-
     running = True
     while running:
         events = pygame.event.get()

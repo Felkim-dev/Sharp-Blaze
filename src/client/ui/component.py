@@ -12,14 +12,15 @@ class Button:
         
         #Figures Instantiation
         self.button_rectangle = pygame.Rect(Position,(RectangleDimension))
-        self.text_surface = self.button_font.render(self.text_string,True,(255, 255, 255))
+        self.text_surface = self.button_font.render(self.text_string,True,(0, 0, 0))
         
-        #Center
+        # Text Rec Center
         self.text_rect = self.text_surface.get_rect()
         self.text_rect.center = self.button_rectangle.center
         
     def draw(self,screen):
-        pygame.draw.rect(screen,self.ButtonColor,self.button_rectangle)
+        
+        pygame.draw.rect(screen,self.ButtonColor,self.button_rectangle,border_radius=7)
         screen.blit(self.text_surface, self.text_rect)
         
 
