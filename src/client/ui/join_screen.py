@@ -1,0 +1,2 @@
+class JoinScreen:
+    pass

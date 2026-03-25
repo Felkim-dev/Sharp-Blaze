@@ -3,7 +3,8 @@ from ui.component import Button
 import sys
 
 class MainScreen:
-    def __init__(self, screen):
+    def __init__(self, screen_manager,screen):
+        self.screen_manager = screen_manager
         self.screen = screen
 
         # Colors
@@ -52,7 +53,6 @@ class MainScreen:
                     print("Abriendo OPCIONES...")
 
                 elif self.btn_exit.button_rectangle.collidepoint(mouse_pos):
-                    print("Saliendo del juego...")
                     pygame.quit()
                     sys.exit()
 
