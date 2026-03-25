@@ -32,7 +32,7 @@ class MainScreen:
         self.btn_options = Button((center_x, init_y + separation_y * 3), BUTTON_WH, LIGHT_BLUE, "Options", BLACK, TEXT_SIZE)
         self.btn_exit = Button((center_x, init_y + separation_y * 4), BUTTON_WH, RED, "Exit", BLACK, TEXT_SIZE)
 
-    def handle_events(self, events):
+    def handle_events(self, events,keys):
 
         for event in events:
 

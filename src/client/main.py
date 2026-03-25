@@ -42,7 +42,9 @@ class GAME:
                     pygame.quit()
                     sys.exit()
             
-            self.current_screen.handle_events(events)
+            keys = pygame.key.get_pressed()
+    
+            self.current_screen.handle_events(events,keys)
             self.current_screen.draw()
             
             pygame.display.flip()

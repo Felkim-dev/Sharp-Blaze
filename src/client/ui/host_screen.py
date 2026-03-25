@@ -41,7 +41,7 @@ class HostScreen:
 
         self.box_name = InputBox((center_x_input,init_y-100), INPUT_WH, "ENTER USERNAME (>3 CHARACTERS)")
 
-    def handle_events(self, events):
+    def handle_events(self, events,keys):
 
         for event in events:
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -55,10 +55,11 @@ class HostScreen:
 
             if event.type == pygame.KEYDOWN:
                 if self.box_name.is_selected:
-                    if event.key == pygame.K_BACKSPACE:
-                        self.box_name.string_input = self.box_name.string_input[:-1]
-                    else:
-                        self.box_name.string_input += event.unicode
+                    self.box_name.string_input += event.unicode
+                    
+        if keys[pygame.K_BACKSPACE]:
+            self.box_name.string_input = self.box_name.string_input[:-1]
+                        
 
     def draw(self):
         # SCREEN DRAW
