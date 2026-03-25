@@ -8,15 +8,19 @@ class Button:
         self.ButtonColor = ButtonColor
         self.RectangleDimension = RectangleDimension
         self.text_string = Text
-        self.button_font = pygame.font.SysFont("Intro Rust", TextSize, bold= True)
+        self.button_font = pygame.font.Font(r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\assets\IntroRust.otf", TextSize)
         
         #Figures Instantiation
         self.button_rectangle = pygame.Rect(Position,(RectangleDimension))
-        self.button_text = self.button_font.render(self.text_string,True,(255, 255, 255))
+        self.text_surface = self.button_font.render(self.text_string,True,(255, 255, 255))
+        
+        #Center
+        self.text_rect = self.text_surface.get_rect()
+        self.text_rect.center = self.button_rectangle.center
         
     def draw(self,screen):
         pygame.draw.rect(screen,self.ButtonColor,self.button_rectangle)
-        screen.blit(self.button_text,(self.Position[0] + self.RectangleDimension[0]/2 ,self.Position[1]+self.RectangleDimension[1]/3))
+        screen.blit(self.text_surface, self.text_rect)
         
 
 class InputBox:
