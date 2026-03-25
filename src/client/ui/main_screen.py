@@ -41,7 +41,7 @@ class MainScreen:
                     mouse_pos = event.pos
 
                 if self.btn_host.button_rectangle.collidepoint(mouse_pos):
-                    print("Cambiando a pantalla HOST...")
+                    self.screen_manager.change_screen("HOST")
 
                 elif self.btn_join.button_rectangle.collidepoint(mouse_pos):
                     print("Cambiando a pantalla JOIN...")
