@@ -10,7 +10,7 @@ HEIGHT=720
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Sharp Blaze - Connection")
+    pygame.display.set_caption("Sharp Blaze")
     clock = pygame.time.Clock()
     # Cargamos la pantalla inicial
     current_screen = MainScreen(screen)
