@@ -131,7 +131,7 @@ class NetworkManager:
                     if '\n' in self.buffer_recepcion:
                         partes = self.buffer_recepcion.split("\n")
                         self.buffer_recepcion = partes.pop()
-                        
+
                         # Ahora 'partes' solo tiene paquetes JSON completos y perfectos
                         for paquete_texto in partes:
                             if paquete_texto.strip():  # Ignorar líneas en blanco
@@ -156,7 +156,33 @@ class NetworkManager:
         return None
 
     def desconectar(self):
-        self.client.close()
+        # 1. Verificamos que el socket realmente exista
+        if self.client is not None:
+            try:
+                # Intentamos ser educados y avisar que nos vamos
+                if self.connected:
+                    mensaje = json.dumps({"accion": "LEAVE"}) + "\n"
+                    self.client.send(mensaje.encode("utf-8"))
+            except Exception as e:
+                # Si falla el envío, no importa, igual vamos a cerrar
+                print(f"No se pudo enviar el mensaje de despedida: {e}")
+
+            finally:
+                # AQUÍ ESTÁ LA MAGIA: Esto se ejecuta SÍ O SÍ, falle o no el envío
+                try:
+                    self.client.close()
+                except Exception as e:
+                    print(f"Error forzando el cierre del socket: {e}")
+
+                # Reseteamos todas las variables de la red para que quede como nueva
+                self.client = None
+                self.connected = False
+                self.estado_conexion = "IDLE"
+
+                # ¡Súper importante! Limpiamos el balde de mensajes viejos
+                self.buffer_recepcion = ""
+                self.mensajes_pendientes = []
+                print("Desconexión completada y red reiniciada.")
 
 
 if __name__ == "__main__":

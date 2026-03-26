@@ -69,26 +69,26 @@ class LobbyScreen:
         """where screen manages the events of their buttons and input boxes"""
         for event in events:
             if self.btn_close.handle_event(event):
+                self.screen_manager.network.desconectar()
                 self.screen_manager.change_screen("MAIN")
 
     def update(self):
         data = self.screen_manager.network.receive_json()
 
         if data:
-            
+
             print(data)
-            
+
             if data.get("type") == "QUEUE_STATUS":
                 self.textbox_nickname1.text = data["payload"]["you"]
                 self.textbox_nickname2.text = "WAITING..."
                 self.textbox_nickname2.text_color = (84, 84, 84)
-                
+
             if data.get("type") == "MATCH_FOUND":
 
                 self.textbox_nickname1.text = data["payload"]["you"]
                 self.textbox_nickname2.text = data["payload"]["opponent"]
                 self.textbox_nickname2.text_color = self.WHITE
-            
 
     def draw(self):
         # SCREEN DRAW

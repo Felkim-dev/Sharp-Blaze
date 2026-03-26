@@ -1,7 +1,6 @@
 import pygame
 from ui.component import Button, InputBox, Text,CloseButton
 import string
-import socket
 
 SERVER_IP = "10.163.104.121"
 
