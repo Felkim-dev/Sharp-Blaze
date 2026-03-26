@@ -21,9 +21,10 @@ class Button:
         self.RectangleDimension = RectangleDimension
         self.button_text = Text
         self.button_font = pygame.font.Font(COMPONENTS_FONT, TextSize)
+        self.text = Text
         self.text_color = TextColor
         self.CORNERS_RADIUS = 7
-        
+
         # COLORS
         self.WHITE = (255, 255, 255)
         self.LIGHTGRAY = (112, 112, 112)
@@ -31,12 +32,6 @@ class Button:
         # Figures Instantiation
         # Rectangle
         self.button_rectangle = pygame.Rect(Position,(RectangleDimension))
-        # Text
-        self.text_surface = self.button_font.render(Text,True,self.text_color)
-
-        # Text Centered in relation with the rectangle
-        self.text_rect = self.text_surface.get_rect()
-        self.text_rect.center = self.button_rectangle.center
 
     def check_hover(self,mouse_pos):
         """If the mouse is on the button then it changes the color
@@ -47,10 +42,17 @@ class Button:
             self.ButtonColor = self.ButtonColor_copy
 
     def draw(self,screen):
-        
+
         # Draw rectangle on the screen
         pygame.draw.rect(screen,self.ButtonColor,self.button_rectangle, border_radius= self.CORNERS_RADIUS)
 
+        # Text Draw
+        self.text_surface = self.button_font.render(self.text, True, self.text_color)
+
+        # Text Centered in relation with the rectangle
+        self.text_rect = self.text_surface.get_rect()
+        self.text_rect.center = self.button_rectangle.center
+        
         # Draw the text (text_surface) on a invisible rectangle (text_rect)
         screen.blit(self.text_surface, self.text_rect)
 
@@ -67,11 +69,11 @@ class InputBox:
         # Characteristics
         self.Position = Position
         self.RectangleDimension = RectangleDimension
-        
-        #Strings
-            #DEFAULT
+
+        # Strings
+        # DEFAULT
         self.default_string = DefaultText
-            #USER INPUT
+        # USER INPUT
         self.user_input = ""
 
         # COLORS
@@ -88,23 +90,8 @@ class InputBox:
         self.BORDER_SIZE = 5
 
         # Figures Instantiation
-            #Rectangle
+        # Rectangle
         self.inputbox_rectangle = pygame.Rect(Position, (RectangleDimension))
-        
-            #Text renders
-                #DEFAULT TEXT
-        self.text_surface_DEFAULT = self.inputbox_font.render(self.default_string, True, self.GRAY)
-                #USERT TEXT
-        self.text_surface_USER = self.inputbox_font.render(self.user_input, True, self.WHITE)
-
-        # TEXT CENTER INTO THE RECTANGLE
-            # DEFAULT TEXT
-        self.text_rect_DEFAULT = self.text_surface_DEFAULT.get_rect()
-        self.text_rect_DEFAULT.center = self.inputbox_rectangle.center
-
-            # USER DEFAULT TEXT
-        self.text_rect_USER = self.text_surface_USER.get_rect()
-        self.text_rect_USER.center = self.inputbox_rectangle.center
 
         # INITIAL STATES
         self.is_selected = False
@@ -114,6 +101,25 @@ class InputBox:
         self.notallowed_chars = NotAllowedChars
 
     def draw(self,screen):
+
+        # Text renders
+        # DEFAULT TEXT
+        self.text_surface_DEFAULT = self.inputbox_font.render(
+            self.default_string, True, self.GRAY
+        )
+        # USERT TEXT
+        self.text_surface_USER = self.inputbox_font.render(
+            self.user_input, True, self.WHITE
+        )
+
+        # TEXT CENTER INTO THE RECTANGLE
+        # DEFAULT TEXT
+        self.text_rect_DEFAULT = self.text_surface_DEFAULT.get_rect()
+        self.text_rect_DEFAULT.center = self.inputbox_rectangle.center
+
+        # USER DEFAULT TEXT
+        self.text_rect_USER = self.text_surface_USER.get_rect()
+        self.text_rect_USER.center = self.inputbox_rectangle.center
 
         # DRAW OF THE BLACK RECTANGLE
         pygame.draw.rect(screen,self.BLACK,self.inputbox_rectangle, border_radius= self.CORNERS_RADIUS)
@@ -196,16 +202,14 @@ class TextBox:
         # Rectangle
         self.textbox_rectangle = pygame.Rect(Position, (RectangleDimension))
 
+    def draw(self, screen):
+
         # Text render
         self.text_surface = self.inputbox_font.render(self.text, True, self.text_color)
 
         # TEXT CENTER INTO THE RECTANGLE
         self.text_rect = self.text_surface.get_rect()
         self.text_rect.center = self.textbox_rectangle.center
-
-    def draw(self, screen):
-
-        self.text_surface = self.inputbox_font.render(self.text, True, self.text_color)
 
         # DRAW OF THE TOP RECTANGLE
         pygame.draw.rect(screen,self.rectangle_color,self.textbox_rectangle,border_radius=self.CORNERS_RADIUS)
