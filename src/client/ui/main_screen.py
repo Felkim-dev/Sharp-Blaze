@@ -1,5 +1,5 @@
 import pygame
-from ui.component import Button
+from ui.component import Button,Text
 import sys
 
 
@@ -32,10 +32,14 @@ class MainScreen:
         self.btn_bot = Button((center_x, init_y + separation_y * 2), BUTTON_WH, self.LIGHT_BLUE, "Bot Match", self.BLACK, TEXT_SIZE)
         self.btn_options = Button((center_x, init_y + separation_y * 3), BUTTON_WH, self.LIGHT_BLUE, "Options", self.BLACK, TEXT_SIZE)
         self.btn_exit = Button((center_x, init_y + separation_y * 4), BUTTON_WH, self.RED, "Exit", self.BLACK, TEXT_SIZE)
-        
-        #FONT
+
+        # FONT
         self.TITLE_FONT = r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\assets\Anton-Regular.ttf"
 
+        # TEXT
+        self.text_title = Text((self.screen.get_rect().centerx, self.screen.get_rect().centery//2),"SHARP BLAZE", 100,self.WHITE,self.TITLE_FONT)
+        
+        
     def handle_events(self, events,keys):
 
         for event in events:
@@ -44,7 +48,7 @@ class MainScreen:
                 if event.button == 1:
                     mouse_pos = event.pos
 
-                #COLISSION WITH EACH BUTTON
+                # COLISSION WITH EACH BUTTON
                 if self.btn_host.button_rectangle.collidepoint(mouse_pos):
                     self.screen_manager.change_screen("HOST")
 
@@ -62,8 +66,8 @@ class MainScreen:
                     sys.exit()
 
             elif event.type == pygame.MOUSEMOTION:
-                
-                #MOUSE ON BUTTON DETECTION
+
+                # MOUSE ON BUTTON DETECTION
                 mouse_pos = event.pos
 
                 self.btn_host.check_hover(mouse_pos)
@@ -84,7 +88,5 @@ class MainScreen:
         self.btn_exit.draw(self.screen)
 
         # TEXT DRAW
-        text_font = pygame.font.Font(self.TITLE_FONT,100)
-        text_surface = text_font.render("SHARP BLAZE", True, self.WHITE)
-        title_rect = text_surface.get_rect(center = (self.screen.get_rect().centerx, 180))
-        self.screen.blit(text_surface,title_rect)
+
+        self.text_title.draw(self.screen)

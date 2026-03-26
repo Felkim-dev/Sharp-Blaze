@@ -1,5 +1,5 @@
 import pygame
-from ui.component import Button,InputBox
+from ui.component import Button,InputBox,Text
 import sys
 import string
 
@@ -36,19 +36,25 @@ class HostScreen:
         width_input = INPUT_WH[0]
         center_x_input = self.screen.get_rect().centerx - (width_input // 2)
 
-        init_y = 310
-        separation_y = 60
+        init_y = self.screen.height//3
+        separation_y = 100
 
         # Button creation
-        self.btn_host = Button((center_x_button, init_y),BUTTON_WH,GRAY,"HOST",self.WHITE,TEXT_SIZE,)
+        self.btn_host = Button((center_x_button, init_y + separation_y),BUTTON_WH,GRAY,"HOST",self.WHITE,TEXT_SIZE,)
 
         # INPUT BOX
         # List of Prohibited Simbols
         prohibited_simbols = string.punctuation
         prohibited_simbols += " "
         # INPUT BOX CREATION
-        self.inputbox_nickname = InputBox((center_x_input,init_y-100), INPUT_WH, "ENTER USERNAME (>3 CHARACTERS)",NotAllowedChars=prohibited_simbols)
+        self.inputbox_nickname = InputBox((center_x_input,init_y), INPUT_WH, "ENTER USERNAME (>3 CHARACTERS)",NotAllowedChars=prohibited_simbols)
 
+        #ID CREATION
+        
+        posx_text_ID =center_x_input - 20
+        posy_text_ID =init_y + 20
+        self.text_ID = Text((posx_text_ID,posy_text_ID),"ID: ",INPUT_WH[1]//2,self.WHITE)
+        
     def handle_events(self, events,keys):
         """where screen manages the events of their buttons and input boxes
         """
@@ -83,7 +89,10 @@ class HostScreen:
     def draw(self):
         # SCREEN DRAW
         self.screen.fill((self.MAINDARK))
-        
-        #COMPONENTS DRAW
+
+        # COMPONENTS DRAW
         self.btn_host.draw(self.screen)
         self.inputbox_nickname.draw(self.screen)
+        
+        #TEXT
+        self.text_ID.draw(self.screen)
