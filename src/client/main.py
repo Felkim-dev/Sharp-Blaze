@@ -6,6 +6,7 @@ import sys
 from ui.main_screen import MainScreen
 from ui.host_screen import HostScreen
 from ui.join_screen import JoinScreen
+from ui.lobby_screen import LobbyScreen
 
 class GAME:
     
@@ -22,7 +23,8 @@ class GAME:
         self.screens = {
             "MAIN": MainScreen(self,self.screen),
             "HOST": HostScreen(self,self.screen),
-            # "JOIN": JoinScreen(self,self.screen),
+            "JOIN": JoinScreen(self,self.screen),
+            "LOBBY": LobbyScreen(self,self.screen),
                         }
         
         self.current_screen = self.screens["MAIN"]
