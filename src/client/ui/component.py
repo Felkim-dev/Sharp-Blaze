@@ -21,21 +21,23 @@ class Button:
         self.RectangleDimension = RectangleDimension
         self.button_text = Text
         self.button_font = pygame.font.Font(COMPONENTS_FONT, TextSize)
+        self.text_color = TextColor
         self.CORNERS_RADIUS = 7
         
-        #COLORS
+        # COLORS
         self.WHITE = (255, 255, 255)
-        
+        self.LIGHTGRAY = (112, 112, 112)
+
         # Figures Instantiation
-            #Rectangle
+        # Rectangle
         self.button_rectangle = pygame.Rect(Position,(RectangleDimension))
-            #Text
-        self.text_surface = self.button_font.render(Text,True,TextColor)
+        # Text
+        self.text_surface = self.button_font.render(Text,True,self.text_color)
 
         # Text Centered in relation with the rectangle
         self.text_rect = self.text_surface.get_rect()
         self.text_rect.center = self.button_rectangle.center
-    
+
     def check_hover(self,mouse_pos):
         """If the mouse is on the button then it changes the color
         """
@@ -43,12 +45,13 @@ class Button:
             self.ButtonColor = self.WHITE
         else: 
             self.ButtonColor = self.ButtonColor_copy
-    
+
     def draw(self,screen):
-        #Draw rectangle on the scree
-        pygame.draw.rect(screen,self.ButtonColor,self.button_rectangle, border_radius= self.CORNERS_RADIUS)
         
-        #Draw the text (text_surface) on a invisible rectangle (text_rect)
+        # Draw rectangle on the screen
+        pygame.draw.rect(screen,self.ButtonColor,self.button_rectangle, border_radius= self.CORNERS_RADIUS)
+
+        # Draw the text (text_surface) on a invisible rectangle (text_rect)
         screen.blit(self.text_surface, self.text_rect)
 
 class InputBox:

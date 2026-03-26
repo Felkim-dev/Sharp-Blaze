@@ -15,7 +15,8 @@ class JoinScreen:
         self.MAINDARK = (19, 23, 34)
         # BUTTONS
         self.WHITE = (255, 255, 255)
-        GRAY = (54, 54, 54)
+        self.BLACK = (0, 0, 0)
+        GRAY = (112, 112, 112)
 
         # INPUT BOX SIXE
         INPUT_WH = (500, 50)
@@ -44,7 +45,7 @@ class JoinScreen:
             BUTTON_WH,
             GRAY,
             "JOIN",
-            self.WHITE,
+            self.BLACK,
             TEXT_SIZE,
         )
 
@@ -70,12 +71,16 @@ class JoinScreen:
 
     def handle_events(self, events, keys):
         """where screen manages the events of their buttons and input boxes"""
+
         for event in events:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     mouse_pos = event.pos
 
-                if self.btn_join.button_rectangle.collidepoint(mouse_pos):
+                if (
+                    self.btn_join.button_rectangle.collidepoint(mouse_pos)
+                    and len(self.inputbox_nickname.user_input) > 3
+                ):
                     self.screen_manager.change_screen("LOBBY")
 
                 # Comprobation that the input box is clicked
@@ -102,6 +107,13 @@ class JoinScreen:
                             or self.inputbox_nickname.notallowed_chars is None
                         ):
                             self.inputbox_nickname.user_input += char
+
+            elif event.type == pygame.MOUSEMOTION and len(self.inputbox_nickname.user_input) > 3:
+
+                # MOUSE ON BUTTON DETECTION
+                mouse_pos = event.pos
+
+                self.btn_join.check_hover(mouse_pos)
 
         # Deleting of characters of the string
         if keys[pygame.K_BACKSPACE]:
