@@ -211,3 +211,42 @@ class TextBox:
         pygame.draw.rect(screen,self.WHITE,self.textbox_rectangle,self.BORDER_SIZE,border_radius=self.CORNERS_RADIUS)
 
         screen.blit(self.text_surface, self.text_rect)
+
+class CloseButton:
+    def __init__(self, x, y, size=30):
+        
+        self.rect = pygame.Rect(x, y, size, size)
+
+        # COLORS
+        self.WHITE = (255, 255 , 255)
+
+        # Thickness 
+        self.thickness = 5
+
+    def handle_event(self, event):
+        
+        # Click Detect
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.collidepoint(event.pos):
+                return True 
+
+        return False
+
+    def draw(self, screen):
+
+        pygame.draw.line(
+            screen,
+            self.WHITE,
+            self.rect.topleft,
+            self.rect.bottomright,
+            self.thickness,
+        )
+
+        # Línea 2: De Abajo-Izquierda a Arriba-Derecha (/)
+        pygame.draw.line(
+            screen,
+            self.WHITE,
+            self.rect.bottomleft,
+            self.rect.topright,
+            self.thickness,
+        )
