@@ -154,6 +154,57 @@ class Text:
 
         text_surface = self.text_definition.render(self.text, True, self.color)
         text_position = text_surface.get_rect(center=(self.position))
-        
+
         # Text drawing
         screen.blit(text_surface, text_position)
+
+class TextBox:
+
+    def __init__(
+        self,
+        Position: tuple,
+        RectangleDimension: tuple,
+        Rectangle_Color: tuple,
+        Text: str,
+        Text_Color: tuple,
+        
+    ):
+        # Characteristics
+        self.Position = Position
+        self.RectangleDimension = RectangleDimension
+        self.rectangle_color = Rectangle_Color
+
+        # COLOR
+        self.WHITE = (255, 255, 255)
+
+        # Strings
+        self.text= Text
+        self.text_color = Text_Color
+
+        # FONT
+        self.font_size = RectangleDimension[1]//2
+        self.inputbox_font = pygame.font.Font(COMPONENTS_FONT, self.font_size)
+
+        # INPUT DESIGN
+        self.CORNERS_RADIUS = 7
+        self.BORDER_SIZE = 5
+
+        # Figures Instantiation
+        # Rectangle
+        self.textbox_rectangle = pygame.Rect(Position, (RectangleDimension))
+
+        # Text render
+        self.text_surface = self.inputbox_font.render(self.text, True, self.text_color)
+
+        # TEXT CENTER INTO THE RECTANGLE
+        self.text_rect = self.text_surface.get_rect()
+        self.text_rect.center = self.textbox_rectangle.center
+
+    def draw(self, screen):
+
+        # DRAW OF THE TOP RECTANGLE
+        pygame.draw.rect(screen,self.rectangle_color,self.textbox_rectangle,border_radius=self.CORNERS_RADIUS)
+        # DRAW OF THE WHITE RECTANGLE
+        pygame.draw.rect(screen,self.WHITE,self.textbox_rectangle,self.BORDER_SIZE,border_radius=self.CORNERS_RADIUS)
+
+        screen.blit(self.text_surface, self.text_rect)
