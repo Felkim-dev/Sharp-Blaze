@@ -2,35 +2,39 @@ import pygame
 from ui.component import Button
 import sys
 
+
 class MainScreen:
     def __init__(self, screen_manager,screen):
+        # SCREEN FROM THE MAIN GAME LOOP
         self.screen_manager = screen_manager
         self.screen = screen
 
-        # Colors
+        # COLORS
         self.MAINDARK = (19,23,34)
         self.WHITE = (255, 255, 255)
-        LIGHT_BLUE = (0,212,255)
-        BLACK = (0, 0, 0)
-        RED = (204, 5, 35)
+        self.LIGHT_BLUE = (0,212,255)
+        self.BLACK = (0, 0, 0)
+        self.RED = (204, 5, 35)
 
         # Button and Text Size
         BUTTON_WH = (350, 50)
         TEXT_SIZE = 24
 
-        # Calculate Pos
+        # Calculating POSITION
         width_button = BUTTON_WH[0]
         center_x = self.screen.get_rect().centerx - (width_button //2)
-
         init_y = 310
         separation_y = 60
 
         # Buttons declarations
-        self.btn_host = Button((center_x, init_y + separation_y * 0), BUTTON_WH, LIGHT_BLUE,"Host Game", BLACK, TEXT_SIZE)
-        self.btn_join = Button((center_x, init_y + separation_y * 1), BUTTON_WH, LIGHT_BLUE, "Join Game", BLACK, TEXT_SIZE)
-        self.btn_bot = Button((center_x, init_y + separation_y * 2), BUTTON_WH, LIGHT_BLUE, "Bot Match", BLACK, TEXT_SIZE)
-        self.btn_options = Button((center_x, init_y + separation_y * 3), BUTTON_WH, LIGHT_BLUE, "Options", BLACK, TEXT_SIZE)
-        self.btn_exit = Button((center_x, init_y + separation_y * 4), BUTTON_WH, RED, "Exit", BLACK, TEXT_SIZE)
+        self.btn_host = Button((center_x, init_y + separation_y * 0), BUTTON_WH, self.LIGHT_BLUE,"Host Game", self.BLACK, TEXT_SIZE)
+        self.btn_join = Button((center_x, init_y + separation_y * 1), BUTTON_WH, self.LIGHT_BLUE, "Join Game", self.BLACK, TEXT_SIZE)
+        self.btn_bot = Button((center_x, init_y + separation_y * 2), BUTTON_WH, self.LIGHT_BLUE, "Bot Match", self.BLACK, TEXT_SIZE)
+        self.btn_options = Button((center_x, init_y + separation_y * 3), BUTTON_WH, self.LIGHT_BLUE, "Options", self.BLACK, TEXT_SIZE)
+        self.btn_exit = Button((center_x, init_y + separation_y * 4), BUTTON_WH, self.RED, "Exit", self.BLACK, TEXT_SIZE)
+        
+        #FONT
+        self.TITLE_FONT = r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\assets\Anton-Regular.ttf"
 
     def handle_events(self, events,keys):
 
@@ -40,6 +44,7 @@ class MainScreen:
                 if event.button == 1:
                     mouse_pos = event.pos
 
+                #COLISSION WITH EACH BUTTON
                 if self.btn_host.button_rectangle.collidepoint(mouse_pos):
                     self.screen_manager.change_screen("HOST")
 
@@ -57,6 +62,8 @@ class MainScreen:
                     sys.exit()
 
             elif event.type == pygame.MOUSEMOTION:
+                
+                #MOUSE ON BUTTON DETECTION
                 mouse_pos = event.pos
 
                 self.btn_host.check_hover(mouse_pos)
@@ -77,7 +84,7 @@ class MainScreen:
         self.btn_exit.draw(self.screen)
 
         # TEXT DRAW
-        text_font = pygame.font.Font(r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\assets\Anton-Regular.ttf",100)
+        text_font = pygame.font.Font(self.TITLE_FONT,100)
         text_surface = text_font.render("SHARP BLAZE", True, self.WHITE)
         title_rect = text_surface.get_rect(center = (self.screen.get_rect().centerx, 180))
         self.screen.blit(text_surface,title_rect)
