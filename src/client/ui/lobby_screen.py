@@ -29,11 +29,11 @@ class LobbyScreen:
         width_screen = self.screen.get_width()
         button_size = 30
         margin = 50 
-            # POS CALCULATION
+        # POS CALCULATION
         pos_x = width_screen - button_size - margin
         pos_y = margin  
 
-            # CLOSE BUTTON INSTANCE
+        # CLOSE BUTTON INSTANCE
         self.btn_close = CloseButton(pos_x, pos_y, button_size)
 
         # Positioning COMPONENTS
@@ -59,17 +59,36 @@ class LobbyScreen:
 
         posx_text_player1 = center_x_text_player1 + width_text//2
         posy_text_player1 = init_y - 40
-        self.text_player1 = Text((posx_text_player1, posy_text_player1), "PLAYER 1", TEXT_WH[1] // 2, self.WHITE)
+        self.text_player1 = Text((posx_text_player1, posy_text_player1), "YOU", TEXT_WH[1] // 2, self.WHITE)
 
         posx_text_player2 = center_x_text_player2 + width_text // 2
         posy_text_player2 = init_y - 40
-        self.text_player2 = Text((posx_text_player2, posy_text_player2), "PLAYER 2", TEXT_WH[1] // 2, self.WHITE)
+        self.text_player2 = Text((posx_text_player2, posy_text_player2), "OPPONENT", TEXT_WH[1] // 2, self.WHITE)
 
     def handle_events(self, events, keys):
         """where screen manages the events of their buttons and input boxes"""
         for event in events:
             if self.btn_close.handle_event(event):
                 self.screen_manager.change_screen("MAIN")
+
+    def update(self):
+        data = self.screen_manager.network.receive_json()
+
+        if data:
+            
+            print(data)
+            
+            if data.get("type") == "QUEUE_STATUS":
+                self.textbox_nickname1.text = data["payload"]["you"]
+                self.textbox_nickname2.text = "WAITING..."
+                self.textbox_nickname2.text_color = (84, 84, 84)
+                
+            if data.get("type") == "MATCH_FOUND":
+
+                self.textbox_nickname1.text = data["payload"]["you"]
+                self.textbox_nickname2.text = data["payload"]["opponent"]
+                self.textbox_nickname2.text_color = self.WHITE
+            
 
     def draw(self):
         # SCREEN DRAW

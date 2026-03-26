@@ -1,7 +1,9 @@
 import pygame
 from ui.component import Button, InputBox, Text,CloseButton
 import string
+import socket
 
+SERVER_IP = "10.163.104.121"
 
 class JoinScreen:
     def __init__(self, screen_manager, screen):
@@ -86,6 +88,7 @@ class JoinScreen:
         for event in events:
 
             if self.btn_close.handle_event(event):
+                self.inputbox_nickname.user_input = ""
                 self.screen_manager.change_screen("MAIN")
 
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -96,7 +99,18 @@ class JoinScreen:
                     self.btn_join.button_rectangle.collidepoint(mouse_pos)
                     and len(self.inputbox_nickname.user_input) > 3
                 ):
-                    self.screen_manager.change_screen("LOBBY")
+                    if self.screen_manager.network.estado_conexion != "CONECTANDO":
+
+                        data_join = {
+                            "type": "INITIAL_CONNECT",
+                            "payload": {
+                                "player_id": self.inputbox_nickname.user_input,
+                                "client_version": "xd",
+                                "is_ready": True,
+                            },
+                        }
+
+                        self.screen_manager.network.connect(SERVER_IP,data_join)
 
                 # Comprobation that the input box is clicked
                 if self.inputbox_nickname.inputbox_rectangle.collidepoint(mouse_pos):
@@ -133,6 +147,19 @@ class JoinScreen:
         # Deleting of characters of the string
         if keys[pygame.K_BACKSPACE]:
             self.inputbox_nickname.user_input = self.inputbox_nickname.user_input[:-1]
+
+    def update(self):
+        estado = self.screen_manager.network.estado_conexion
+
+        if estado == "CONECTANDO":
+            pass
+        elif estado == "ERROR":
+            print("Mostrar mensaje de error en pantalla")
+            self.screen_manager.network.estado_conexion = "IDLE"
+
+        elif estado == "IDLE" and self.screen_manager.network.connected:
+
+            self.screen_manager.change_screen("LOBBY")
 
     def draw(self):
         # SCREEN DRAW

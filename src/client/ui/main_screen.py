@@ -75,6 +75,9 @@ class MainScreen:
                 self.btn_options.check_hover(mouse_pos)
                 self.btn_exit.check_hover(mouse_pos)
 
+    def update(self):
+        pass
+    
     def draw(self):
         # SCREEN DRAW
         self.screen.fill((self.MAINDARK))  # Fondo oscuro

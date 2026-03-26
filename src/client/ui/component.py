@@ -205,6 +205,8 @@ class TextBox:
 
     def draw(self, screen):
 
+        self.text_surface = self.inputbox_font.render(self.text, True, self.text_color)
+
         # DRAW OF THE TOP RECTANGLE
         pygame.draw.rect(screen,self.rectangle_color,self.textbox_rectangle,border_radius=self.CORNERS_RADIUS)
         # DRAW OF THE WHITE RECTANGLE
