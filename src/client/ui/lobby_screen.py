@@ -1,5 +1,5 @@
 import pygame
-from ui.component import Button, Text,TextBox
+from ui.component import Button, Text,TextBox,CloseButton
 
 class LobbyScreen:
     def __init__(self, screen_manager, screen):
@@ -25,6 +25,17 @@ class LobbyScreen:
         # TEXT SIZE
         TEXT_SIZE = BUTTON_WH[1]//2
 
+        # EXIT MAIN MENU BUTTON
+        width_screen = self.screen.get_width()
+        button_size = 30
+        margin = 50 
+            # POS CALCULATION
+        pos_x = width_screen - button_size - margin
+        pos_y = margin  
+
+            # CLOSE BUTTON INSTANCE
+        self.btn_close = CloseButton(pos_x, pos_y, button_size)
+
         # Positioning COMPONENTS
         # START BUTTON
         width_button = BUTTON_WH[0]
@@ -36,7 +47,6 @@ class LobbyScreen:
         center_x_text_player2 = self.screen.get_rect().centerx + width_text//2
 
         init_y = (self.screen.height // 3) + 50
-        separation_y = 100
 
         # Button creation
         self.btn_Start = Button((center_x_button, init_y+100),BUTTON_WH,self.GRAY,"START GAME",self.WHITE,TEXT_SIZE,)
@@ -58,7 +68,8 @@ class LobbyScreen:
     def handle_events(self, events, keys):
         """where screen manages the events of their buttons and input boxes"""
         for event in events:
-            pass
+            if self.btn_close.handle_event(event):
+                self.screen_manager.change_screen("MAIN")
 
     def draw(self):
         # SCREEN DRAW
@@ -73,3 +84,6 @@ class LobbyScreen:
         # TEXT
         self.text_player1.draw(self.screen)
         self.text_player2.draw(self.screen)
+
+        # EXIT BUTTON
+        self.btn_close.draw(self.screen)

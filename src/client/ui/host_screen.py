@@ -1,5 +1,5 @@
 import pygame
-from ui.component import Button,InputBox,Text
+from ui.component import Button,InputBox,Text,CloseButton
 import string
 
 class HostScreen:
@@ -47,16 +47,30 @@ class HostScreen:
         # INPUT BOX CREATION
         self.inputbox_nickname = InputBox((center_x_input,init_y), INPUT_WH, "ENTER USERNAME (>3 CHARACTERS)",NotAllowedChars=prohibited_simbols)
 
-        #ID CREATION
-        
+        # ID CREATION
+
         posx_text_ID =center_x_input - 20
         posy_text_ID =init_y + 20
         self.text_ID = Text((posx_text_ID,posy_text_ID),"ID: ",INPUT_WH[1]//2,self.WHITE)
-        
+
+        # EXIT MAIN MENU BUTTON
+        width_screen = self.screen.get_width()
+        button_size = 30
+        margin = 50
+        # POS CALCULATION
+        pos_x = width_screen - button_size - margin
+        pos_y = margin
+
+        # CLOSE BUTTON INSTANCE
+        self.btn_close = CloseButton(pos_x, pos_y, button_size)
+
     def handle_events(self, events,keys):
         """where screen manages the events of their buttons and input boxes
         """
         for event in events:
+            if self.btn_close.handle_event(event):
+                self.screen_manager.change_screen("MAIN")
+
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     mouse_pos = event.pos
@@ -91,6 +105,9 @@ class HostScreen:
         # COMPONENTS DRAW
         self.btn_host.draw(self.screen)
         self.inputbox_nickname.draw(self.screen)
-        
-        #TEXT
+
+        # TEXT
         self.text_ID.draw(self.screen)
+
+        # EXIT BUTTON
+        self.btn_close.draw(self.screen)
