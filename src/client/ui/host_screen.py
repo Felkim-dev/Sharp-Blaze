@@ -1,8 +1,6 @@
 import pygame
 from ui.component import Button,InputBox,Text
-import sys
 import string
-
 
 class HostScreen:
     def __init__(self, screen_manager, screen):
@@ -25,7 +23,7 @@ class HostScreen:
         BUTTON_WH = (350, 50)
 
         # TEXT SIZE
-        TEXT_SIZE = 24
+        TEXT_SIZE = BUTTON_WH[1]//2
 
         # CENTRATING COMPONENTS
         # HOST BUTTON

@@ -38,8 +38,7 @@ class MainScreen:
 
         # TEXT
         self.text_title = Text((self.screen.get_rect().centerx, self.screen.get_rect().centery//2),"SHARP BLAZE", 100,self.WHITE,self.TITLE_FONT)
-        
-        
+
     def handle_events(self, events,keys):
 
         for event in events:
@@ -53,7 +52,7 @@ class MainScreen:
                     self.screen_manager.change_screen("HOST")
 
                 elif self.btn_join.button_rectangle.collidepoint(mouse_pos):
-                    print("Cambiando a pantalla JOIN...")
+                    self.screen_manager.change_screen("JOIN")
 
                 elif self.btn_bot.button_rectangle.collidepoint(mouse_pos):
                     print("Iniciando partida BOT MATCH...")
