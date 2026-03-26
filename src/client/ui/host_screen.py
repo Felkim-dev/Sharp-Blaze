@@ -1,68 +1,89 @@
 import pygame
 from ui.component import Button,InputBox
 import sys
+import string
 
 
 class HostScreen:
     def __init__(self, screen_manager, screen):
+
+        # SCREEN FROM THE MAIN GAME LOOP
         self.screen_manager = screen_manager
         self.screen = screen
 
-        # Colors
+        # COLORS
+        # PRINCIPAL BG
         self.MAINDARK = (19, 23, 34)
+        # BUTTONS
         self.WHITE = (255, 255, 255)
         GRAY = (54, 54, 54)
 
         # INPUT BOX SIXE
         INPUT_WH = (500,50)
 
-        # Button and Text Size
+        # BUTTON SIZE
         BUTTON_WH = (350, 50)
+
+        # TEXT SIZE
         TEXT_SIZE = 24
 
-        # Calculate Pos
+        # CENTRATING COMPONENTS
+        # HOST BUTTON
         width_button = BUTTON_WH[0]
         center_x_button = self.screen.get_rect().centerx - (width_button // 2)
+
+        # INPUT BOX
         width_input = INPUT_WH[0]
         center_x_input = self.screen.get_rect().centerx - (width_input // 2)
 
         init_y = 310
         separation_y = 60
 
-        # Buttons declarations
-        self.btn_connect = Button(
-            (center_x_button, init_y),
-            BUTTON_WH,
-            GRAY,
-            "CONNECT",
-            self.WHITE,
-            TEXT_SIZE,
-        )
+        # Button creation
+        self.btn_host = Button((center_x_button, init_y),BUTTON_WH,GRAY,"HOST",self.WHITE,TEXT_SIZE,)
 
-        self.box_name = InputBox((center_x_input,init_y-100), INPUT_WH, "ENTER USERNAME (>3 CHARACTERS)")
+        # INPUT BOX
+        # List of Prohibited Simbols
+        prohibited_simbols = string.punctuation
+        prohibited_simbols += " "
+        # INPUT BOX CREATION
+        self.inputbox_nickname = InputBox((center_x_input,init_y-100), INPUT_WH, "ENTER USERNAME (>3 CHARACTERS)",NotAllowedChars=prohibited_simbols)
 
     def handle_events(self, events,keys):
-
+        """where screen manages the events of their buttons and input boxes
+        """
         for event in events:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     mouse_pos = event.pos
-                
-                if self.box_name.button_rectangle.collidepoint(mouse_pos):
-                    self.box_name.is_selected = True
+
+                # Comprobation that the input box is clicked
+                if self.inputbox_nickname.inputbox_rectangle.collidepoint(mouse_pos):
+                    self.inputbox_nickname.is_selected = True
                 else:
-                    self.box_name.is_selected = False
+                    self.inputbox_nickname.is_selected = False
 
             if event.type == pygame.KEYDOWN:
-                if self.box_name.is_selected:
-                    self.box_name.string_input += event.unicode
-                    
+
+                # Writing if the input box was clicked
+                if self.inputbox_nickname.is_selected:
+                    char = event.unicode
+
+                    # Comprobation to avoid too large strings
+                    if len(self.inputbox_nickname.user_input) < self.inputbox_nickname.max_length:
+
+                        # Comprobation to avoid special characters
+                        if (not char in self.inputbox_nickname.notallowed_chars or self.inputbox_nickname.notallowed_chars is None):
+                            self.inputbox_nickname.user_input += char
+
+        # Deleting of characters of the string
         if keys[pygame.K_BACKSPACE]:
-            self.box_name.string_input = self.box_name.string_input[:-1]
-                        
+            self.inputbox_nickname.user_input = self.inputbox_nickname.user_input[:-1]
 
     def draw(self):
         # SCREEN DRAW
-        self.screen.fill((self.MAINDARK))  # Fondo oscuro
-        self.btn_connect.draw(self.screen)
-        self.box_name.draw(self.screen)
+        self.screen.fill((self.MAINDARK))
+        
+        #COMPONENTS DRAW
+        self.btn_host.draw(self.screen)
+        self.inputbox_nickname.draw(self.screen)
