@@ -1,5 +1,7 @@
 import pygame
 
+COMPONENTS_FONT = r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\assets\IntroRust.otf"
+
 class Button:
 
     def __init__(
@@ -17,78 +19,115 @@ class Button:
         self.ButtonColor = ButtonColor
         self.ButtonColor_copy = ButtonColor
         self.RectangleDimension = RectangleDimension
-        self.text_string = Text
-        self.button_font = pygame.font.Font(r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\assets\IntroRust.otf", TextSize)
-        self.corners_radius = 7
+        self.button_text = Text
+        self.button_font = pygame.font.Font(COMPONENTS_FONT, TextSize)
+        self.CORNERS_RADIUS = 7
+        
+        #COLORS
         self.WHITE = (255, 255, 255)
         
         # Figures Instantiation
+            #Rectangle
         self.button_rectangle = pygame.Rect(Position,(RectangleDimension))
+            #Text
         self.text_surface = self.button_font.render(Text,True,TextColor)
 
-        # Text Rec Center
+        # Text Centered in relation with the rectangle
         self.text_rect = self.text_surface.get_rect()
         self.text_rect.center = self.button_rectangle.center
     
     def check_hover(self,mouse_pos):
-        
+        """If the mouse is on the button then it changes the color
+        """
         if self.button_rectangle.collidepoint(mouse_pos):
             self.ButtonColor = self.WHITE
         else: 
             self.ButtonColor = self.ButtonColor_copy
     
     def draw(self,screen):
+        #Draw rectangle on the scree
+        pygame.draw.rect(screen,self.ButtonColor,self.button_rectangle, border_radius= self.CORNERS_RADIUS)
         
-        pygame.draw.rect(screen,self.ButtonColor,self.button_rectangle, border_radius= self.corners_radius)
+        #Draw the text (text_surface) on a invisible rectangle (text_rect)
         screen.blit(self.text_surface, self.text_rect)
 
 class InputBox:
+
     def __init__(
         self,
         Position: tuple,
         RectangleDimension: tuple,
-        DefaultText: str
+        DefaultText: str,
+        MaxLength: int = 20,
+        NotAllowedChars: list = None,
     ):
         # Characteristics
         self.Position = Position
         self.RectangleDimension = RectangleDimension
+        
+        #Strings
+            #DEFAULT
         self.default_string = DefaultText
-        self.string_input = ""
+            #USER INPUT
+        self.user_input = ""
 
         # COLORS
-        self.BG_COLOR = (0,0,0)
-        self.BORDER_COLOR = (255,255,255)
-        self.DEFAULT_TEXT_COLOR = (84,84,84)
+        self.BLACK = (0,0,0)
+        self.WHITE = (255,255,255)
+        self.GRAY = (84,84,84)
 
         # FONT
-        self.button_font = pygame.font.Font(r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\assets\IntroRust.otf",25,)
+        self.font_size = RectangleDimension[1] // 2
+        self.inputbox_font = pygame.font.Font(COMPONENTS_FONT,self.font_size)
 
         # INPUT DESIGN
-        self.corners_radius = 7
+        self.CORNERS_RADIUS = 7
         self.BORDER_SIZE = 5
 
         # Figures Instantiation
-        self.button_rectangle = pygame.Rect(Position, (RectangleDimension))
-        self.text_surface_DEFAULT = self.button_font.render(self.default_string, True, self.DEFAULT_TEXT_COLOR)
-        self.text_surface_USER = self.button_font.render(self.string_input, True, self.BORDER_COLOR)
+            #Rectangle
+        self.inputbox_rectangle = pygame.Rect(Position, (RectangleDimension))
+        
+            #Text renders
+                #DEFAULT TEXT
+        self.text_surface_DEFAULT = self.inputbox_font.render(self.default_string, True, self.GRAY)
+                #USERT TEXT
+        self.text_surface_USER = self.inputbox_font.render(self.user_input, True, self.WHITE)
 
-        # Text Rec Center
-        self.text_rect = self.text_surface_DEFAULT.get_rect()
-        self.text_rect.center = self.button_rectangle.center
+        # TEXT CENTER INTO THE RECTANGLE
+            # DEFAULT TEXT
+        self.text_rect_DEFAULT = self.text_surface_DEFAULT.get_rect()
+        self.text_rect_DEFAULT.center = self.button_rectangle.center
+
+            # USER DEFAULT TEXT
+        self.text_rect_USER = self.text_surface_USER.get_rect()
+        self.text_rect_USER.center = self.button_rectangle.center
 
         # INITIAL STATES
         self.is_selected = False
 
+        # RESTRICTIONS
+        self.max_length = MaxLength
+        self.notallowed_chars = NotAllowedChars
+
     def draw(self,screen):
 
-        # BGCOLOR
-        pygame.draw.rect(screen,self.BG_COLOR,self.button_rectangle, border_radius= self.corners_radius)
-        # BORDER COLOR
-        pygame.draw.rect(screen,self.BORDER_COLOR,self.button_rectangle, self.BORDER_SIZE, border_radius=self.corners_radius,)
+        # DRAW OF THE BLACK RECTANGLE
+        pygame.draw.rect(screen,self.BLACK,self.inputbox_rectangle, border_radius= self.CORNERS_RADIUS)
+        # DRAW OF THE WHITE RECTANGLE
+        pygame.draw.rect(screen,self.WHITE,self.inputbox_rectangle, self.BORDER_SIZE, border_radius=self.CORNERS_RADIUS,)
 
-        # Draw Object
-        if self.is_selected or len(self.string_input)>0:
-            self.text_surface_USER = self.button_font.render(self.string_input, True, self.BORDER_COLOR)
-            screen.blit(self.text_surface_USER, self.text_rect)
+        # CONTINUOUS DRAWING COMPROBATION
+        if self.is_selected or len(self.user_input)>0:
+            # RENDER THE NEW TEXT OF THE USER
+            self.text_surface_USER = self.inputbox_font.render(self.user_input, True, self.WHITE)
+
+            # CENTERING THE TEXT OF THE USER
+            self.text_rect_USER = self.text_surface_USER.get_rect()
+            self.text_rect_USER.center = self.inputbox_rectangle.center
+
+            # SHOWING ON THE SCREEN THE TEXT
+            screen.blit(self.text_surface_USER, self.text_rect_USER)
         else:
-            screen.blit(self.text_surface_DEFAULT, self.text_rect)
+            # SHOWING THE DEFAULT TEXT
+            screen.blit(self.text_surface_DEFAULT, self.text_rect_DEFAULT)
