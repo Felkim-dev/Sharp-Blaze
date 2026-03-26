@@ -58,7 +58,7 @@ class InputBox:
         Position: tuple,
         RectangleDimension: tuple,
         DefaultText: str,
-        MaxLength: int = 20,
+        MaxLength: int = 15,
         NotAllowedChars: list = None,
     ):
         # Characteristics
@@ -97,11 +97,11 @@ class InputBox:
         # TEXT CENTER INTO THE RECTANGLE
             # DEFAULT TEXT
         self.text_rect_DEFAULT = self.text_surface_DEFAULT.get_rect()
-        self.text_rect_DEFAULT.center = self.button_rectangle.center
+        self.text_rect_DEFAULT.center = self.inputbox_rectangle.center
 
             # USER DEFAULT TEXT
         self.text_rect_USER = self.text_surface_USER.get_rect()
-        self.text_rect_USER.center = self.button_rectangle.center
+        self.text_rect_USER.center = self.inputbox_rectangle.center
 
         # INITIAL STATES
         self.is_selected = False
@@ -131,3 +131,29 @@ class InputBox:
         else:
             # SHOWING THE DEFAULT TEXT
             screen.blit(self.text_surface_DEFAULT, self.text_rect_DEFAULT)
+
+class Text:
+
+    def __init__(
+        self,
+        Position: tuple,
+        Text: str,
+        TextSize: int,
+        Color: tuple,
+        Font : str = COMPONENTS_FONT,
+    ):
+        self.position = Position
+        self.text = Text
+        self.text_size = TextSize
+        self.color = Color
+        self.font = Font
+        self.text_definition = pygame.font.Font(self.font, self.text_size)
+
+    def draw(self,screen):
+        # Text Drawings
+
+        text_surface = self.text_definition.render(self.text, True, self.color)
+        text_position = text_surface.get_rect(center=(self.position))
+        
+        # Text drawing
+        screen.blit(text_surface, text_position)
