@@ -1,6 +1,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <iostream>
 
 #include "third_party/json.hpp"
 #include "clientProtocol.h"
@@ -36,6 +37,45 @@ std::string client_protocol::BuildOkResponse()
     };
     return response.dump() + "\n";
 
+}
+std::string client_protocol::BuildQueueStatusResponse(
+    int playersWaiting, 
+    const std::string& playerId)
+{
+    json response = {
+        {"type", "QUEUE_STATUS"},
+        {"payload",{
+            {"players_waiting", playersWaiting},
+            {"you", playerId}
+        }}
+    };
+    //std::cout <<response << '\n';
+    return response.dump() +'\n';
+}
+
+std::string client_protocol::BuildMatchFoundResponse(
+    const std::string& sessionId,
+    const std::string& you,
+    const std::string& opponent)
+{
+    json response = {
+        {"type", "MATCH_FOUND"},
+        {"payload", {
+            {"session_id", sessionId}, 
+            {"you", you}, 
+            {"opponent", opponent}}}};
+    return response.dump() + "\n";
+}
+
+std::string client_protocol::BuildMatchStartResponse(const std::string& sessionId)
+{
+    json response = {
+        {"type", "MATCH_START"},
+        {"payload", {
+            {"session_id",sessionId}
+        }}
+    };
+    return response.dump() + '\n';
 }
 
 //framing del buffer por delimitador "\n"
@@ -92,54 +132,84 @@ bool client_protocol::MessageFramer(
 //siempre llena responseToSend(aceptando/rechazando)
 
 bool client_protocol::MessageProtocol(
-    const std::string&  rawMessage,
-    InitialConnectData& outData,
-    std::string&        responseToSend)
+    const std::string &rawMessage,
+    ParsedMessage &outMessage,
+    std::string &responseToSend)
 {
-    const json data = json::parse(rawMessage,nullptr,false);
+    outMessage = ParsedMessage{};
+    responseToSend.clear();
+
+    const json data = json::parse(rawMessage, nullptr, false);
     if (data.is_discarded())
     {
         responseToSend = BuildErrorResponse("invalid_json");
         return false;
     }
+
     if (!data.contains("type") || !data["type"].is_string())
     {
-        responseToSend = BuildErrorResponse("missing_or_invalid type");
+        responseToSend = BuildErrorResponse("missing_or_invalid_type");
         return false;
     }
+
     const std::string type = data["type"].get<std::string>();
-    if (type != "INITIAL_CONNECT")
+
+    if (type == "INITIAL_CONNECT")
     {
-        responseToSend = BuildErrorResponse("unsupported_message_type");
-        return false;
-    }
-    if (!data.contains("payload") || !data["payload"].is_object())
-    {
-        responseToSend = BuildErrorResponse("missing_or_invalid_payload");
-        return false;
+        if (!data.contains("payload") || !data["payload"].is_object())
+        {   
+            std::cout << "llego el json bien\n";
+            responseToSend = BuildErrorResponse("missing_or_invalid_payload");
+            return false;
+        }
+
+        const json &payload = data["payload"];
+
+        if (!payload.contains("player_id") || !payload["player_id"].is_string())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_player_id");
+            return false;
+        }
+        if (!payload.contains("client_version") || !payload["client_version"].is_string())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_client_version");
+            return false;
+        }
+        if (!payload.contains("is_ready") || !payload["is_ready"].is_boolean())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_is_ready");
+            return false;
+        }
+
+        outMessage.type = ParsedMessageType::InitialConnect;
+        outMessage.initialConnect.playerId = payload["player_id"].get<std::string>();
+        outMessage.initialConnect.clientVersion = payload["client_version"].get<std::string>();
+        outMessage.initialConnect.isReady = payload["is_ready"].get<bool>();
+        
+        responseToSend = BuildOkResponse();
+        return true;
     }
 
-    const json& payload = data["payload"];
-    if (!payload.contains("player_id") || !payload["player_id"].is_string())
+    if (type == "PLAYER_READY")
     {
-        responseToSend = BuildErrorResponse("missing_or_invalid_payload");
-        return false;
-    }
-    if (!payload.contains("client_version") || !payload["client_version"].is_string())
-    {
-        responseToSend = BuildErrorResponse("missing_or_invalid_client_version");
-        return false;
-    }
-    if (!payload.contains("is_ready") || !payload["is_ready"].is_boolean())
-    {
-        responseToSend = BuildErrorResponse("missing_or_invalid_is_ready");
-        return false;
-    }
-    outData.playerId      = payload["player_id"].get<std::string>();
-    outData.clientVersion = payload["client_version"].get<std::string>();
-    outData.isReady       = payload["is_ready"].get<bool>();
-    
-    responseToSend = BuildOkResponse();
-    return true;
+        if (!data.contains("payload") || !data["payload"].is_object())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_payload");
+            return false;
+        }
 
+        const json &payload = data["payload"];
+        if (!payload.contains("session_id") || !payload["session_id"].is_string())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_session_id");
+            return false;
+        }
+
+        outMessage.type = ParsedMessageType::PlayerReady;
+        outMessage.playerReady.sessionId = payload["session_id"].get<std::string>();
+        return true;
+    }
+
+    responseToSend = BuildErrorResponse("unsupported_message_type");
+    return false;
 }

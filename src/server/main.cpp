@@ -4,7 +4,7 @@
 int main(){
     std::cout << "------SHARP BLAZE SERVER ENGINE------\n";
     
-    NetworkManager serverRTS(555);
+    NetworkManager serverRTS(5555);
 
     //Initialize server 
     serverRTS.start();
