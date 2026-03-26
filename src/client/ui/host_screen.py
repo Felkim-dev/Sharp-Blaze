@@ -49,9 +49,9 @@ class HostScreen:
                     mouse_pos = event.pos
                 
                 if self.box_name.button_rectangle.collidepoint(mouse_pos):
-                    self.box_name.change_isselected()
+                    self.box_name.is_selected = True
                 else:
-                    self.box_name.change_isselected()
+                    self.box_name.is_selected = False
 
             if event.type == pygame.KEYDOWN:
                 if self.box_name.is_selected:

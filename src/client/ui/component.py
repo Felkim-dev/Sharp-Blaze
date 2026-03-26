@@ -77,13 +77,7 @@ class InputBox:
         self.text_rect.center = self.button_rectangle.center
 
         # INITIAL STATES
-        self.is_selected = True
-
-    def change_isselected(self):
-        if self.is_selected:
-            self.is_selected = False
-        else:
-            self.is_selected = True
+        self.is_selected = False
 
     def draw(self,screen):
 
@@ -93,7 +87,7 @@ class InputBox:
         pygame.draw.rect(screen,self.BORDER_COLOR,self.button_rectangle, self.BORDER_SIZE, border_radius=self.corners_radius,)
 
         # Draw Object
-        if self.is_selected and self.string_input:
+        if self.is_selected or len(self.string_input)>0:
             self.text_surface_USER = self.button_font.render(self.string_input, True, self.BORDER_COLOR)
             screen.blit(self.text_surface_USER, self.text_rect)
         else:
