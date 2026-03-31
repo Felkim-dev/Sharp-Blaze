@@ -69,7 +69,7 @@ class LobbyScreen:
         """where screen manages the events of their buttons and input boxes"""
         for event in events:
             if self.btn_close.handle_event(event):
-                self.screen_manager.network.desconectar()
+                self.screen_manager.network.disconnect()
                 self.screen_manager.change_screen("MAIN")
 
     def update(self):

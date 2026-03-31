@@ -1,5 +1,5 @@
 import pygame
-from ui.component import Button, InputBox, Text,CloseButton
+from ui.component import Button, InputBox, Text,CloseButton,TextBox
 import string
 
 SERVER_IP = "10.163.104.121"
@@ -18,12 +18,16 @@ class JoinScreen:
         self.WHITE = (255, 255, 255)
         self.BLACK = (0, 0, 0)
         GRAY = (112, 112, 112)
+        RED_ERROR = (204, 5, 35)
 
         # INPUT BOX SIXE
         INPUT_WH = (500, 50)
 
         # BUTTON SIZE
         BUTTON_WH = (350, 50)
+
+        # ERROR TEXT SIZE
+        ERROR_WH = (800,200)
 
         # TEXT SIZE
         TEXT_SIZE = BUTTON_WH[1] // 2
@@ -81,6 +85,18 @@ class JoinScreen:
         # CLOSE BUTTON INSTANCE
         self.btn_close = CloseButton(pos_x, pos_y, button_size)
 
+        # ERROR
+        self.error_box = TextBox((240, init_y + separation_y+100),ERROR_WH,RED_ERROR,"SERVER DOES NOT RESPOND",self.WHITE)
+        # ERROR CONTROL
+        self.show_error = False
+        self.error_time_init = 0
+        self.duration_error = 5000 #ms
+
+    def show_notification(self):
+
+        self.show_error = True
+        self.error_time_init = pygame.time.get_ticks()
+
     def handle_events(self, events, keys):
         """where screen manages the events of their buttons and input boxes"""
 
@@ -98,7 +114,7 @@ class JoinScreen:
                     self.btn_join.button_rectangle.collidepoint(mouse_pos)
                     and len(self.inputbox_nickname.user_input) > 3
                 ):
-                    if self.screen_manager.network.estado_conexion != "CONECTANDO":
+                    if self.screen_manager.network.connection_status != "CONNECTING":
 
                         data_join = {
                             "type": "INITIAL_CONNECT",
@@ -148,17 +164,25 @@ class JoinScreen:
             self.inputbox_nickname.user_input = self.inputbox_nickname.user_input[:-1]
 
     def update(self):
-        estado = self.screen_manager.network.estado_conexion
+        state = self.screen_manager.network.connection_status
 
-        if estado == "CONECTANDO":
+        if state == "CONNECTING":
             pass
-        elif estado == "ERROR":
-            print("Mostrar mensaje de error en pantalla")
-            self.screen_manager.network.estado_conexion = "IDLE"
+        elif state == "ERROR":
+            self.show_notification()
+            self.screen_manager.network.connection_status = "IDLE"
 
-        elif estado == "IDLE" and self.screen_manager.network.connected:
+        elif state == "IDLE" and self.screen_manager.network.connected:
 
             self.screen_manager.change_screen("LOBBY")
+
+        if self.show_error:
+            actual_time = pygame.time.get_ticks()
+
+            elapsed_time = actual_time - self.error_time_init
+            
+            if elapsed_time > self.duration_error:
+                self.show_error = False
 
     def draw(self):
         # SCREEN DRAW
@@ -173,3 +197,7 @@ class JoinScreen:
 
         # EXIT BUTTON
         self.btn_close.draw(self.screen)
+        
+        #ERROR MESSAGE
+        if self.show_error:
+            self.error_box.draw(self.screen)
