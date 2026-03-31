@@ -1,0 +1,48 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "msys2-ucrt64",
+      "displayName": "MSYS2 UCRT64 (MinGW Makefiles)",
+      "description": "Configure server build using MSYS2 UCRT64 g++ on Windows.",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/build/ucrt64",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "C:/msys64/ucrt64/bin/g++.exe"
+      },
+      "environment": {
+        "PATH": "C:/msys64/ucrt64/bin;$penv{PATH}"
+      }
+    },
+    {
+      "name": "default-ninja",
+      "displayName": "Default Ninja",
+      "description": "Configure server build with Ninja using the default compiler.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "build-msys2-ucrt64",
+      "displayName": "Build (MSYS2 UCRT64)",
+      "configurePreset": "msys2-ucrt64",
+      "jobs": 8
+    },
+    {
+      "name": "build-default-ninja",
+      "displayName": "Build (Default Ninja)",
+      "configurePreset": "default-ninja",
+      "jobs": 8
+    }
+  ]
+}
