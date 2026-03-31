@@ -1,13 +1,15 @@
 import pygame
+import math
+import struct
 
 class GameScreen:
     def __init__(self, screen_manager , screen):
-        
-        #MAIN SCREEN
+
+        # MAIN SCREEN
         self.screen_manager = screen_manager
         self.screen  = screen
-        
-        #MAIN COLOR
+
+        # MAIN COLOR
         self.MAINDARK = (19, 23, 34)
 
     def handle_events(self, events, keys):

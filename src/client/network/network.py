@@ -21,7 +21,7 @@ class NetworkManager:
         self.server_ip = None
 
 #--------------------------- UDP Methods -------------------------------------
-    def init_udp_connection(self, ip, port):
+    def init_udp_connection(self, ip, port=5556):
         """It is called when the Lobby Start button is clicked"""
         self.server_ip = ip
         self.udp_port_server = port
