@@ -10,15 +10,6 @@ using json = nlohmann::json;
 
 /// @brief ESTE ARCHIVO ES PARA FRAMEAR LOS MENSAJES JSON DE IDA Y VUELTA
 
-// namespace client_protocol
-// {
-//     struct InitialConnectData
-//     {
-//         std::string playerId;
-//         std::string clientVersion;
-//         bool isReady = false;
-//     };
-
 std::string client_protocol::BuildErrorResponse(const std::string &reason)
 {
     json response = {

@@ -12,10 +12,11 @@
 //#include "third_party/json.hpp"
 #include "NetworkManager.h"
 #include "clientProtocol.h"
+#include "platform_socket.h"
 
-#ifdef _MSC_VER
-#pragma comment(lib, "Ws2_32.lib")
-#endif
+// #ifdef _MSC_VER
+// #pragma comment(lib, "Ws2_32.lib")
+// #endif
 
 namespace
 {
@@ -143,7 +144,7 @@ namespace
         if (!bothReady)
         {
             return;
-        }
+        }   
 
         const std::string startMsg = client_protocol::BuildMatchStartResponse(sessionId);
         SendText(pair.first, startMsg);
@@ -187,27 +188,22 @@ namespace
 
             const std::string queueMsg =
                 client_protocol::BuildQueueStatusResponse(static_cast<int>(g_waitingQueue.size()), g_players[socket].playerName);
-            if(SendText(other, queueMsg))
-            {
-                std::cout <<"enviado queue status\n";
-            };
-            
+            SendText(other, queueMsg);            
             TryMatchPlayersNoLock();
         }
     }
 }
 
+//TODO: corregir para que funcione con windows  y linux
 NetworkManager::NetworkManager(int p):port(p){
-    // Initialize WSA variables
+    // Initialize variables
     isRunning = false;
     serverSocket=INVALID_SOCKET;
-    
-    WSADATA wsaData;
 
-    // request winsock version 2.2
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    // INIT de platform_socket.h
+    if (!net::Init())
     {
-        std::cerr << "[ERROR] WSAStartup failed.\n";
+        std::cerr << "[ERROR] Socket library failed.\n";
     }
 };
 
@@ -218,19 +214,19 @@ NetworkManager::~NetworkManager(){
 void NetworkManager::stop(){
 
     isRunning = false;
-    if (serverSocket != INVALID_SOCKET)
+    if (net::IsValid(serverSocket))
     {
-        closesocket(serverSocket);
+        net::CloseSocket(serverSocket);
     }
-    WSACleanup();
+    net::Cleanup();
 };
 void NetworkManager::start(){
 
     serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (serverSocket == INVALID_SOCKET)
+    if (!net::IsValid(serverSocket))
     {
-        std::cerr << "[ERROR] Socket creation failed.\n";
-        WSACleanup();
+        std::cerr << "[ERROR] Socket creation failed." << net::GetLastError() << '\n';
+        net::Cleanup();
         return;
     }
     sockaddr_in serverAddr;
@@ -238,21 +234,22 @@ void NetworkManager::start(){
     serverAddr.sin_port = htons(port);
     serverAddr.sin_addr.s_addr = INADDR_ANY; //IP QUE SE ESCUCHA
 
+
     // bind the socket to the address and port
     if (bind(serverSocket, (sockaddr *)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
     {
-        std::cerr << "[ERROR] Socket bind failed.\n";
-        closesocket(serverSocket);
-        WSACleanup();
+        std::cerr << "[ERROR] Socket bind failed." << net::GetLastError() << '\n';
+        net::CloseSocket(serverSocket);
+        net::Cleanup();
         return;
     }
 
     // listen for incoming connections
     if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR)
     {
-        std::cerr << "[ERROR] Listen failed.\n";
-        closesocket(serverSocket);
-        WSACleanup();
+        std::cerr << "[ERROR] Listen failed." << net::GetLastError() << '\n';
+        net::CloseSocket(serverSocket);
+        net::Cleanup();
         return;
     }
     std::cout << "[INFO] Server is listening on port " << port << '\n';
@@ -263,10 +260,13 @@ void NetworkManager::start(){
     while (isRunning)
     {
         sockaddr_in clientAddr;
-        int clientSize = sizeof(clientAddr);
+        // int clientSize = sizeof(clientAddr);
+
+        // codigo para bind y listen
+        socklen_t clientSize = sizeof(clientAddr);
 
         SOCKET clientSocket = accept(serverSocket, (sockaddr *)&clientAddr, &clientSize);
-        if (clientSocket == INVALID_SOCKET)
+        if (!net::IsValid(clientSocket))
         {
             std::cerr << "[ERROR] Accept failed.\n";
             continue;
@@ -315,7 +315,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                     if (!SendText(clientSocket, responseToSend))
                     {
                         std::cerr << "[ERROR] send() failed for P" << playerId
-                                  << " code=" << WSAGetLastError() << "\n";
+                                  << " code=" << net::GetLastError() << "\n";
                         break;
                     }
                 }
@@ -374,7 +374,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
         else
         {
             std::cerr << "[ERROR] recv() failed for P" << playerId
-                      << " code=" << WSAGetLastError() << "\n";
+                      << " code=" << net::GetLastError() << "\n";
             break;
         }
     }
@@ -384,5 +384,5 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
         CleanupDisconnectedNoLock(clientSocket);
     }
 
-    closesocket(clientSocket);
+    net::CloseSocket(clientSocket);
 }

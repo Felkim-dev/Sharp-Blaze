@@ -1,7 +1,7 @@
 #ifndef NETWORK_MANAGER_H
 #define NETWORK_MANAGER_H
 
-#include <winsock2.h>
+#include "platform_socket.h"
 #include <vector>
 #include <thread>
 #include <mutex>
