@@ -7,13 +7,46 @@ class NetworkManager:
 
     def __init__(self):
         """INITIAL STATES"""
-        self.client = None
+        # -------------------- TCP INTIAL STATES -------------------
+        self.client_tcp = None
         self.connected = False
         self.connection_status = "IDLE"
-
         self.receive_buffer = ""
         self.pending_messages = []
 
+        # ------------------- UDP INITIAL STATES -------------------
+        self.client_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.client_udp.setblocking(False)
+        self.udp_port_server = None
+        self.server_ip = None
+
+#--------------------------- UDP Methods -------------------------------------
+    def init_udp_connection(self, ip, port):
+        """It is called when the Lobby Start button is clicked"""
+        self.server_ip = ip
+        self.udp_port_server = port
+        
+        welcome_message = b"HELLO_UDP"
+        
+        try:
+            self.client_udp.sendto(welcome_message,(self.server_ip,self.udp_port_server))
+            print("UDP Channel open. Waiting for positions")
+        except Exception as e:
+            print(f"Error at moment of UDP channel openning: {e}")
+
+    def receive_udp(self):
+        """Read the last postions packet from the server"""
+        try:
+            raw_data, origin_directions = self.client_udp.recvfrom(1024)
+            
+            return raw_data
+        
+        except BlockingIOError:
+            return None
+        except Exception as e:
+            return None
+
+#------------------------------- TCP methods ------------------------------------------------------
     def connect(self, ip, datos_iniciales, port=5555):
 
         if self.connection_status == "CONNECTING":
@@ -27,17 +60,17 @@ class NetworkManager:
         thread.start()
 
     def connection_thread(self, ip, port, datos_iniciales):
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        self.client.settimeout(3.0)
+        self.client_tcp.settimeout(3.0)
         try:
-            self.client.connect((ip, port))
+            self.client_tcp.connect((ip, port))
 
             mensaje = json.dumps(datos_iniciales) + "\n"
-            self.client.send(mensaje.encode("utf-8"))
+            self.client_tcp.send(mensaje.encode("utf-8"))
 
-            self.client.settimeout(None)
-            self.client.setblocking(False)
+            self.client_tcp.settimeout(None)
+            self.client_tcp.setblocking(False)
 
             self.connected = True
             self.connection_status = "IDLE"
@@ -56,7 +89,7 @@ class NetworkManager:
             try:
                 message = json.dumps(data_dictionary)
                 print(message)
-                self.client.send(message.encode("utf-8"))
+                self.client_tcp.send(message.encode("utf-8"))
             except Exception as e:
                 print(f"Error in: {e}")
 
@@ -67,7 +100,7 @@ class NetworkManager:
 
         if self.connected:
             try:
-                data = self.client.recv(4096).decode("utf-8")
+                data = self.client_tcp.recv(4096).decode("utf-8")
                 print(data)
                 if data:
                     self.receive_buffer += data
@@ -97,9 +130,9 @@ class NetworkManager:
                 self.connected = False
 
         return None
-
+    
     def disconnect(self):
-        if self.client is not None:
+        if self.client_tcp is not None:
 
             # SERVER DOES NOT RECEIVE this message
             # try:
@@ -111,12 +144,12 @@ class NetworkManager:
 
             # finally:
             try:
-                self.client.close()
+                self.client_tcp.close()
             except Exception as e:
                 print(f"Error forcing the socket to close: {e}")
 
             # RESTARTING VARIBLES TO THE INITIAL STATE
-            self.client = None
+            self.client_tcp = None
             self.connected = False
             self.connection_status = "IDLE"
 
