@@ -2,6 +2,8 @@ import socket
 import json
 import threading
 
+from utils.config import Config
+
 class NetworkManager:
     """Class that manages all the connections"""
 
@@ -20,14 +22,14 @@ class NetworkManager:
         self.udp_port_server = None
         self.server_ip = None
 
-#--------------------------- UDP Methods -------------------------------------
-    def init_udp_connection(self, ip, port=5556):
+    # --------------------------- UDP Methods -------------------------------------
+    def init_udp_connection(self):
         """It is called when the Lobby Start button is clicked"""
-        self.server_ip = ip
-        self.udp_port_server = port
-        
+        self.server_ip = Config.SERVER_IP
+        self.udp_port_server = Config.UDP_PORT
+
         welcome_message = b"HELLO_UDP"
-        
+
         try:
             self.client_udp.sendto(welcome_message,(self.server_ip,self.udp_port_server))
             print("UDP Channel open. Waiting for positions")
@@ -38,23 +40,26 @@ class NetworkManager:
         """Read the last postions packet from the server"""
         try:
             raw_data, origin_directions = self.client_udp.recvfrom(1024)
-            
+
             return raw_data
-        
+
         except BlockingIOError:
             return None
         except Exception as e:
             return None
 
-#------------------------------- TCP methods ------------------------------------------------------
-    def connect(self, ip, datos_iniciales, port=5555):
+    # ------------------------------- TCP methods ------------------------------------------------------
+    def connect(self, datos_iniciales):
 
+        self.server_ip = Config.SERVER_IP
+        self.tcp_port_server = Config.TCP_PORT
+        
         if self.connection_status == "CONNECTING":
             return
         self.connection_status = "CONNECTING"
 
         thread = threading.Thread(
-            target=self.connection_thread, args=(ip, port, datos_iniciales)
+            target=self.connection_thread, args=(self.server_ip, self.tcp_port_server, datos_iniciales)
         )
         thread.daemon = True
         thread.start()
@@ -130,7 +135,7 @@ class NetworkManager:
                 self.connected = False
 
         return None
-    
+
     def disconnect(self):
         if self.client_tcp is not None:
 
