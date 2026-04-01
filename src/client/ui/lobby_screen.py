@@ -80,6 +80,7 @@ class LobbyScreen:
                     if self.textbox_nickname2.text != "WAITING..." and self.btn_Start.button_rectangle.collidepoint(mouse_pos):
 
                         if Config.OFFLINE_DEBUG_MODE: # DEBUG MODE
+                            self.screen_manager.network.init_udp_connection()
                             self.screen_manager.change_screen("GAME")
                         else:
                             self.screen_manager.network.send_json(JSON_Manager.get_stargame())

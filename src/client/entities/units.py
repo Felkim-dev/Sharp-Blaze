@@ -33,10 +33,10 @@ class Unit:
 
 
 class Attacker(Unit):
-    def __init__(self, unit_id, start_x, start_y,size):
+    def __init__(self, unit_id, start_x, start_y):
         super().__init__(unit_id, start_x, start_y)
 
-        self.size = size
+        self.size = 10
         
     def get_points(self):
         # Calculate the vertex based on the central position x,y

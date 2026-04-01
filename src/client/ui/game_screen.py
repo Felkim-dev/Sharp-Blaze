@@ -2,6 +2,8 @@ import pygame
 import math
 import struct
 
+from engine.world import GameWorld
+
 class GameScreen:
     def __init__(self, screen_manager , screen):
 
@@ -11,12 +13,17 @@ class GameScreen:
 
         # MAIN COLOR
         self.MAINDARK = (19, 23, 34)
+        
+        #WORLD
+        self.world = GameWorld(self.screen_manager.network)
 
     def handle_events(self, events, keys):
         pass
 
     def update(self):
-        print(self.screen_manager.network.get_latest_positions())
+        self.world.update()
 
     def draw(self):
         self.screen.fill(self.MAINDARK)
+        
+        self.world.draw(self.screen)
