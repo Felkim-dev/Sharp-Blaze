@@ -128,7 +128,7 @@ class JoinScreen:
                                 },
                             }
 
-                            self.screen_manager.network.connect(Config.SERVER_IP,data_join)
+                            self.screen_manager.network.connect(data_join)
 
                 # Comprobation that the input box is clicked
                 if self.inputbox_nickname.inputbox_rectangle.collidepoint(mouse_pos):
