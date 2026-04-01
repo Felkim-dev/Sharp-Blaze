@@ -11,3 +11,14 @@ class JSON_Manager:
         }
         
         return datajoin
+
+    def get_stargame(): 
+        
+        start = {
+            "type": "START_GAME",
+            "payload":{
+                "start" : False,
+            },
+        }
+        
+        return start

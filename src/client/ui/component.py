@@ -176,6 +176,7 @@ class TextBox:
         Rectangle_Color: tuple,
         Text: str,
         Text_Color: tuple,
+        Text_size: int
         
     ):
         # Characteristics
@@ -191,7 +192,7 @@ class TextBox:
         self.text_color = Text_Color
 
         # FONT
-        self.font_size = RectangleDimension[1]//2
+        self.font_size = Text_size
         self.inputbox_font = pygame.font.Font(COMPONENTS_FONT, self.font_size)
 
         # INPUT DESIGN

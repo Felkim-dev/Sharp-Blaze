@@ -1,7 +1,9 @@
 import pygame
-from ui.component import Button, Text,TextBox,CloseButton
-from utils.config import Config
 
+from ui.component import Button, Text,TextBox,CloseButton
+
+from utils.config import Config
+from utils.json import JSON_Manager
 class LobbyScreen:
     def __init__(self, screen_manager, screen):
 
@@ -75,8 +77,11 @@ class LobbyScreen:
                     mouse_pos = event.pos
 
                     if self.textbox_nickname2.text != "WAITING..." and self.btn_Start.button_rectangle.collidepoint(mouse_pos):
-                        self.screen_manager.network.init_udp_connection()
-                        self.screen_manager.change_screen("GAME")
+
+                        if Config.OFFLINE_DEBUG_MODE: # DEBUG MODE
+                            self.screen_manager.change_screen("GAME")
+                        else:
+                            self.screen_manager.network.send_json(JSON_Manager.get_stargame())
 
             if self.btn_close.handle_event(event):
                 self.screen_manager.network.disconnect()
@@ -104,11 +109,16 @@ class LobbyScreen:
                     self.textbox_nickname2.text = "WAITING..."
                     self.textbox_nickname2.text_color = (84, 84, 84)
 
-                if data.get("type") == "MATCH_FOUND":
+                elif data.get("type") == "MATCH_FOUND":
 
                     self.textbox_nickname1.text = data["payload"]["you"]
                     self.textbox_nickname2.text = data["payload"]["opponent"]
                     self.textbox_nickname2.text_color = self.WHITE
+
+                if data.get("type") == "START_GAME" and data["payload"]["start"]:
+                    self.screen_manager.network.init_udp_connection()
+                    self.screen_manager.change_screen("GAME")
+
         else:
             # ======================= DEBUG MODE =======================
             self.textbox_nickname1.text = "Player1"
