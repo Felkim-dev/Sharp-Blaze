@@ -16,9 +16,7 @@ class GameScreen:
         pass
 
     def update(self):
-        raw_data = self.screen_manager.network.receive_udp()
-        if raw_data:
-            print(f"Me llegaron estos bytes de Steve: {raw_data}")
+        print(self.screen_manager.network.get_latest_positions())
 
     def draw(self):
         self.screen.fill(self.MAINDARK)

@@ -1,6 +1,7 @@
 import socket
 import json
 import threading
+import struct
 
 from utils.config import Config
 
@@ -18,9 +19,12 @@ class NetworkManager:
 
         # ------------------- UDP INITIAL STATES -------------------
         self.client_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.client_udp.setblocking(False)
+        self.client_udp.bind(("0.0.0.0",Config.UDP_PORT))
         self.udp_port_server = None
         self.server_ip = None
+
+        self.latest_positions = {}  
+        self.is_udp_listening = False
 
     # --------------------------- UDP Methods -------------------------------------
     def init_udp_connection(self):
@@ -33,27 +37,47 @@ class NetworkManager:
         try:
             self.client_udp.sendto(welcome_message,(self.server_ip,self.udp_port_server))
             print("UDP Channel open. Waiting for positions")
+
+            self.start_udp_thread()
         except Exception as e:
             print(f"Error at moment of UDP channel openning: {e}")
 
-    def receive_udp(self):
-        """Read the last postions packet from the server"""
-        try:
-            raw_data, origin_directions = self.client_udp.recvfrom(1024)
+    def start_udp_thread(self):
+        """Runs the secondary thread that hears the network"""
+        if not self.is_udp_listening:
+            self.is_udp_listening = True
+            thread = threading.Thread(target=self._udp_listen_loop, daemon=True)
+            thread.start()
 
-            return raw_data
+    def _udp_listen_loop(self):
+        """Bucle infinito del hilo secundario. Desempaqueta y guarda."""
+        while self.is_udp_listening:
+            try:
+                # Este hilo se quedará esperando aquí hasta que llegue un paquete
+                raw_data, origin_directions = self.client_udp.recvfrom(1024)
 
-        except BlockingIOError:
-            return None
-        except Exception as e:
-            return None
+                # Asumiendo tu paquete de 12 bytes (<iff)
+                if len(raw_data) == 12:
+                    entity_id, x, y = struct.unpack("<iff", raw_data)
+                    # Guardamos las coordenadas limpias en el buzón
+                    self.latest_positions[entity_id] = (x, y)
+
+            except OSError:
+                # Ocurre si cerramos el socket al desconectar
+                break
+            except Exception as e:
+                print(f"[ERROR UDP Thread] {e}")
+
+    def get_latest_positions(self):
+        """Pygame calls this method to retrieve te lastest positions"""
+        return self.latest_positions
 
     # ------------------------------- TCP methods ------------------------------------------------------
     def connect(self, datos_iniciales):
 
         self.server_ip = Config.SERVER_IP
         self.tcp_port_server = Config.TCP_PORT
-        
+
         if self.connection_status == "CONNECTING":
             return
         self.connection_status = "CONNECTING"

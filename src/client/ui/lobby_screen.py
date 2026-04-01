@@ -75,6 +75,7 @@ class LobbyScreen:
                     mouse_pos = event.pos
 
                     if self.textbox_nickname2.text != "WAITING..." and self.btn_Start.button_rectangle.collidepoint(mouse_pos):
+                        self.screen_manager.network.init_udp_connection()
                         self.screen_manager.change_screen("GAME")
 
             if self.btn_close.handle_event(event):
