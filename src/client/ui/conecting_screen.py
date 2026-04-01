@@ -52,12 +52,14 @@ class ConnectingScreen:
 
         # TEXT BOX
         # TEXT BOX CREATION
+        size_text_boxes = 25
         self.textbox_connecting = TextBox(
             (center_x_input, init_y),
             TEXTBOX_WH,
             self.GREEN,
             "CONNECTING",
-            self.BLACK
+            self.BLACK,
+            size_text_boxes,
         )
 
         # EXIT MAIN MENU BUTTON

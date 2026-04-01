@@ -55,8 +55,9 @@ class LobbyScreen:
         self.btn_Start = Button((center_x_button, init_y+100),BUTTON_WH,self.GRAY,"START GAME",self.BLACK,TEXT_SIZE,)
 
         # TEXT BOX CREATION
-        self.textbox_nickname1 = TextBox((center_x_text_player1, init_y),TEXT_WH,self.BLACK,"USER1",self.WHITE)
-        self.textbox_nickname2 = TextBox((center_x_text_player2, init_y),TEXT_WH,self.BLACK,"USER2",self.WHITE)
+        size_text_boxes = 25
+        self.textbox_nickname1 = TextBox((center_x_text_player1, init_y),TEXT_WH,self.BLACK,"USER1",self.WHITE,size_text_boxes)
+        self.textbox_nickname2 = TextBox((center_x_text_player2, init_y),TEXT_WH,self.BLACK,"USER2",self.WHITE,size_text_boxes)
 
         # Player text CREATION
 

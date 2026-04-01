@@ -88,7 +88,8 @@ class JoinScreen:
         self.btn_close = CloseButton(pos_x, pos_y, button_size)
 
         # ERROR
-        self.error_box = TextBox((240, init_y + separation_y+100),ERROR_WH,RED_ERROR,"SERVER DOES NOT RESPOND",self.WHITE)
+        error_text_size = 50
+        self.error_box = TextBox((240, init_y + separation_y+100),ERROR_WH,RED_ERROR,"SERVER DOES NOT RESPOND",self.WHITE,error_text_size)
         # ERROR CONTROL
         self.show_error = False
         self.error_time_init = 0
