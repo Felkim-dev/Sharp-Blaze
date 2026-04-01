@@ -1,5 +1,6 @@
 import pygame
 from ui.component import Button, Text,TextBox,CloseButton
+from utils.config import Config
 
 class LobbyScreen:
     def __init__(self, screen_manager, screen):
@@ -13,7 +14,7 @@ class LobbyScreen:
         self.MAINDARK = (19, 23, 34)
 
         self.WHITE = (255, 255, 255)
-        self.GRAY = (54, 54, 54)
+        self.GRAY = (112, 112, 112)
         self.BLACK = (0, 0, 0)
 
         # PLAYER BOX SIZE
@@ -49,7 +50,7 @@ class LobbyScreen:
         init_y = (self.screen.height // 3) + 50
 
         # Button creation
-        self.btn_Start = Button((center_x_button, init_y+100),BUTTON_WH,self.GRAY,"START GAME",self.WHITE,TEXT_SIZE,)
+        self.btn_Start = Button((center_x_button, init_y+100),BUTTON_WH,self.GRAY,"START GAME",self.BLACK,TEXT_SIZE,)
 
         # TEXT BOX CREATION
         self.textbox_nickname1 = TextBox((center_x_text_player1, init_y),TEXT_WH,self.BLACK,"USER1",self.WHITE)
@@ -68,27 +69,49 @@ class LobbyScreen:
     def handle_events(self, events, keys):
         """where screen manages the events of their buttons and input boxes"""
         for event in events:
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    mouse_pos = event.pos
+
+                    if self.textbox_nickname2.text != "WAITING..." and self.btn_Start.button_rectangle.collidepoint(mouse_pos):
+                        self.screen_manager.change_screen("GAME")
+
             if self.btn_close.handle_event(event):
                 self.screen_manager.network.disconnect()
                 self.screen_manager.change_screen("MAIN")
 
+            elif event.type == pygame.MOUSEMOTION:
+
+                # MOUSE ON BUTTON DETECTION
+                mouse_pos = event.pos
+
+                if self.textbox_nickname2.text != "WAITING...":
+                    self.btn_Start.check_hover(mouse_pos)
+
     def update(self):
-        data = self.screen_manager.network.receive_json()
 
-        if data:
+        if not Config.OFFLINE_DEBUG_MODE:
+            data = self.screen_manager.network.receive_json()
 
-            print(data)
+            if data:
 
-            if data.get("type") == "QUEUE_STATUS":
-                self.textbox_nickname1.text = data["payload"]["you"]
-                self.textbox_nickname2.text = "WAITING..."
-                self.textbox_nickname2.text_color = (84, 84, 84)
+                print(data)
 
-            if data.get("type") == "MATCH_FOUND":
+                if data.get("type") == "QUEUE_STATUS":
+                    self.textbox_nickname1.text = data["payload"]["you"]
+                    self.textbox_nickname2.text = "WAITING..."
+                    self.textbox_nickname2.text_color = (84, 84, 84)
 
-                self.textbox_nickname1.text = data["payload"]["you"]
-                self.textbox_nickname2.text = data["payload"]["opponent"]
-                self.textbox_nickname2.text_color = self.WHITE
+                if data.get("type") == "MATCH_FOUND":
+
+                    self.textbox_nickname1.text = data["payload"]["you"]
+                    self.textbox_nickname2.text = data["payload"]["opponent"]
+                    self.textbox_nickname2.text_color = self.WHITE
+        else:
+            # ======================= DEBUG MODE =======================
+            self.textbox_nickname1.text = "Player1"
+            self.textbox_nickname2.text = "Player2"
 
     def draw(self):
         # SCREEN DRAW

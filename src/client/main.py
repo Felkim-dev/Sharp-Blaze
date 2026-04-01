@@ -8,6 +8,7 @@ from ui.host_screen import HostScreen
 from ui.join_screen import JoinScreen
 from ui.lobby_screen import LobbyScreen
 from ui.conecting_screen import ConnectingScreen
+from ui.game_screen import GameScreen
 
 #IMPORT NETWORK MANAGER
 from network.network import NetworkManager
@@ -36,7 +37,8 @@ class GAME:
             "HOST": HostScreen(self, self.screen),
             "JOIN": JoinScreen(self, self.screen),
             "LOBBY": LobbyScreen(self, self.screen),
-            "CONNECTING": ConnectingScreen(self, self.screen)
+            "CONNECTING": ConnectingScreen(self, self.screen),
+            "GAME": GameScreen(self, self.screen),
         }
 
         #MAIN SCREEN WHEN THE GAME IS OPENED

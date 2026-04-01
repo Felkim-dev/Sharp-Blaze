@@ -1,8 +1,7 @@
 import pygame
 from ui.component import Button, InputBox, Text,CloseButton,TextBox
 import string
-
-SERVER_IP = "10.163.104.121"
+from utils.config import Config
 
 class JoinScreen:
     def __init__(self, screen_manager, screen):
@@ -114,18 +113,22 @@ class JoinScreen:
                     self.btn_join.button_rectangle.collidepoint(mouse_pos)
                     and len(self.inputbox_nickname.user_input) > 3
                 ):
-                    if self.screen_manager.network.connection_status != "CONNECTING":
+                    
+                    # ------------------ DEBUG MODE -------------------------
+                    if not Config.OFFLINE_DEBUG_MODE:
+                        
+                        if self.screen_manager.network.connection_status != "CONNECTING":
 
-                        data_join = {
-                            "type": "INITIAL_CONNECT",
-                            "payload": {
-                                "player_id": self.inputbox_nickname.user_input,
-                                "client_version": "xd",
-                                "is_ready": True,
-                            },
-                        }
+                            data_join = {
+                                "type": "INITIAL_CONNECT",
+                                "payload": {
+                                    "player_id": self.inputbox_nickname.user_input,
+                                    "client_version": "xd",
+                                    "is_ready": True,
+                                },
+                            }
 
-                        self.screen_manager.network.connect(SERVER_IP,data_join)
+                            self.screen_manager.network.connect(Config.SERVER_IP,data_join)
 
                 # Comprobation that the input box is clicked
                 if self.inputbox_nickname.inputbox_rectangle.collidepoint(mouse_pos):
@@ -172,7 +175,7 @@ class JoinScreen:
             self.show_notification()
             self.screen_manager.network.connection_status = "IDLE"
 
-        elif state == "IDLE" and self.screen_manager.network.connected:
+        elif (state == "IDLE" and self.screen_manager.network.connected) or Config.OFFLINE_DEBUG_MODE: #DEBUG MODE
 
             self.screen_manager.change_screen("LOBBY")
 
