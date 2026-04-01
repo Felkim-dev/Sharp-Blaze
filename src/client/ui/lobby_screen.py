@@ -47,7 +47,7 @@ class LobbyScreen:
         center_x_text_player1 = self.screen.get_rect().centerx - width_text * 1.5
         center_x_text_player2 = self.screen.get_rect().centerx + width_text//2
 
-        init_y = (self.screen.height // 3) + 50
+        init_y = (self.screen.get_height() // 3) + 50
 
         # Button creation
         self.btn_Start = Button((center_x_button, init_y+100),BUTTON_WH,self.GRAY,"START GAME",self.BLACK,TEXT_SIZE,)
