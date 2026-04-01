@@ -1,8 +1,11 @@
 import pygame
-from ui.component import Button, InputBox, Text,CloseButton,TextBox
 import string
+
+from ui.component import Button, InputBox, Text,CloseButton,TextBox
+
 from utils.config import Config
 
+from utils.json import JSON_Manager
 class JoinScreen:
     def __init__(self, screen_manager, screen):
 
@@ -113,20 +116,13 @@ class JoinScreen:
                     self.btn_join.button_rectangle.collidepoint(mouse_pos)
                     and len(self.inputbox_nickname.user_input) > 3
                 ):
-                    
+
                     # ------------------ DEBUG MODE -------------------------
                     if not Config.OFFLINE_DEBUG_MODE:
-                        
+
                         if self.screen_manager.network.connection_status != "CONNECTING":
 
-                            data_join = {
-                                "type": "INITIAL_CONNECT",
-                                "payload": {
-                                    "player_id": self.inputbox_nickname.user_input,
-                                    "client_version": "xd",
-                                    "is_ready": True,
-                                },
-                            }
+                            data_join = JSON_Manager.get_datajoin(self.inputbox_nickname.user_input)
 
                             self.screen_manager.network.connect(data_join)
 
@@ -183,7 +179,7 @@ class JoinScreen:
             actual_time = pygame.time.get_ticks()
 
             elapsed_time = actual_time - self.error_time_init
-            
+
             if elapsed_time > self.duration_error:
                 self.show_error = False
 
@@ -200,7 +196,7 @@ class JoinScreen:
 
         # EXIT BUTTON
         self.btn_close.draw(self.screen)
-        
-        #ERROR MESSAGE
+
+        # ERROR MESSAGE
         if self.show_error:
             self.error_box.draw(self.screen)
