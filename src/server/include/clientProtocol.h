@@ -1,5 +1,8 @@
 #include <string>
 #include <vector>
+#include <memory>
+
+class GameSession;
 
 namespace client_protocol
 {
@@ -37,7 +40,7 @@ namespace client_protocol
         const std::string& you,
         const std::string& opponent);
     
-    std::string BuildMatchStartResponse(const std::string& sessionId);
+    std::string BuildMatchStartResponse(const std::string& sessionId, std::shared_ptr<GameSession> session);
     bool MessageFramer(
     std::string&              carryBuffer, 
     const char*               chunk, 

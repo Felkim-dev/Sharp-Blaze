@@ -7,12 +7,16 @@
 #include <algorithm>
 #include <atomic>
 #include <unordered_map>
+#include <unordered_set>
+#include <memory>
 
 
 //#include "third_party/json.hpp"
 #include "NetworkManager.h"
 #include "clientProtocol.h"
 #include "platform_socket.h"
+#include "GameSession.h"
+#include "UDPBroadcaster.h"
 
 // #ifdef _MSC_VER
 // #pragma comment(lib, "Ws2_32.lib")
@@ -32,7 +36,11 @@ namespace
     std::deque<SOCKET> g_waitingQueue;
     std::unordered_map<SOCKET, PlayerState> g_players;
     std::unordered_map<std::string, std::pair<SOCKET,SOCKET>> g_sessions;
+    std::unordered_map<std::string, std::shared_ptr<GameSession>> g_gameSessions;
+    std::unordered_map<std::string, std::unique_ptr<KinematicSender>> g_udpSenders;
+    std::unordered_set<std::string> g_startedSessions;
     std::atomic<int> g_sessionCounter{1};
+    constexpr int kGameUdpPort = 5556;
     
     bool SendText(SOCKET socket, const std::string& text)
     {
@@ -111,6 +119,18 @@ namespace
 
             std::cout << "[MATCH] " << p1.playerName << " vs " << p2.playerName
                       << " | " << sessionId << "\n";
+            auto gameSession = std::make_shared<GameSession>(
+                p1.internalPlayerId,
+                p2.internalPlayerId,
+                sessionId);
+
+            auto udpSender = std::make_unique<KinematicSender>(kGameUdpPort);
+            udpSender->setSession(gameSession);
+            udpSender->start();
+
+            g_gameSessions[sessionId] = gameSession;
+            g_udpSenders[sessionId] = std::move(udpSender);
+            
         }
     }
 
@@ -122,35 +142,47 @@ namespace
         }
 
         PlayerState &me = g_players[socket];
-        if (me.sessionId != sessionId)
+        const std::string effectiveSessionId = sessionId.empty() ? me.sessionId : sessionId;
+
+        if (effectiveSessionId.empty())
         {
             return;
         }
 
-        if (!g_sessions.count(sessionId))
+        if (me.sessionId != effectiveSessionId)
+        {
+            return;
+        }
+
+        if (!g_sessions.count(effectiveSessionId))
+        {
+            return;
+        }
+
+        if (g_startedSessions.count(effectiveSessionId))
         {
             return;
         }
 
         me.ready = true;
-        const auto pair = g_sessions[sessionId];
+        const auto pair = g_sessions[effectiveSessionId];
 
         if (!g_players.count(pair.first) || !g_players.count(pair.second))
         {
             return;
         }
 
-        const bool bothReady = g_players[pair.first].ready && g_players[pair.second].ready;
-        if (!bothReady)
+        const std::string startMsg = client_protocol::BuildMatchStartResponse(
+            effectiveSessionId,
+            g_gameSessions[effectiveSessionId]);
+        if (SendText(pair.first, startMsg))
         {
-            return;
-        }   
-
-        const std::string startMsg = client_protocol::BuildMatchStartResponse(sessionId);
-        SendText(pair.first, startMsg);
+            std::cout << "GAME_START ENVIADO CORRECTAMENTE\n";
+        };
         SendText(pair.second, startMsg);
+        g_startedSessions.insert(effectiveSessionId);
 
-        std::cout << "[MATCH] " << sessionId << " started.\n";
+        std::cout << "[MATCH] " << effectiveSessionId << " started.\n";
     }
 
     void CleanupDisconnectedNoLock(SOCKET socket)
@@ -178,6 +210,15 @@ namespace
         const auto pair = g_sessions[me.sessionId];
         g_sessions.erase(me.sessionId);
 
+        auto senderIt = g_udpSenders.find(me.sessionId);
+        if (senderIt != g_udpSenders.end())
+        {
+            senderIt->second->stop();
+            g_udpSenders.erase(senderIt);
+        }
+        g_gameSessions.erase(me.sessionId);
+        g_startedSessions.erase(me.sessionId);
+
         const SOCKET other = (pair.first == socket) ? pair.second : pair.first;
         if (g_players.count(other))
         {
@@ -187,7 +228,7 @@ namespace
             g_waitingQueue.push_back(other);
 
             const std::string queueMsg =
-                client_protocol::BuildQueueStatusResponse(static_cast<int>(g_waitingQueue.size()), g_players[socket].playerName);
+                client_protocol::BuildQueueStatusResponse(static_cast<int>(g_waitingQueue.size()), me.playerName);
             SendText(other, queueMsg);            
             TryMatchPlayersNoLock();
         }

@@ -2,9 +2,11 @@
 #include <vector>
 #include <utility>
 #include <iostream>
+#include <memory>
 
 #include "third_party/json.hpp"
 #include "clientProtocol.h"
+#include "GameSession.h"
 
 using json = nlohmann::json;
 
@@ -17,6 +19,7 @@ std::string client_protocol::BuildErrorResponse(const std::string &reason)
         {"status", "rejected"},
         {"reason", reason}
     };
+    std::cout << "error en el msj\n";
     return response.dump() +"\n"; 
 }
 
@@ -58,12 +61,33 @@ std::string client_protocol::BuildMatchFoundResponse(
     return response.dump() + "\n";
 }
 
-std::string client_protocol::BuildMatchStartResponse(const std::string& sessionId)
+std::string client_protocol::BuildMatchStartResponse(const std::string& sessionId, std::shared_ptr<GameSession> session)
 {
+    json structures = json::object();
+    json units = json::object();
+
+    if (session)
+    {
+        auto structuresSnapshot = session->getStructuresSnapshot();
+        for (const auto& structure : structuresSnapshot)
+        {
+            structures[std::to_string(structure.entity_id)] = json::array({structure.x, structure.y});
+        }
+
+        auto unitsSnapshot = session->getUnitsSnapshot();
+        for (const auto& unit : unitsSnapshot)
+        {
+            units[std::to_string(unit.entity_id)] = json::array({unit.x, unit.y});
+        }
+    }
+
     json response = {
-        {"type", "MATCH_START"},
+        {"type", "START_GAME"},
         {"payload", {
-            {"session_id",sessionId}
+            {"session_id", sessionId},
+            {"start", true},
+            {"structures", structures},
+            {"units", units}
         }}
     };
     return response.dump() + '\n';
@@ -198,6 +222,40 @@ bool client_protocol::MessageProtocol(
 
         outMessage.type = ParsedMessageType::PlayerReady;
         outMessage.playerReady.sessionId = payload["session_id"].get<std::string>();
+        return true;
+    }
+
+    if (type == "START_GAME")
+    {
+        if (!data.contains("payload") || !data["payload"].is_object())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_payload");
+            return false;
+        }
+
+        const json& payload = data["payload"];
+        if (!payload.contains("start") || !payload["start"].is_boolean  ())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_start");
+            return false;
+        }
+
+        // El cliente usa start=false para solicitar el inicio de partida.
+        if (payload["start"].get<bool>() != false)
+        {
+            responseToSend = BuildErrorResponse("invalid_start_value");
+            return false;
+        }
+
+        outMessage.type = ParsedMessageType::PlayerReady;
+        if (payload.contains("session_id") && payload["session_id"].is_string())
+        {
+            outMessage.playerReady.sessionId = payload["session_id"].get<std::string>();
+        }
+        else
+        {
+            outMessage.playerReady.sessionId.clear();
+        }
         return true;
     }
 

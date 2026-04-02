@@ -2,12 +2,15 @@
 #define NETWORK_MANAGER_H
 
 #include "platform_socket.h"
+#include "GameSession.h"
+
 #include <vector>
 #include <thread>
 #include <mutex>
 #include <atomic>
 #include <deque>
 #include <string>
+
 
 
 class NetworkManager {
