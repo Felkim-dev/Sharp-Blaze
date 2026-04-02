@@ -34,7 +34,7 @@ class MainScreen:
         self.btn_exit = Button((center_x, init_y + separation_y * 4), BUTTON_WH, self.RED, "Exit", self.BLACK, TEXT_SIZE)
 
         # FONT
-        self.TITLE_FONT = r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\assets\Anton-Regular.ttf"
+        self.TITLE_FONT = r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\src\client\assets\Anton-Regular.ttf"
 
         # TEXT
         self.text_title = Text((self.screen.get_rect().centerx, self.screen.get_rect().centery//2),"SHARP BLAZE", 100,self.WHITE,self.TITLE_FONT)
@@ -77,7 +77,7 @@ class MainScreen:
 
     def update(self):
         pass
-    
+
     def draw(self):
         # SCREEN DRAW
         self.screen.fill((self.MAINDARK))  # Fondo oscuro

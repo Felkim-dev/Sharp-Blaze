@@ -1,9 +1,11 @@
 import pygame
-from ui.component import Button, InputBox, Text,CloseButton,TextBox
 import string
 
-SERVER_IP = "10.163.104.121"
+from ui.component import Button, InputBox, Text,CloseButton,TextBox
 
+from utils.config import Config
+
+from utils.json import JSON_Manager
 class JoinScreen:
     def __init__(self, screen_manager, screen):
 
@@ -41,7 +43,7 @@ class JoinScreen:
         width_input = INPUT_WH[0]
         center_x_input = self.screen.get_rect().centerx - (width_input // 2)
 
-        init_y = self.screen.height // 3
+        init_y = self.screen.get_height() // 3
         separation_y = 100
 
         # Button creation
@@ -86,7 +88,8 @@ class JoinScreen:
         self.btn_close = CloseButton(pos_x, pos_y, button_size)
 
         # ERROR
-        self.error_box = TextBox((240, init_y + separation_y+100),ERROR_WH,RED_ERROR,"SERVER DOES NOT RESPOND",self.WHITE)
+        error_text_size = 50
+        self.error_box = TextBox((240, init_y + separation_y+100),ERROR_WH,RED_ERROR,"SERVER DOES NOT RESPOND",self.WHITE,error_text_size)
         # ERROR CONTROL
         self.show_error = False
         self.error_time_init = 0
@@ -114,18 +117,15 @@ class JoinScreen:
                     self.btn_join.button_rectangle.collidepoint(mouse_pos)
                     and len(self.inputbox_nickname.user_input) > 3
                 ):
-                    if self.screen_manager.network.connection_status != "CONNECTING":
 
-                        data_join = {
-                            "type": "INITIAL_CONNECT",
-                            "payload": {
-                                "player_id": self.inputbox_nickname.user_input,
-                                "client_version": "xd",
-                                "is_ready": True,
-                            },
-                        }
+                    # ------------------ DEBUG MODE -------------------------
+                    if not Config.OFFLINE_DEBUG_MODE:
 
-                        self.screen_manager.network.connect(SERVER_IP,data_join)
+                        if self.screen_manager.network.connection_status != "CONNECTING":
+
+                            data_join = JSON_Manager.get_datajoin(self.inputbox_nickname.user_input)
+
+                            self.screen_manager.network.connect(data_join)
 
                 # Comprobation that the input box is clicked
                 if self.inputbox_nickname.inputbox_rectangle.collidepoint(mouse_pos):
@@ -172,7 +172,7 @@ class JoinScreen:
             self.show_notification()
             self.screen_manager.network.connection_status = "IDLE"
 
-        elif state == "IDLE" and self.screen_manager.network.connected:
+        elif (state == "IDLE" and self.screen_manager.network.connected) or Config.OFFLINE_DEBUG_MODE: #DEBUG MODE
 
             self.screen_manager.change_screen("LOBBY")
 
@@ -180,7 +180,7 @@ class JoinScreen:
             actual_time = pygame.time.get_ticks()
 
             elapsed_time = actual_time - self.error_time_init
-            
+
             if elapsed_time > self.duration_error:
                 self.show_error = False
 
@@ -197,7 +197,7 @@ class JoinScreen:
 
         # EXIT BUTTON
         self.btn_close.draw(self.screen)
-        
-        #ERROR MESSAGE
+
+        # ERROR MESSAGE
         if self.show_error:
             self.error_box.draw(self.screen)

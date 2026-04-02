@@ -37,7 +37,7 @@ class ConnectingScreen:
         width_input = TEXTBOX_WH[0]
         center_x_input = self.screen.get_rect().centerx - (width_input // 2)
 
-        init_y = self.screen.height // 3
+        init_y = self.screen.get_height() // 3
         separation_y = 100
 
         # Button creation
@@ -52,12 +52,14 @@ class ConnectingScreen:
 
         # TEXT BOX
         # TEXT BOX CREATION
+        size_text_boxes = 25
         self.textbox_connecting = TextBox(
             (center_x_input, init_y),
             TEXTBOX_WH,
             self.GREEN,
             "CONNECTING",
-            self.BLACK
+            self.BLACK,
+            size_text_boxes,
         )
 
         # EXIT MAIN MENU BUTTON
