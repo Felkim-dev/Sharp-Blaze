@@ -80,7 +80,12 @@ class LobbyScreen:
                     if self.textbox_nickname2.text != "WAITING..." and self.btn_Start.button_rectangle.collidepoint(mouse_pos):
 
                         if Config.OFFLINE_DEBUG_MODE: # DEBUG MODE
-                            self.screen_manager.network.init_udp_connection()
+                            
+                            units = {'5':(2500,2500)}
+                            structures = {'100':(1500,1500)}
+                            
+                            game_screen = self.screen_manager.screens["GAME"]
+                            game_screen.load_initial_state(units,structures)
                             self.screen_manager.change_screen("GAME")
                         else:
                             self.screen_manager.network.send_json(JSON_Manager.get_startgame())
@@ -122,7 +127,7 @@ class LobbyScreen:
                     units = data["payload"]["units"]
 
                     structures = data["payload"]["structures"]
-                    
+
                     game_screen = self.screen_manager.screens["GAME"]
 
                     game_screen.load_initial_state(units,structures)
