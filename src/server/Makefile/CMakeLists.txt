@@ -11,6 +11,8 @@ add_executable(sharp_blaze_server
     ../network/clientProtocol.cpp
     ../network/UDPBroadcaster.cpp
     ../network/GameSession.cpp
+    ../network/GameEngine.cpp
+    ../network/PathFinder.cpp
 )
 
 target_include_directories(sharp_blaze_server

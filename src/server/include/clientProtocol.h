@@ -17,10 +17,17 @@ namespace client_protocol
     {
         std::string sessionId;
     };
+    struct MoveUnitData
+    {
+        int unitId = 0;
+        float destX = 0.0f;
+        float destY = 0.0f;
+    };
     enum class ParsedMessageType
     {
         InitialConnect,
         PlayerReady,
+        MoveUnit,
         Unsuported
     };
     
@@ -29,6 +36,7 @@ namespace client_protocol
         ParsedMessageType type = ParsedMessageType::Unsuported;
         InitialConnectData initialConnect;
         PlayerReadyData playerReady;
+        MoveUnitData moveUnit;
     };
     
     std::string BuildErrorResponse(const std::string& reason);

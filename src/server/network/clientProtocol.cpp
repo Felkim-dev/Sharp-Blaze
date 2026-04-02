@@ -259,6 +259,40 @@ bool client_protocol::MessageProtocol(
         return true;
     }
 
+    if (type == "MOVE_ORDER")
+    {
+        if (!data.contains("payload") || !data["payload"].is_object())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_payload");
+            return false;
+        }
+
+        const json& payload = data["payload"];
+        if (!payload.contains("unit_id") || !payload["unit_id"].is_number_integer())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_unit_id");
+            return false;
+        }
+        if (!payload.contains("target_x") || !payload["target_x"].is_number())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_target_x");
+            return false;
+        }
+        if (!payload.contains("target_y") || !payload["target_y"].is_number())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_target_y");
+            return false;
+        }
+
+        outMessage.type = ParsedMessageType::MoveUnit;
+        outMessage.moveUnit.unitId = payload["unit_id"].get<int>();
+        outMessage.moveUnit.destX = payload["target_x"].get<float>();
+        outMessage.moveUnit.destY = payload["target_y"].get<float>();
+        responseToSend = BuildOkResponse();
+        std::cout << outMessage.moveUnit.unitId << "," << outMessage.moveUnit.destX << "," << outMessage.moveUnit.destY<< '\n';
+        return true;
+    }
+
     responseToSend = BuildErrorResponse("unsupported_message_type");
     return false;
 }

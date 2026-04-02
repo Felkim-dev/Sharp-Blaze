@@ -15,6 +15,7 @@
 #include "NetworkManager.h"
 #include "clientProtocol.h"
 #include "platform_socket.h"
+#include "GameEngine.h"
 #include "GameSession.h"
 #include "UDPBroadcaster.h"
 
@@ -37,6 +38,7 @@ namespace
     std::unordered_map<SOCKET, PlayerState> g_players;
     std::unordered_map<std::string, std::pair<SOCKET,SOCKET>> g_sessions;
     std::unordered_map<std::string, std::shared_ptr<GameSession>> g_gameSessions;
+    std::unordered_map<std::string, std::shared_ptr<GameEngine>> g_gameEngines;
     std::unordered_map<std::string, std::unique_ptr<KinematicSender>> g_udpSenders;
     std::unordered_set<std::string> g_startedSessions;
     std::atomic<int> g_sessionCounter{1};
@@ -129,6 +131,7 @@ namespace
             udpSender->start();
 
             g_gameSessions[sessionId] = gameSession;
+            g_gameEngines[sessionId] = std::make_shared<GameEngine>(gameSession);
             g_udpSenders[sessionId] = std::move(udpSender);
             
         }
@@ -216,6 +219,7 @@ namespace
             senderIt->second->stop();
             g_udpSenders.erase(senderIt);
         }
+        g_gameEngines.erase(me.sessionId);
         g_gameSessions.erase(me.sessionId);
         g_startedSessions.erase(me.sessionId);
 
@@ -404,6 +408,36 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                 {
                     std::lock_guard<std::mutex> lock(g_matchMutex);
                     HandleReadyNoLock(clientSocket, parsed.playerReady.sessionId);
+                }
+                else if (parsed.type == client_protocol::ParsedMessageType::MoveUnit)
+                {
+                    std::lock_guard<std::mutex> lock(g_matchMutex);
+
+                    if (!g_players.count(clientSocket))
+                    {
+                        continue;
+                    }
+
+                    const PlayerState& me = g_players[clientSocket];
+                    if (me.sessionId.empty())
+                    {
+                        continue;
+                    }
+
+                    auto engineIt = g_gameEngines.find(me.sessionId);
+                    if (engineIt == g_gameEngines.end())
+                    {
+                        continue;
+                    }
+
+                    games_types::PlayerCommand cmd{};
+                    cmd.playerId = me.internalPlayerId;
+                    cmd.unitId = parsed.moveUnit.unitId;
+                    cmd.destX = parsed.moveUnit.destX;
+                    cmd.destY = parsed.moveUnit.destY;
+
+                    engineIt->second->tcpCommandEnqueue(cmd);
+                    engineIt->second->commandQueueProcess();
                 }
             }
         }

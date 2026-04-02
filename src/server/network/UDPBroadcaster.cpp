@@ -190,11 +190,11 @@ void KinematicSender::LoopRecepcion()
                 known = udpClients.find(clientKey) != udpClients.end();
             }
 
-            if (bytesReceived == static_cast<int>(sizeof(UnitPosition)))
-            {
-                const UnitPosition* data = reinterpret_cast<const UnitPosition*>(buffer);
-                updateInternPosition(data->entity_id, data->x, data->y);
-            }
+            // if (bytesReceived == static_cast<int>(sizeof(UnitPosition)))
+            // {
+            //     const UnitPosition* data = reinterpret_cast<const UnitPosition*>(buffer);
+            //     updateInternPosition(data->entity_id, data->x, data->y);
+            // }
             else if(bytesReceived == 9)
             {
                 if (!known)

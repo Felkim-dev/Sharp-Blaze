@@ -17,4 +17,11 @@ namespace games_types
         int entity_id;
         float x, y;
     };
+    struct PlayerCommand
+    {
+        int playerId;
+        int unitId;
+        float destX;
+        float destY;
+    };
 }
