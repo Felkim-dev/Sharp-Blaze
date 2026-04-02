@@ -80,10 +80,10 @@ class LobbyScreen:
                     if self.textbox_nickname2.text != "WAITING..." and self.btn_Start.button_rectangle.collidepoint(mouse_pos):
 
                         if Config.OFFLINE_DEBUG_MODE: # DEBUG MODE
-                            
+
                             units = {'5':(2500,2500)}
                             structures = {'100':(1500,1500)}
-                            
+
                             game_screen = self.screen_manager.screens["GAME"]
                             game_screen.load_initial_state(units,structures)
                             self.screen_manager.change_screen("GAME")
@@ -117,6 +117,8 @@ class LobbyScreen:
                     self.textbox_nickname2.text_color = (84, 84, 84)
 
                 elif data.get("type") == "MATCH_FOUND":
+
+                    # local_player_id = data["payload"]["you"]
 
                     self.textbox_nickname1.text = data["payload"]["you"]
                     self.textbox_nickname2.text = data["payload"]["opponent"]

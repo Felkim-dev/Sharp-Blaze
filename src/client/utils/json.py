@@ -9,16 +9,29 @@ class JSON_Manager:
                 "is_ready": True,
             },
         }
-        
+
         return datajoin
 
     def get_startgame(): 
-        
+
         start = {
             "type": "START_GAME",
             "payload":{
                 "start" : False,
             },
         }
-        
+
         return start
+
+    def get_moveorder(id,x,y):
+
+        command_payload = {
+            "type": "MOVE_ORDER",
+            "payload": {
+                "unit_id": id,
+                "target_x": x,
+                "target_y": y,
+            },
+        }
+        
+        return command_payload

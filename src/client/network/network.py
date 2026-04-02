@@ -2,6 +2,7 @@ import socket
 import json
 import threading
 import struct
+import time
 
 from utils.config import Config
 
@@ -10,6 +11,9 @@ class NetworkManager:
 
     def __init__(self):
         """INITIAL STATES"""
+
+        self.current_rtt = 0
+
         # -------------------- TCP INTIAL STATES -------------------
         self.client_tcp = None
         self.connected = False
@@ -30,7 +34,7 @@ class NetworkManager:
     def init_udp_connection(self):
         """It is called when the Lobby Start button is clicked"""
         self.server_ip = Config.SERVER_IP
-        self.udp_port_server = Config.UDP_PORT
+        self.udp_port_server = 5556
 
         welcome_message = b"HELLO_UDP"
 
@@ -186,3 +190,9 @@ class NetworkManager:
             self.receive_buffer = ""
             self.pending_messages = []
             print("Disconnection complete and network restarted.")
+
+    def calculate_rtt(self, sent_timestamp):
+        """Called when the UDP thread receives a ping echo from the C++ server."""
+        current_time = time.time()
+        # Time difference in seconds * 1000 = milliseconds
+        self.current_rtt = (current_time - sent_timestamp) * 1000
