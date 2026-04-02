@@ -26,6 +26,7 @@ ENV/
 .env
 .pytest_cache/
 .mypy_cache/
+sharp_blaze_venv/
 
 # ==========================================
 # Docker & Infrastructure
