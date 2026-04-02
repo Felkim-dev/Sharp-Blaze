@@ -1,4 +1,5 @@
 import pygame
+import math
 
 class Unit:
     def __init__(self, unit_id, start_x, start_y):
@@ -17,6 +18,10 @@ class Unit:
         self.hp = 100
         self.color = (255,255,255)
 
+        # SELECTION
+        self.is_selected = False
+        self.hitbox_radius = 20  # How forgiving the click detection is
+
     def update_target(self, new_x, new_y):
         '''Update where the unit will be move'''
         self.target_x = new_x
@@ -31,6 +36,22 @@ class Unit:
         self.x += (self.target_x - self.x) * lerp_factor
         self.y += (self.target_y - self.y) * lerp_factor
 
+    def check_click(self, world_click_x, world_click_y):
+        """Returns True if the world coordinates fall inside this unit's hitbox."""
+        distance = math.hypot(self.x - world_click_x, self.y - world_click_y)
+        return distance <= self.hitbox_radius
+
+    def draw_selection_ring(self, screen, camera_x, camera_y):
+        """Draws a green ring around the unit if it is selected."""
+        if self.is_selected:
+            screen_x = int(self.x - camera_x)
+            screen_y = int(self.y - camera_y)
+
+            # Draw a green circle with 2px thickness (outline only)
+            pygame.draw.circle(
+                screen, (0, 255, 0), (screen_x, screen_y), self.hitbox_radius + 2, 2
+            )
+
 
 class Attacker(Unit):
     def __init__(self, unit_id, start_x, start_y):
@@ -40,6 +61,8 @@ class Attacker(Unit):
 
     def draw(self,screen, camera_x, camera_y):
         """The unit is drawed"""
+
+        self.draw_selection_ring(screen, camera_x, camera_y)
 
         screen_x = int(self.x - camera_x)
         screen_y = int(self.y - camera_y)
@@ -55,12 +78,14 @@ class Attacker(Unit):
 class Recolectors(Unit):
     def __init__(self, unit_id, start_x, start_y):
         super().__init__(unit_id, start_x, start_y)
-        
+
         self.radius = 15
     def draw(self,screen,camera_x,camera_y):
-        
+
         pos_x = int(self.x - camera_x)
         pos_y = int(self.y - camera_y)
-        
+
+        self.draw_selection_ring(screen, camera_x, camera_y)
+
         if (-self.radius < pos_x < screen.get_width() + self.radius) and (-self.radius < pos_y < screen.get_height() + self.radius):
             pygame.draw.circle(screen, self.color, (pos_x,pos_y), 15)

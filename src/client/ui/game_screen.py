@@ -5,6 +5,7 @@ import struct
 from engine.world import GameWorld
 from engine.camera import Camera
 from ui.minimap import Minimap
+from ui.telemetry import TelemetryPanel
 
 class GameScreen:
     def __init__(self, screen_manager , screen):
@@ -27,11 +28,44 @@ class GameScreen:
         # MINIMAP
         self.minimap = Minimap(screen_w,screen_h,map_width=5000, map_height=5000)
 
+        # Instantiate the Telemetry Panel
+        self.telemetry = TelemetryPanel(self.screen.get_width())
+
     def load_initial_state(self, units, structures):
         self.world.build_initial_state(units,structures)
 
     def handle_events(self, events, keys):
-        pass
+        """Processes one-time events like mouse clicks."""
+        for event in events:
+            # Detect Mouse Button Press
+            if event.type == pygame.MOUSEBUTTONDOWN:
+
+                mouse_x, mouse_y = event.pos
+
+                # 1. UI PROTECTION: Check if click is on the Minimap first!
+                # Assuming your Minimap class has the geometry we built earlier
+                dist_to_minimap = math.hypot(
+                    mouse_x - self.minimap.cx, mouse_y - self.minimap.cy
+                )
+                if dist_to_minimap <= self.minimap.radius:
+                    # Click was inside the minimap UI, ignore world selection
+                    continue
+
+                # 2. TRANSLATE: Screen Coordinates -> World Coordinates
+                world_x = mouse_x + self.camera.x
+                world_y = mouse_y + self.camera.y
+
+                # -------------------------------------------------------------
+                # LEFT CLICK (Button 1) -> Select Units
+                # -------------------------------------------------------------
+                if event.button == 1:
+                    self.world.handle_left_click(world_x, world_y)
+
+                # -------------------------------------------------------------
+                # RIGHT CLICK (Button 3) -> Issue Move Commands
+                # -------------------------------------------------------------
+                elif event.button == 3:
+                    self.world.handle_right_click(world_x, world_y)
 
     def update(self):
 
@@ -65,6 +99,9 @@ class GameScreen:
 
         self.minimap.draw(self.screen,self.world,self.camera)
 
+        # 2. Draw Telemetry UI at the very top layer
+        self.telemetry.draw(self.screen, self.screen_manager.clock , self.screen_manager.network)
+        
         grosor = 5
         color_alerta = (255, 0, 0)  # Rojo
 
