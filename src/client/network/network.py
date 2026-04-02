@@ -61,9 +61,6 @@ class NetworkManager:
                     entity_id, x, y = struct.unpack("<iff", raw_data)
                     # Guardamos las coordenadas limpias en el buzón
                     self.latest_positions[entity_id] = (x, y)
-                    print(f"SI RECIBI {self.latest_positions}")
-                else:
-                    print("LLEGO ALGO RARO")
 
             except OSError:
                 # Ocurre si cerramos el socket al desconectar

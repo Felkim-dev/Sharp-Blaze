@@ -28,8 +28,6 @@ class GameWorld:
 
         network_data = self.network.get_latest_positions()
 
-        print(f"LLEGA A DIBUJAR:{network_data}")
-
         for entity_id,(net_x, net_y) in network_data.items():
 
             if entity_id < 100:
