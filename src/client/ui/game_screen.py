@@ -31,7 +31,30 @@ class GameScreen:
         self.world.build_initial_state(units,structures)
 
     def handle_events(self, events, keys):
-        pass
+        """Processes one-time events like mouse clicks."""
+        for event in events:
+            # Detect Mouse Button Press
+            if event.type == pygame.MOUSEBUTTONDOWN:
+
+                # event.button == 1 is Left Click
+                if event.button == 1:
+                    mouse_x, mouse_y = event.pos
+
+                    # 1. UI PROTECTION: Check if click is on the Minimap first!
+                    # Assuming your Minimap class has the geometry we built earlier
+                    dist_to_minimap = math.hypot(
+                        mouse_x - self.minimap.cx, mouse_y - self.minimap.cy
+                    )
+                    if dist_to_minimap <= self.minimap.radius:
+                        # Click was inside the minimap UI, ignore world selection
+                        continue
+
+                    # 2. TRANSLATE: Screen Coordinates -> World Coordinates
+                    world_x = mouse_x + self.camera.x
+                    world_y = mouse_y + self.camera.y
+
+                    # 3. EXECUTE: Tell the world to select units at this world coordinate
+                    self.world.handle_left_click(world_x, world_y)
 
     def update(self):
 
