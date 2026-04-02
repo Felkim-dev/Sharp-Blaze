@@ -12,7 +12,7 @@ class JSON_Manager:
         
         return datajoin
 
-    def get_stargame(): 
+    def get_startgame(): 
         
         start = {
             "type": "START_GAME",

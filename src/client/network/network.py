@@ -61,6 +61,9 @@ class NetworkManager:
                     entity_id, x, y = struct.unpack("<iff", raw_data)
                     # Guardamos las coordenadas limpias en el buzón
                     self.latest_positions[entity_id] = (x, y)
+                    print(f"SI RECIBI {self.latest_positions}")
+                else:
+                    print("LLEGO ALGO RARO")
 
             except OSError:
                 # Ocurre si cerramos el socket al desconectar
@@ -116,9 +119,9 @@ class NetworkManager:
     def send_json(self, data_dictionary):
         if self.connected:
             try:
-                message = json.dumps(data_dictionary)
-                print(message)
+                message = json.dumps(data_dictionary) + "\n"
                 self.client_tcp.send(message.encode("utf-8"))
+                print(f"Mensaje de salida TCP: {message}")
             except Exception as e:
                 print(f"Error in: {e}")
 
@@ -130,7 +133,7 @@ class NetworkManager:
         if self.connected:
             try:
                 data = self.client_tcp.recv(4096).decode("utf-8")
-                print(data)
+                print(f"Mensaje de entrada TCP: {data}")
                 if data:
                     self.receive_buffer += data
                     if "\n" in self.receive_buffer:

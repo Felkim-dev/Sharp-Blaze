@@ -83,7 +83,7 @@ class LobbyScreen:
                             self.screen_manager.network.init_udp_connection()
                             self.screen_manager.change_screen("GAME")
                         else:
-                            self.screen_manager.network.send_json(JSON_Manager.get_stargame())
+                            self.screen_manager.network.send_json(JSON_Manager.get_startgame())
 
             if self.btn_close.handle_event(event):
                 self.screen_manager.network.disconnect()
@@ -118,7 +118,17 @@ class LobbyScreen:
                     self.textbox_nickname2.text_color = self.WHITE
 
                 if data.get("type") == "START_GAME" and data["payload"]["start"]:
+
+                    units = data["payload"]["units"]
+
+                    structures = data["payload"]["structures"]
+                    
+                    game_screen = self.screen_manager.screens["GAME"]
+
+                    game_screen.load_initial_state(units,structures)
+
                     self.screen_manager.network.init_udp_connection()
+
                     self.screen_manager.change_screen("GAME")
 
         else:
