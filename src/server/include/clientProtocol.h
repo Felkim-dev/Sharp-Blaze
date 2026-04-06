@@ -1,5 +1,8 @@
 #include <string>
 #include <vector>
+#include <memory>
+
+class GameSession;
 
 namespace client_protocol
 {
@@ -14,10 +17,17 @@ namespace client_protocol
     {
         std::string sessionId;
     };
+    struct MoveUnitData
+    {
+        int unitId = 0;
+        float destX = 0.0f;
+        float destY = 0.0f;
+    };
     enum class ParsedMessageType
     {
         InitialConnect,
         PlayerReady,
+        MoveUnit,
         Unsuported
     };
     
@@ -26,6 +36,7 @@ namespace client_protocol
         ParsedMessageType type = ParsedMessageType::Unsuported;
         InitialConnectData initialConnect;
         PlayerReadyData playerReady;
+        MoveUnitData moveUnit;
     };
     
     std::string BuildErrorResponse(const std::string& reason);
@@ -37,7 +48,7 @@ namespace client_protocol
         const std::string& you,
         const std::string& opponent);
     
-    std::string BuildMatchStartResponse(const std::string& sessionId);
+    std::string BuildMatchStartResponse(const std::string& sessionId, std::shared_ptr<GameSession> session);
     bool MessageFramer(
     std::string&              carryBuffer, 
     const char*               chunk, 
