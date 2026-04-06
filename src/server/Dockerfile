@@ -21,6 +21,7 @@ WORKDIR /app
 
 COPY --from=builder /app/build/linux/sharp_blaze_server /app/sharp_blaze_server
 
-EXPOSE 5555
+EXPOSE 5555/tcp
+EXPOSE 5556/udp
 
 CMD ["/app/sharp_blaze_server"]
