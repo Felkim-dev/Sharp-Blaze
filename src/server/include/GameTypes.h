@@ -24,4 +24,10 @@ namespace games_types
         float destX;
         float destY;
     };
+    // struct WaitingPlayer
+    // {
+    //     SOCKET socket = INVALID_SOCKET;
+    //     std::string playerName;
+    //     bool ready = false;
+    // };
 }

@@ -2,15 +2,14 @@
 #define NETWORK_MANAGER_H
 
 #include "platform_socket.h"
-#include "GameSession.h"
+#include "SessionManager.h"
 
-#include <vector>
 #include <thread>
-#include <mutex>
-#include <atomic>
 #include <deque>
+#include <atomic>
+#include <unordered_map>
 #include <string>
-
+#include <mutex>
 
 
 class NetworkManager {
@@ -21,31 +20,30 @@ public:
     void stop();              //para detener el server
 
 private:
-    void handleClient(SOCKET clientSocket, int playerId); 
+    struct PlayerState
+    {
+        SOCKET socket = INVALID_SOCKET;
+        int internalPlayerId = 0;
+        std::string playerName;
+        std::string sessionId;
+    };
+
+    bool sendText(SOCKET socket, const std::string& text);
+    void handleClient(SOCKET clientSocket, int playerId);
+    void removeFromQueueNoLock(SOCKET socket);
+    void tryMatchPlayersNoLock();
+    void handleReadyNoLock(SOCKET socket, const std::string& sessionId);
+    void cleanupDisconnectedNoLock(SOCKET socket);
+
+    SessionOrchestrator sessionOrchestrator;
+
+    std::mutex g_matchMutex;
+    std::deque<SOCKET> g_waitingQueue;
+    std::unordered_map<SOCKET, PlayerState> g_players;
+
     SOCKET serverSocket;
     int port;
     std::atomic<bool> isRunning;
-    std::vector<std::thread> clientThreads;
-    std::mutex clientMutex;
-
-    struct WaitingPlayer
-    {
-        SOCKET socket;
-        int playerId;
-        std::string playerName;
-    };
-
-    std::deque<WaitingPlayer> waitingQueue;
-    std::mutex matchmakingMutex;
-    std::atomic<int> sessionCounter{1};
-    
-    void enqueueForMatchmaking(SOCKET socket, int playerId, const std::string& playerName);
-    void removeFromMatchmakingQueue(SOCKET socket);
-    void tryMatchPlayersLocked();
-    std::string createSessionId();
-    bool sendAll(SOCKET socket, const std::string& text);
-    
-
 };
 
 

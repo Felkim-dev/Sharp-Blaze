@@ -8,8 +8,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_executable(sharp_blaze_server
     ../main.cpp
     ../network/NetworkManager.cpp
+    ../network/SessionManager.cpp
     ../network/clientProtocol.cpp
-    ../network/UDPBroadcaster.cpp
+    ../transport/UDPBroadcaster.cpp
     ../network/GameSession.cpp
     ../network/GameEngine.cpp
     ../network/PathFinder.cpp
