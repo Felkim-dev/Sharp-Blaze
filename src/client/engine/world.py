@@ -9,13 +9,16 @@ class GameWorld:
 
         self.network = network_manager
 
+        self.local_color = (0, 212, 255)
+        self.enemy_color = (255, 0, 85)
+        
         self.units = {}
         self.structures = {}
 
     def build_initial_state(self,units, structures):
 
         for entity_id,(net_x, net_y) in units.items(): 
-            
+
             entity_id2 =int(entity_id)
             self.units[entity_id2] = Attacker(entity_id2, net_x, net_y)
 
@@ -26,6 +29,21 @@ class GameWorld:
                 self.structures[entity_id] = Base(entity_id,net_x,net_y)
             elif entity_id == '103':
                 self.structures[entity_id] = Shop(entity_id,net_x,net_y)
+
+    def unit_colorize(self,units,structures):
+        
+        for entity_id, (net_x, net_y) in units.items():
+
+            entity_id2 = int(entity_id)
+            self.units[entity_id2] = Attacker(entity_id2, net_x, net_y)
+
+        for entity_id, (net_x, net_y) in structures.items():
+            if entity_id == "100":
+                self.structures[entity_id] = Base(entity_id, net_x, net_y)
+            elif entity_id == "101":
+                self.structures[entity_id] = Base(entity_id, net_x, net_y)
+            elif entity_id == "103":
+                self.structures[entity_id] = Shop(entity_id, net_x, net_y)
 
     def handle_right_click(self, target_world_x, target_world_y):
         """Finds selected units and sends a MOVE_ORDER to the server."""
@@ -51,11 +69,11 @@ class GameWorld:
         network_data = self.network.get_latest_positions()
 
         print(network_data)
-        
+
         for entity_id,(net_x, net_y) in network_data.items():
-            
+
             entity_id2 = int(entity_id)
-            
+
             if entity_id2 not in self.units:
                 self.units[entity_id2] = Recolectors(entity_id2,net_x,net_y)
             else:

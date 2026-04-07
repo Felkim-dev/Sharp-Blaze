@@ -118,10 +118,12 @@ class LobbyScreen:
 
                 elif data.get("type") == "MATCH_FOUND":
 
-                    # local_player_id = data["payload"]["you"]
+                    local_player_id = data["payload"]["you"]
+                    enemy_player_id = data["payload"]["opponent"]
 
-                    self.textbox_nickname1.text = data["payload"]["you"]
-                    self.textbox_nickname2.text = data["payload"]["opponent"]
+                    self.textbox_nickname1.text = local_player_id
+                    self.textbox_nickname2.text = enemy_player_id
+                    
                     self.textbox_nickname2.text_color = self.WHITE
 
                 if data.get("type") == "START_GAME" and data["payload"]["start"]:
