@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(SharpBlazeServer LANGUAGES CXX)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -33,3 +35,23 @@ target_link_libraries(sharp_blaze_server PRIVATE Threads::Threads)
 if(WIN32)
     target_link_libraries(sharp_blaze_server PRIVATE ws2_32)
 endif()
+
+add_executable(sharp_blaze_server_tests
+    ../tests/server_logic_tests.cpp
+    ../network/GameSession.cpp
+    ../network/GameEngine.cpp
+    ../network/PathFinder.cpp
+)
+
+target_include_directories(sharp_blaze_server_tests
+    PRIVATE
+        ../include
+)
+
+target_link_libraries(sharp_blaze_server_tests PRIVATE Threads::Threads)
+
+if(WIN32)
+    target_link_libraries(sharp_blaze_server_tests PRIVATE ws2_32)
+endif()
+
+add_test(NAME server_logic_tests COMMAND sharp_blaze_server_tests)

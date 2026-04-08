@@ -1,5 +1,7 @@
 #include "../include/SessionManager.h"
 
+#include <chrono>
+#include <thread>
 #include <utility>
 
 namespace
@@ -14,10 +16,73 @@ SessionOrchestrator::~SessionOrchestrator()
     std::lock_guard<std::mutex> lock(mtx);
     for (auto& entry : sessionsById)
     {
+        stopSimulationNoLock(entry.second);
+
         if (entry.second.udpSender)
         {
             entry.second.udpSender->stop();
         }
+    }
+}
+
+void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
+                                         std::shared_ptr<std::atomic<bool>> runningFlag)
+{
+    constexpr int kTickMs = 16;
+    const std::chrono::milliseconds targetFrame(kTickMs);
+
+    while (runningFlag && runningFlag->load())
+    {
+        const auto tickStart = std::chrono::steady_clock::now();
+
+        if (engine)
+        {
+            engine->advanceCollectors(kTickMs);
+        }
+
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - tickStart);
+        if (elapsed < targetFrame)
+        {
+            std::this_thread::sleep_for(targetFrame - elapsed);
+        }
+    }
+}
+
+void SessionOrchestrator::startSimulationNoLock(SessionRecord& record)
+{
+    if (!record.engine)
+    {
+        return;
+    }
+
+    if (!record.simulationRunning)
+    {
+        record.simulationRunning = std::make_shared<std::atomic<bool>>(false);
+    }
+
+    if (record.simulationThread.joinable())
+    {
+        return;
+    }
+
+    record.simulationRunning->store(true);
+    record.simulationThread = std::thread(
+        &SessionOrchestrator::simulationLoop,
+        record.engine,
+        record.simulationRunning);
+}
+
+void SessionOrchestrator::stopSimulationNoLock(SessionRecord& record)
+{
+    if (record.simulationRunning)
+    {
+        record.simulationRunning->store(false);
+    }
+
+    if (record.simulationThread.joinable())
+    {
+        record.simulationThread.join();
     }
 }
 
@@ -46,6 +111,7 @@ std::string SessionOrchestrator::createMatch(const MatchCandidate& a, const Matc
     record.session = session;
     record.engine = engine;
     record.udpSender = std::move(sender);
+    record.simulationRunning = std::make_shared<std::atomic<bool>>(false);
 
     sessionsById[sessionId] = std::move(record);
     sessionIdByClient[a.socket] = sessionId;
@@ -86,6 +152,7 @@ bool SessionOrchestrator::markReady(SOCKET clientSocket, const std::string& sess
     if (record.p1Ready && record.p2Ready)
     {
         record.started = true;
+        startSimulationNoLock(record);
         return true;
     }
 
@@ -112,6 +179,8 @@ void SessionOrchestrator::closeByClient(SOCKET clientSocket)
 
     const SOCKET p1 = sessionIt->second.p1;
     const SOCKET p2 = sessionIt->second.p2;
+
+    stopSimulationNoLock(sessionIt->second);
 
     if (sessionIt->second.udpSender)
     {

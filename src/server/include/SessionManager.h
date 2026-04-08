@@ -3,6 +3,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 #include <unordered_map>
 
@@ -40,9 +41,15 @@ private:
         std::shared_ptr<GameSession> session;
         std::shared_ptr<GameEngine> engine;
         std::unique_ptr<KinematicSender> udpSender;
+        std::shared_ptr<std::atomic<bool>> simulationRunning;
+        std::thread simulationThread;
     };
 
     std::string makeSessionId();
+    void startSimulationNoLock(SessionRecord& record);
+    void stopSimulationNoLock(SessionRecord& record);
+    static void simulationLoop(std::shared_ptr<GameEngine> engine,
+                               std::shared_ptr<std::atomic<bool>> runningFlag);
 
     mutable std::mutex mtx;
     std::atomic<int> sessionCounter{1};

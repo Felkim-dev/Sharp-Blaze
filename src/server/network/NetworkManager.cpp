@@ -358,33 +358,122 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                 }
                 else if (parsed.type == client_protocol::ParsedMessageType::MoveUnit)
                 {
-                    std::lock_guard<std::mutex> lock(g_matchMutex);
-
-                    if (!g_players.count(clientSocket))
+                    std::string sessionId;
+                    int internalPlayerId = 0;
                     {
-                        continue;
+                        std::lock_guard<std::mutex> lock(g_matchMutex);
+                        if (!g_players.count(clientSocket))
+                        {
+                            continue;
+                        }
+
+                        const PlayerState& me = g_players[clientSocket];
+                        if (me.sessionId.empty())
+                        {
+                            continue;
+                        }
+
+                        sessionId = me.sessionId;
+                        internalPlayerId = me.internalPlayerId;
                     }
 
-                    const PlayerState& me = g_players[clientSocket];
-                    if (me.sessionId.empty())
-                    {
-                        continue;
-                    }
-
-                    auto engine = sessionOrchestrator.getEngine(me.sessionId);
+                    auto engine = sessionOrchestrator.getEngine(sessionId);
                     if (!engine)
                     {
                         continue;
                     }
 
                     games_types::PlayerCommand cmd{};
-                    cmd.playerId = me.internalPlayerId;
+                    cmd.playerId = internalPlayerId;
                     cmd.unitId = parsed.moveUnit.unitId;
                     cmd.destX = parsed.moveUnit.destX;
                     cmd.destY = parsed.moveUnit.destY;
 
                     engine->tcpCommandEnqueue(cmd);
                     engine->commandQueueProcess();
+                }
+                else if (parsed.type == client_protocol::ParsedMessageType::BuyUnit)
+                {
+                    std::string sessionId;
+                    int internalPlayerId = 0;
+                    {
+                        std::lock_guard<std::mutex> lock(g_matchMutex);
+                        if (!g_players.count(clientSocket))
+                        {
+                            continue;
+                        }
+
+                        const PlayerState& me = g_players[clientSocket];
+                        if (me.sessionId.empty())
+                        {
+                            continue;
+                        }
+
+                        sessionId = me.sessionId;
+                        internalPlayerId = me.internalPlayerId;
+                    }
+
+                    auto engine = sessionOrchestrator.getEngine(sessionId);
+                    if (!engine)
+                    {
+                        continue;
+                    }
+
+                    const auto purchase = engine->processUnitPurchase(
+                        internalPlayerId,
+                        parsed.buyUnit.unitType,
+                        parsed.buyUnit.quantity);
+
+                    std::string buyerMsg;
+                    if (!purchase.success)
+                    {
+                        buyerMsg =
+                            std::string("{\"type\":\"BUY_UNIT_RESULT\",\"status\":\"rejected\",\"reason\":\"") +
+                            purchase.reason +
+                            "\"}\n";
+                        sendText(clientSocket, buyerMsg);
+                        continue;
+                    }
+
+                    buyerMsg =
+                        std::string("{\"type\":\"BUY_UNIT_RESULT\",\"status\":\"accepted\",\"payload\":{") +
+                        "\"unit_id\":" + std::to_string(purchase.unitId) + "," +
+                        "\"unit_type\":" + std::to_string(static_cast<int>(purchase.unitType)) + "," +
+                        "\"spawn_x\":" + std::to_string(purchase.spawnX) + "," +
+                        "\"spawn_y\":" + std::to_string(purchase.spawnY) + "," +
+                        "\"new_balance\":" + std::to_string(purchase.newBalance) +
+                        "}}\n";
+                    sendText(clientSocket, buyerMsg);
+
+                    std::pair<SOCKET, SOCKET> players{};
+                    if (sessionOrchestrator.getPlayers(sessionId, players))
+                    {
+                        const std::string spawnBroadcast =
+                            std::string("{\"type\":\"UNIT_SPAWNED\",\"payload\":{") +
+                            "\"unit_id\":" + std::to_string(purchase.unitId) + "," +
+                            "\"unit_type\":" + std::to_string(static_cast<int>(purchase.unitType)) + "," +
+                            "\"owner_player\":" + std::to_string(internalPlayerId) +
+                            "}}\n";
+                        sendText(players.first, spawnBroadcast);
+                        if (players.second != players.first)
+                        {
+                            sendText(players.second, spawnBroadcast);
+                        }
+                    }
+                }
+                else if (parsed.type == client_protocol::ParsedMessageType::DepositResource)
+                {
+                    {
+                        std::lock_guard<std::mutex> lock(g_matchMutex);
+                        if (!g_players.count(clientSocket))
+                        {
+                            continue;
+                        }
+                    }
+
+                    const std::string depositAck =
+                        "{\"type\":\"DEPOSIT_RESOURCE_RESULT\",\"status\":\"ignored\",\"reason\":\"server_authoritative_fsm\"}\n";
+                    sendText(clientSocket, depositAck);
                 }
             }
         }

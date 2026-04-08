@@ -10,6 +10,93 @@
 
 using json = nlohmann::json;
 
+namespace
+{
+    bool isPurchasableTroopType(games_types::EntityType type)
+    {
+        return type == games_types::EntityType::Collector ||
+               type == games_types::EntityType::Attacker;
+    }
+
+    bool parseEntityType(const json& value, games_types::EntityType& outType)
+    {
+        if (value.is_number_integer())
+        {
+            const int raw = value.get<int>();
+            if (raw >= static_cast<int>(games_types::EntityType::Structure) &&
+                raw <= static_cast<int>(games_types::EntityType::Unknown))
+            {
+                outType = static_cast<games_types::EntityType>(raw);
+                return true;
+            }
+            return false;
+        }
+
+        if (!value.is_string())
+        {
+            return false;
+        }
+
+        const std::string typeName = value.get<std::string>();
+        if (typeName == "Structure")
+        {
+            outType = games_types::EntityType::Structure;
+            return true;
+        }
+        if (typeName == "Attacker")
+        {
+            outType = games_types::EntityType::Attacker;
+            return true;
+        }
+        if (typeName == "Collector")
+        {
+            outType = games_types::EntityType::Collector;
+            return true;
+        }
+        if (typeName == "ResourceMine")
+        {
+            outType = games_types::EntityType::ResourceMine;
+            return true;
+        }
+        if (typeName == "Shop")
+        {
+            outType = games_types::EntityType::Shop;
+            return true;
+        }
+
+        return false;
+    }
+
+    bool parseResourceType(const json& value, games_types::ResourceType& outType)
+    {
+        if (value.is_number_integer())
+        {
+            const int raw = value.get<int>();
+            if (raw >= static_cast<int>(games_types::ResourceType::Gold) &&
+                raw <= static_cast<int>(games_types::ResourceType::Unknown))
+            {
+                outType = static_cast<games_types::ResourceType>(raw);
+                return true;
+            }
+            return false;
+        }
+
+        if (!value.is_string())
+        {
+            return false;
+        }
+
+        const std::string typeName = value.get<std::string>();
+        if (typeName == "Gold")
+        {
+            outType = games_types::ResourceType::Gold;
+            return true;
+        }
+
+        return false;
+    }
+}
+
 /// @brief ESTE ARCHIVO ES PARA FRAMEAR LOS MENSAJES JSON DE IDA Y VUELTA
 
 std::string client_protocol::BuildErrorResponse(const std::string &reason)
@@ -290,6 +377,107 @@ bool client_protocol::MessageProtocol(
         outMessage.moveUnit.destY = payload["target_y"].get<float>();
         responseToSend = BuildOkResponse();
         std::cout << outMessage.moveUnit.unitId << "," << outMessage.moveUnit.destX << "," << outMessage.moveUnit.destY<< '\n';
+        return true;
+    }
+
+    if (type == "BUY_UNIT")
+    {
+        if (!data.contains("payload") || !data["payload"].is_object())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_payload");
+            return false;
+        }
+
+        const json& payload = data["payload"];
+        if (!payload.contains("unit_type"))
+        {
+            responseToSend = BuildErrorResponse("missing_unit_type");
+            return false;
+        }
+
+        games_types::EntityType unitType = games_types::EntityType::Unknown;
+        if (!parseEntityType(payload["unit_type"], unitType) ||
+            unitType == games_types::EntityType::Unknown)
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_unit_type");
+            return false;
+        }
+
+        if (!isPurchasableTroopType(unitType))
+        {
+            responseToSend = BuildErrorResponse("unit_type_not_purchasable");
+            return false;
+        }
+
+        int quantity = 1;
+        if (payload.contains("quantity"))
+        {
+            if (!payload["quantity"].is_number_integer())
+            {
+                responseToSend = BuildErrorResponse("missing_or_invalid_quantity");
+                return false;
+            }
+            quantity = payload["quantity"].get<int>();
+        }
+
+        if (quantity <= 0)
+        {
+            responseToSend = BuildErrorResponse("invalid_quantity_value");
+            return false;
+        }
+
+        outMessage.type = ParsedMessageType::BuyUnit;
+        outMessage.buyUnit.unitType = unitType;
+        outMessage.buyUnit.quantity = quantity;
+        responseToSend = BuildOkResponse();
+        return true;
+    }
+
+    if (type == "DEPOSIT_RESOURCE")
+    {
+        if (!data.contains("payload") || !data["payload"].is_object())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_payload");
+            return false;
+        }
+
+        const json& payload = data["payload"];
+        if (!payload.contains("collector_id") || !payload["collector_id"].is_number_integer())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_collector_id");
+            return false;
+        }
+        if (!payload.contains("resource_type"))
+        {
+            responseToSend = BuildErrorResponse("missing_resource_type");
+            return false;
+        }
+        if (!payload.contains("amount") || !payload["amount"].is_number_integer())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_amount");
+            return false;
+        }
+
+        games_types::ResourceType resourceType = games_types::ResourceType::Unknown;
+        if (!parseResourceType(payload["resource_type"], resourceType) ||
+            resourceType == games_types::ResourceType::Unknown)
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_resource_type");
+            return false;
+        }
+
+        const int amount = payload["amount"].get<int>();
+        if (amount <= 0)
+        {
+            responseToSend = BuildErrorResponse("invalid_amount_value");
+            return false;
+        }
+
+        outMessage.type = ParsedMessageType::DepositResource;
+        outMessage.deposit.collectorId = payload["collector_id"].get<int>();
+        outMessage.deposit.resourceType = resourceType;
+        outMessage.deposit.amount = amount;
+        responseToSend = BuildOkResponse();
         return true;
     }
 

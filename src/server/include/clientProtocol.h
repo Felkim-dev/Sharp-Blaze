@@ -2,6 +2,8 @@
 #include <vector>
 #include <memory>
 
+#include "GameTypes.h"
+
 class GameSession;
 
 namespace client_protocol
@@ -23,11 +25,27 @@ namespace client_protocol
         float destX = 0.0f;
         float destY = 0.0f;
     };
+
+    struct BuyUnitData
+    {
+        games_types::EntityType unitType = games_types::EntityType::Unknown;
+        int quantity = 1;
+    };
+
+    struct DepositResourceData
+    {
+        int collectorId = 0;
+        games_types::ResourceType resourceType = games_types::ResourceType::Gold;
+        int amount = 0;
+    };
+
     enum class ParsedMessageType
     {
         InitialConnect,
         PlayerReady,
         MoveUnit,
+        BuyUnit,
+        DepositResource,
         Unsuported
     };
     
@@ -37,6 +55,8 @@ namespace client_protocol
         InitialConnectData initialConnect;
         PlayerReadyData playerReady;
         MoveUnitData moveUnit;
+        BuyUnitData buyUnit;
+        DepositResourceData deposit;
     };
     
     std::string BuildErrorResponse(const std::string& reason);
