@@ -121,7 +121,7 @@ class LobbyScreen:
     def update(self):
 
         if not Config.OFFLINE_DEBUG_MODE:
-            data = self.screen_manager.network.receive_json()
+            data = self.screen_manager.network.receive_XML()
 
             if data:
 

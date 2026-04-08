@@ -11,7 +11,7 @@ from ui.conecting_screen import ConnectingScreen
 from ui.game_screen import GameScreen
 
 #IMPORT NETWORK MANAGER
-from network.network import NetworkManager
+from network.receive_XML import NetworkManager_XML
 
 #MAIN CLASS
 class GAME:
@@ -29,7 +29,7 @@ class GAME:
         self.clock = pygame.time.Clock()
 
         #OBJECT NETWORK
-        self.network = NetworkManager()
+        self.network = NetworkManager_XML()
 
         #DICTIONARY OF THE VALID SCREENS
         self.screens = {
