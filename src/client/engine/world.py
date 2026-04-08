@@ -11,27 +11,83 @@ class GameWorld:
 
         self.local_color = (0, 212, 255)
         self.enemy_color = (255, 0, 85)
-        
+
         self.units = {}
         self.structures = {}
+
+    def return_entity_color(self,id):
+        if  0 <= id <= 4999:
+            return self.local_color
+        elif 5000 <= id <= 9999:
+            return self.enemy_color
+
+    def return_entities_type(self,id):
+        """
+        Defines the global index allocation for all game entities, categorized by
+        player ownership, entity type, and environmental objects.
+
+        Player 1 (Indices: 0 - 4,999)
+        Structures: 0 - 999
+        Units: 1,000 - 4,999
+            Attacker Units: 1,000 - 2,999
+            Recolectors Units: 3,000 - 4,999
+
+        Player 2 (Indices: 5,000 - 9,999)
+        Structures: 5,000 - 5,999
+        Units:6,000 - 9,999
+            Attacker Units:* 6,000 - 7,999
+            Recolectors Units:* 8,000 - 9,999
+
+        Map Structures (Indices: 10,000+)
+           Mines: 10,000 - 11,000
+           Shops: 11,001 - 12,000
+
+        ---
+        Note: Ensure that any new instantiation logic checks these bounds to prevent
+        index collisions between player-owned units and world objects.
+        """
+        if 0 <= id <= 999 or 5000 <= id <= 5999:
+            return "Base"
+        elif 1000 <= id <= 2999 or 6000 <= id <= 7999:
+            return "Attacker"
+        elif 3000 <= id <= 4999 or 8000 <= id <= 9999:
+            return "Recolector"
+        elif 10000 <= id <= 10999:
+            return "Mine"
+        elif 11000 <= id <= 11999:
+            return "Shop"
 
     def build_initial_state(self,units, structures):
 
         for entity_id,(net_x, net_y) in units.items(): 
-
             entity_id2 =int(entity_id)
-            self.units[entity_id2] = Attacker(entity_id2, net_x, net_y)
+
+            type = self.return_entities_type(entity_id2)
+
+            if type == "Attacker":
+                self.units[entity_id2] = Attacker(entity_id2, net_x, net_y)
+            elif type == "Recolector":
+                self.units[entity_id2] = Recolectors(entity_id2, net_x, net_y)
+
+            unit_color = self.return_entity_color(entity_id2)
+            self.units[entity_id2].change_color(unit_color)
 
         for entity_id,(net_x, net_y) in structures.items():
-            if entity_id == '100':
-                self.structures[entity_id] = Base(entity_id,net_x,net_y)
-            elif entity_id == '101':
-                self.structures[entity_id] = Base(entity_id,net_x,net_y)
-            elif entity_id == '103':
-                self.structures[entity_id] = Shop(entity_id,net_x,net_y)
+            entity_id2 = int(entity_id)
+
+            type = self.return_entities_type(entity_id2)
+
+            if type == "Base":
+                self.structures[entity_id2] = Base(entity_id2, net_x, net_y)
+                unit_color = self.return_entity_color(entity_id2)
+                self.structures[entity_id2].change_color(unit_color)
+            if type == "Mine":
+                self.structures[entity_id2] = GoldMine(entity_id2, net_x, net_y)
+            if type == "Shop":
+                self.structures[entity_id2] = Shop(entity_id2, net_x, net_y)
 
     def unit_colorize(self,units,structures):
-        
+
         for entity_id, (net_x, net_y) in units.items():
 
             entity_id2 = int(entity_id)
