@@ -44,8 +44,8 @@ class GoldMine(Structures):
     def __init__(self, structure_id, final_x, final_y):
         super().__init__(structure_id, final_x, final_y)
         self.color = (233, 246, 14) #YELLOW
-        self.inner_radius = 150
-        self.outer_radius = 300
+        self.inner_radius = 25
+        self.outer_radius = 50
         self.points = 5 
 
     def draw(self,screen,camera_x,camera_y):
@@ -80,7 +80,7 @@ class Shop(Structures):
     def __init__(self, structure_id, final_x, final_y):
         super().__init__(structure_id, final_x, final_y)
 
-        self.size = 300
+        self.size = 50
         self.color = (227, 0, 255) #PINK
 
     def draw(self,screen,camera_x, camera_y):

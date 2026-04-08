@@ -4,45 +4,35 @@ import math
 
 class Minimap:
     def __init__(self, screen_width, screen_height, map_width, map_height):
-        # 1. Round Minimap Geometry
-        self.radius = 100
+        # 1. Square Minimap Geometry
+        self.width = 200
+        self.height = 200
         self.margin = 20
 
-        # Calculate the center of the circle (bottom right corner)
-        self.cx = screen_width - self.radius - self.margin
-        self.cy = screen_height - self.radius - self.margin
+        # Calculate the top-left corner of the minimap (bottom right of the window)
+        self.x = screen_width - self.width - self.margin
+        self.y = screen_height - self.height - self.margin
 
-        # 2. Scale factors (Diameter is 2 * radius)
-        self.scale_x = (self.radius * 2) / map_width
-        self.scale_y = (self.radius * 2) / map_height
+        # We create a Pygame Rect for easy collision detection later
+        self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
+
+        # 2. Scale factors
+        self.scale_x = self.width / map_width
+        self.scale_y = self.height / map_height
 
         # UI Colors
         self.bg_color = (0, 0, 0)  # Black background
         self.border_color = (255, 255, 255)  # White border
         self.camera_color = (0, 255, 0)  # Green rectangle
 
-        # -------------------------------------------------------------
-        # THE MASKING SETUP
-        # -------------------------------------------------------------
-        self.surface_size = self.radius * 2
-
-        # We create a local rectangular surface with transparency (SRCALPHA)
-        self.minimap_surface = pygame.Surface((self.surface_size, self.surface_size), pygame.SRCALPHA)
-
-        # We create the mask (A solid white circle with transparent background)
-        self.mask_surface = pygame.Surface((self.surface_size, self.surface_size), pygame.SRCALPHA)
-        pygame.draw.circle(self.mask_surface, (255, 255, 255, 255), (self.radius, self.radius), self.radius)
-
     def handle_click(self, mouse_x, mouse_y, camera):
         """Translates a click on the minimap to camera movement in the world."""
-        # Calculate the Euclidean distance from the click to the center of the minimap
-        distance_to_center = math.hypot(mouse_x - self.cx, mouse_y - self.cy)
 
-        # If the click was INSIDE the minimap circle
-        if distance_to_center <= self.radius:
-            # 1. Get the relative coordinate inside the minimap square bounding box
-            rel_x = mouse_x - (self.cx - self.radius)
-            rel_y = mouse_y - (self.cy - self.radius)
+        # If the click was INSIDE the minimap square
+        if self.rect.collidepoint(mouse_x, mouse_y):
+            ## 1. Get the relative coordinate inside the minimap square bounding box
+            rel_x = mouse_x - self.x
+            rel_y = mouse_y - self.y
 
             # 2. Translate it to the giant world (Inverse rule of three)
             world_x = rel_x / self.scale_x
@@ -61,37 +51,82 @@ class Minimap:
 
     def draw(self, screen, world, camera):
 
-        # 1. Clear the local surface completely (make it transparent)
-        self.minimap_surface.fill((0, 0, 0, 0))
+        # A. Draw the black background of the minimap directly to the main screen
+        pygame.draw.rect(screen, self.bg_color, self.rect)
 
-        # A. Draw the black background of the minimap
-        pygame.draw.circle(self.minimap_surface, self.bg_color, (self.radius, self.radius), self.radius)
+        # B. Iterate through BOTH dictionaries (units and structures)
+        # This prevents code duplication and keeps rendering efficient
+        for entity_dictionary in (world.units, world.structures):
+            for entity in entity_dictionary.values():
 
-        # B. Draw the entities
-        for entity in world.units.values():
-            # Using local coordinates (from 0 to surface_size)
-            local_x = int(entity.x * self.scale_x)
-            local_y = int(entity.y * self.scale_y)
-            pygame.draw.circle(
-                self.minimap_surface, entity.color, (local_x, local_y), 3
-            )
+                # Scale coordinates to the minimap
+                mini_x = int(self.x + (entity.x * self.scale_x))
+                mini_y = int(self.y + (entity.y * self.scale_y))
+
+                # Miniature icon size (radius/half-width)
+                icon_size = 4
+
+                # Get the exact class name of the object as a string
+                entity_type = entity.__class__.__name__
+
+                if entity_type == "Recolectors":
+                    # Draw a standard Circle
+                    pygame.draw.circle(
+                        screen, entity.color, (mini_x, mini_y), icon_size
+                    )
+
+                elif entity_type == "Base":
+                    # Draw a Square (centered on mini_x, mini_y)
+                    base_rect = (
+                        mini_x - icon_size,
+                        mini_y - icon_size,
+                        icon_size * 2,
+                        icon_size * 2,
+                    )
+                    pygame.draw.rect(screen, entity.color, base_rect)
+
+                elif entity_type == "Attacker":
+                    # Draw an upward-pointing Triangle
+                    p1 = (mini_x, mini_y - icon_size)
+                    p2 = (mini_x - icon_size, mini_y + icon_size)
+                    p3 = (mini_x + icon_size, mini_y + icon_size)
+                    pygame.draw.polygon(screen, entity.color, [p1, p2, p3])
+
+                elif entity_type == "Shop":
+                    # Draw a Diamond (Rhombus)
+                    p1 = (mini_x, mini_y - icon_size)
+                    p2 = (mini_x + icon_size, mini_y)
+                    p3 = (mini_x, mini_y + icon_size)
+                    p4 = (mini_x - icon_size, mini_y)
+                    pygame.draw.polygon(screen, entity.color, [p1, p2, p3, p4])
+
+                elif entity_type == "GoldMine":
+                    # Draw a miniature 5-point Star
+                    star_points = []
+                    angle = math.pi / 2 * 3
+                    angle_increment = math.pi / 5
+
+                    for i in range(10):
+                        # Alternate between outer and inner radius
+                        radius = icon_size if i % 2 == 0 else icon_size / 2
+                        px = mini_x + math.cos(angle) * radius
+                        py = mini_y + math.sin(angle) * radius
+                        star_points.append((px, py))
+                        angle += angle_increment
+
+                    pygame.draw.polygon(screen, entity.color, star_points)
+
+                else:
+                    # Fallback just in case an unknown entity is added later
+                    pygame.draw.circle(screen, entity.color, (mini_x, mini_y), 2)
 
         # 4. Draw the camera rectangle
-        # It doesn't matter if it pokes out of the circle here!
-        cam_local_x = int(camera.x * self.scale_x)
-        cam_local_y = int(camera.y * self.scale_y)
-        cam_local_w = int(camera.screen_width * self.scale_x)
-        cam_local_h = int(camera.screen_height * self.scale_y)
+        cam_mini_x = int(self.x + (camera.x * self.scale_x))
+        cam_mini_y = int(self.y + (camera.y * self.scale_y))
+        cam_mini_w = int(camera.screen_width * self.scale_x)
+        cam_mini_h = int(camera.screen_height * self.scale_y)
 
-        pygame.draw.rect(self.minimap_surface,self.camera_color,(cam_local_x, cam_local_y, cam_local_w, cam_local_h),1,)
+        pygame.draw.rect(screen, self.camera_color, (cam_mini_x, cam_mini_y, cam_mini_w, cam_mini_h), 1)
 
-        # 5. THE MAGIC: Apply the circular mask
-        # BLEND_RGBA_MULT erases any pixels on the minimap_surface that are 
-        # transparent on the mask_surface. This cuts off the green corners!
-        self.minimap_surface.blit(self.mask_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-
-        # 6. Draw the thick white border on top to hide any rough edges
-        pygame.draw.circle(self.minimap_surface, self.border_color, (self.radius, self.radius), self.radius, 4)
-
-        # 7. Paste the finished, masked minimap onto the main game screen
-        screen.blit(self.minimap_surface, (self.cx - self.radius, self.cy - self.radius))
+        # 6. Draw the thick white border on top
+        pygame.draw.rect(screen, self.border_color, self.rect, 4)

@@ -42,12 +42,9 @@ class GameScreen:
 
                 mouse_x, mouse_y = event.pos
 
-                # 1. UI PROTECTION: Check if click is on the Minimap first!
-                # Assuming your Minimap class has the geometry we built earlier
-                dist_to_minimap = math.hypot(
-                    mouse_x - self.minimap.cx, mouse_y - self.minimap.cy
-                )
-                if dist_to_minimap <= self.minimap.radius:
+                # 1. UI PROTECTION: Check if click is on the Square Minimap first!
+                # We simply ask Pygame if the mouse coordinates are inside the minimap's Rect
+                if self.minimap.rect.collidepoint(mouse_x, mouse_y):
                     # Click was inside the minimap UI, ignore world selection
                     continue
 
@@ -101,7 +98,7 @@ class GameScreen:
 
         # 2. Draw Telemetry UI at the very top layer
         self.telemetry.draw(self.screen, self.screen_manager.clock , self.screen_manager.network)
-        
+
         grosor = 5
         color_alerta = (255, 0, 0)  # Rojo
 

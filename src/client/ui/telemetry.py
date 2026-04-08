@@ -1,6 +1,7 @@
 import pygame
 import time
 
+COMPONENTS_FONT = r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\src\client\assets\IntroRust.otf"
 
 class TelemetryPanel:
     def __init__(self, screen_width):
@@ -12,7 +13,7 @@ class TelemetryPanel:
 
         # 2. Pygame Font setup (Using a default bold font, similar to your image)
         pygame.font.init()
-        self.font = pygame.font.SysFont("Arial", 16, bold=True)
+        self.font = pygame.font.SysFont(COMPONENTS_FONT, 16, bold=True)
 
         # 3. Create a semi-transparent dark surface
         self.bg_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)

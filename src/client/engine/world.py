@@ -9,23 +9,81 @@ class GameWorld:
 
         self.network = network_manager
 
+        self.local_color = (0, 212, 255)
+        self.enemy_color = (255, 0, 85)
+
         self.units = {}
         self.structures = {}
 
+    def entity_team_changer(self,id):
+        if  0 <= id <= 4999:
+            if 0 <= id <= 999:
+                self.structures[id].change_color(self.local_color)
+            else:
+                self.units[id].change_color(self.local_color)
+        elif 5000 <= id <= 9999:
+            if 5000 <= id <= 5999:
+                self.structures[id].change_color(self.enemy_color)
+            else:
+                self.units[id].change_color(self.enemy_color)
+
+    def return_entities_object(self,id,net_x,net_y):
+        """
+        Defines the global index allocation for all game entities, categorized by
+        player ownership, entity type, and environmental objects.
+
+        Player 1 (Indices: 0 - 4,999)
+        Structures: 0 - 999
+        Units: 1,000 - 4,999
+            Attacker Units: 1,000 - 2,999
+            Recolectors Units: 3,000 - 4,999
+
+        Player 2 (Indices: 5,000 - 9,999)
+        Structures: 5,000 - 5,999
+        Units:6,000 - 9,999
+            Attacker Units:* 6,000 - 7,999
+            Recolectors Units:* 8,000 - 9,999
+
+        Map Structures (Indices: 10,000+)
+           Mines: 10,000 - 11,000
+           Shops: 11,001 - 12,000
+
+        ---
+        Note: Ensure that any new instantiation logic checks these bounds to prevent
+        index collisions between player-owned units and world objects.
+        """
+        if 0 <= id <= 999 or 5000 <= id <= 5999:
+            return Base(id, net_x, net_y)
+        elif 1000 <= id <= 2999 or 6000 <= id <= 7999:
+            return Attacker(id, net_x, net_y)
+        elif 3000 <= id <= 4999 or 8000 <= id <= 9999:
+            return Recolectors(id, net_x, net_y)
+        elif 10000 <= id <= 10999:
+            return GoldMine(id, net_x, net_y)
+        elif 11000 <= id <= 11999:
+            return Shop(id, net_x, net_y)
+
     def build_initial_state(self,units, structures):
 
+        print(units, structures)
         for entity_id,(net_x, net_y) in units.items(): 
-            
             entity_id2 =int(entity_id)
-            self.units[entity_id2] = Attacker(entity_id2, net_x, net_y)
+
+            # Entity Instation
+            self.units[entity_id2] = self.return_entities_object(entity_id2,net_x,net_y)
+
+            # Unity Recolorize
+            self.entity_team_changer(entity_id2)
 
         for entity_id,(net_x, net_y) in structures.items():
-            if entity_id == '100':
-                self.structures[entity_id] = Base(entity_id,net_x,net_y)
-            elif entity_id == '101':
-                self.structures[entity_id] = Base(entity_id,net_x,net_y)
-            elif entity_id == '103':
-                self.structures[entity_id] = Shop(entity_id,net_x,net_y)
+            entity_id2 = int(entity_id)
+
+            # Entity Instation
+            self.structures[entity_id2] = self.return_entities_object(entity_id2,net_x,net_y)
+
+            # Unity Recolorize
+            if 0 <= entity_id2 <= 999 or 5000 <= entity_id2 <= 5999:
+                self.entity_team_changer(entity_id2)
 
     def handle_right_click(self, target_world_x, target_world_y):
         """Finds selected units and sends a MOVE_ORDER to the server."""
@@ -51,11 +109,11 @@ class GameWorld:
         network_data = self.network.get_latest_positions()
 
         print(network_data)
-        
+
         for entity_id,(net_x, net_y) in network_data.items():
-            
+
             entity_id2 = int(entity_id)
-            
+
             if entity_id2 not in self.units:
                 self.units[entity_id2] = Recolectors(entity_id2,net_x,net_y)
             else:
