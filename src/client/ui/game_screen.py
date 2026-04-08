@@ -6,6 +6,7 @@ from engine.world import GameWorld
 from engine.camera import Camera
 from ui.minimap import Minimap
 from ui.telemetry import TelemetryPanel
+from ui.component import InfoBox
 
 class GameScreen:
     def __init__(self, screen_manager , screen):
@@ -30,6 +31,18 @@ class GameScreen:
 
         # Instantiate the Telemetry Panel
         self.telemetry = TelemetryPanel(self.screen.get_width())
+        
+        #COLOR FOR BOXE
+        gray = (84, 84, 84)
+        white = (255, 255, 255)
+        gold_path = r'C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\src\client\assets\gold.png'
+        hat_path = r'C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\src\client\assets\hat.png'
+        sword_path = r'C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\src\client\assets\sword.png'
+        # Instantiate the Text Boxes of Gold, Collectors and Attackers
+        self.infobox_gold = InfoBox((50,650),(175,40),gray,"GOLD","54",white,15,gold_path)
+        self.infobox_hat = InfoBox((250,650),(200,40),gray,"COLLECTORS","54",white,15,hat_path)
+        self.infobox_sword = InfoBox((470,650),(200,40),gray,"ATTACKERS","54",white,15,sword_path)
+        
 
     def load_initial_state(self, units, structures):
         self.world.build_initial_state(units,structures)
@@ -90,22 +103,22 @@ class GameScreen:
         self.world.update()
 
     def draw(self):
-        self.screen.fill(self.MAINDARK)
 
-        self.world.draw(self.screen, self.camera)
-
-        self.minimap.draw(self.screen,self.world,self.camera)
-
-        # 2. Draw Telemetry UI at the very top layer
-        self.telemetry.draw(self.screen, self.screen_manager.clock , self.screen_manager.network)
-
-        grosor = 5
-        color_alerta = (255, 0, 0)  # Rojo
-
-        # Variables auxiliares para no repetir código
+        # ======================= Variables ============================
         pantalla_w = self.screen.get_width()
         pantalla_h = self.screen.get_height()
+        grosor = 5
+        color_alerta = (255, 0, 0)  # Rojo
+        
+        # ======================= BG COLOR ============================
+        self.screen.fill(self.MAINDARK)
 
+        # ======================= MAIN ELEMENTS ============================
+        self.world.draw(self.screen, self.camera)
+        self.minimap.draw(self.screen,self.world,self.camera)
+        self.telemetry.draw(self.screen, self.screen_manager.clock , self.screen_manager.network)
+
+        # ========================== RED BORDER OF THE SCREEN =====================================
         # Borde Izquierdo (La cámara llegó a X = 0)
         if self.camera.x <= 0:
             pygame.draw.rect(self.screen, color_alerta, (0, 0, grosor, pantalla_h))
@@ -125,3 +138,8 @@ class GameScreen:
             pygame.draw.rect(
                 self.screen, color_alerta, (0, pantalla_h - grosor, pantalla_w, grosor)
             )
+
+        # ================================== INFO BOXES========================================
+        self.infobox_gold.draw(self.screen)
+        self.infobox_hat.draw(self.screen)
+        self.infobox_sword.draw(self.screen)
