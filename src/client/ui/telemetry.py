@@ -1,7 +1,8 @@
 import pygame
-import time
+import os
 
-COMPONENTS_FONT = r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\src\client\assets\IntroRust.otf"
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+COMPONENTS_FONT = os.path.join(CURRENT_DIR, "assets", "IntroRust.otf")
 
 class TelemetryPanel:
     def __init__(self, screen_width):

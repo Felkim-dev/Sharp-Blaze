@@ -1,7 +1,5 @@
 import pygame
-from ui.component import Button, Text, CloseButton,TextBox
-import string
-
+from ui.component import Button, CloseButton,TextBox
 
 class ConnectingScreen:
     def __init__(self, screen_manager, screen):

@@ -1,7 +1,8 @@
 import pygame
-from ui.component import Button,Text
 import sys
+import os
 
+from ui.component import Button, Text
 
 class MainScreen:
     def __init__(self, screen_manager,screen):
@@ -34,10 +35,11 @@ class MainScreen:
         self.btn_exit = Button((center_x, init_y + separation_y * 4), BUTTON_WH, self.RED, "Exit", self.BLACK, TEXT_SIZE)
 
         # FONT
-        self.TITLE_FONT = r"C:\Users\felip\OneDrive\Escritorio\SEPTIMO_SEMESTRE\Sharp-Blaze\src\client\assets\Anton-Regular.ttf"
+        CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+        TITLE_FONT = os.path.join(CURRENT_DIR, "assets", "Anton-Regular.ttf")
 
         # TEXT
-        self.text_title = Text((self.screen.get_rect().centerx, self.screen.get_rect().centery//2),"SHARP BLAZE", 100,self.WHITE,self.TITLE_FONT)
+        self.text_title = Text((self.screen.get_rect().centerx, self.screen.get_rect().centery//2),"SHARP BLAZE", 100,self.WHITE,TITLE_FONT)
 
     def handle_events(self, events,keys):
 
