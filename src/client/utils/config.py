@@ -3,7 +3,7 @@ class Config:
     
     SERVER_IP = "10.163.104.121"
     TCP_PORT = 5555
-    UDP_PORT = 5557
+    UDP_PORT = 5556
     
     # ----- DEVELOPER MODE -------
     

@@ -4,6 +4,7 @@ from ui.component import Button, Text,TextBox,CloseButton
 
 from utils.config import Config
 from utils.json import JSON_Manager
+from utils.xml import create_initial_connect_xml,create_start_game_xml
 class LobbyScreen:
     def __init__(self, screen_manager, screen):
 
@@ -104,7 +105,7 @@ class LobbyScreen:
                             game_screen.load_initial_state(units,structures)
                             self.screen_manager.change_screen("GAME")
                         else:
-                            self.screen_manager.network.send_json(JSON_Manager.get_startgame())
+                            self.screen_manager.network.send_XML(create_start_game_xml(True))
 
             if self.btn_close.handle_event(event):
                 self.screen_manager.network.disconnect()

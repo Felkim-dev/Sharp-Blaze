@@ -5,7 +5,7 @@ from ui.component import Button, InputBox, Text,CloseButton,TextBox
 
 from utils.config import Config
 
-from utils.json import JSON_Manager
+from utils.xml import create_initial_connect_xml
 class JoinScreen:
     def __init__(self, screen_manager, screen):
 
@@ -123,7 +123,7 @@ class JoinScreen:
 
                         if self.screen_manager.network.connection_status != "CONNECTING":
 
-                            data_join = JSON_Manager.get_datajoin(self.inputbox_nickname.user_input)
+                            data_join = create_initial_connect_xml(self.inputbox_nickname.user_input,"1.0.0",True)
 
                             self.screen_manager.network.connect(data_join)
 

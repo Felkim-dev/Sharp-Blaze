@@ -99,7 +99,7 @@ class NetworkManager:
         try:
             self.client_tcp.connect((ip, port))
 
-            mensaje = json.dumps(datos_iniciales) + "\n"
+            mensaje = datos_iniciales
             self.client_tcp.send(mensaje.encode("utf-8"))
 
             self.client_tcp.settimeout(None)
