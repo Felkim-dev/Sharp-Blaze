@@ -221,17 +221,17 @@ class TextBox:
 
 class CloseButton:
     def __init__(self, x, y, size=30):
-        
+
         self.rect = pygame.Rect(x, y, size, size)
 
         # COLORS
         self.WHITE = (255, 255 , 255)
 
-        # Thickness 
+        # Thickness
         self.thickness = 5
 
     def handle_event(self, event):
-        
+
         # Click Detect
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.rect.collidepoint(event.pos):
@@ -257,3 +257,81 @@ class CloseButton:
             self.rect.topright,
             self.thickness,
         )
+
+class InfoBox(TextBox):
+
+    def __init__(
+        self,
+        Position: tuple,
+        RectangleDimension: tuple,
+        Rectangle_Color: tuple,
+        Text: str,
+        Text_Variable: str,
+        Text_Color: tuple,
+        Text_size: int,
+        Icon_Path:str
+    ):
+        super().__init__(
+            Position=Position,
+            RectangleDimension=RectangleDimension,
+            Rectangle_Color=Rectangle_Color,
+            Text=Text,
+            Text_Color=Text_Color,
+            Text_size=Text_size,
+        )
+
+        self.text_variable = Text_Variable
+
+        raw_image = pygame.image.load(Icon_Path).convert_alpha()
+        icon_size = self.RectangleDimension[1] - 10
+        self.image = pygame.transform.scale(raw_image, (icon_size, icon_size))
+
+    def update_text(self, new_value: str):
+        """Allows updating the dynamic value (e.g., '54' to '100') without recreating the object."""
+        self.text_variable = new_value
+
+    def draw(self, screen):
+
+        # Text render
+        self.text_surface = self.inputbox_font.render(self.text, True, self.text_color)
+        self.text_surface2 = self.inputbox_font.render(self.text_variable, True, self.text_color)
+
+        # -------------------------------------------------------------
+        # LAYOUT & ALIGNMENT MATH
+        # -------------------------------------------------------------
+        padding = 10  # Pixels of distance from the edges and between elements
+
+        # A. Icon Positioning (Left side, padded inward)
+        self.image_rect = self.image.get_rect()
+        self.image_rect.centery = self.textbox_rectangle.centery
+        self.image_rect.left = self.textbox_rectangle.left + padding
+
+        # B. Constant Text Positioning ("GOLD" - Next to the icon)
+        self.text_rect = self.text_surface.get_rect()
+        self.text_rect.centery = self.textbox_rectangle.centery
+        self.text_rect.left = self.image_rect.right + padding
+
+        # C. Variable Text Positioning ("54" - Right side, padded inward)
+        self.text_rect2 = self.text_surface2.get_rect()
+        self.text_rect2.centery = self.textbox_rectangle.centery
+        self.text_rect2.right = self.textbox_rectangle.right - padding
+
+        # DRAW OF THE TOP RECTANGLE
+        pygame.draw.rect(
+            screen,
+            self.rectangle_color,
+            self.textbox_rectangle,
+            border_radius=self.CORNERS_RADIUS,
+        )
+        # DRAW OF THE WHITE RECTANGLE
+        pygame.draw.rect(
+            screen,
+            self.WHITE,
+            self.textbox_rectangle,
+            self.BORDER_SIZE,
+            border_radius=self.CORNERS_RADIUS,
+        )
+
+        screen.blit(self.text_surface,self.text_rect)
+        screen.blit(self.text_surface2, self.text_rect2)
+        screen.blit(self.image,self.image_rect)
