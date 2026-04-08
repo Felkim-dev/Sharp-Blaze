@@ -90,22 +90,22 @@ class GameScreen:
         self.world.update()
 
     def draw(self):
-        self.screen.fill(self.MAINDARK)
 
-        self.world.draw(self.screen, self.camera)
-
-        self.minimap.draw(self.screen,self.world,self.camera)
-
-        # 2. Draw Telemetry UI at the very top layer
-        self.telemetry.draw(self.screen, self.screen_manager.clock , self.screen_manager.network)
-
-        grosor = 5
-        color_alerta = (255, 0, 0)  # Rojo
-
-        # Variables auxiliares para no repetir código
+        # ======================= Variables ============================
         pantalla_w = self.screen.get_width()
         pantalla_h = self.screen.get_height()
+        grosor = 5
+        color_alerta = (255, 0, 0)  # Rojo
+        
+        # ======================= BG COLOR ============================
+        self.screen.fill(self.MAINDARK)
 
+        # ======================= MAIN ELEMENTS ============================
+        self.world.draw(self.screen, self.camera)
+        self.minimap.draw(self.screen,self.world,self.camera)
+        self.telemetry.draw(self.screen, self.screen_manager.clock , self.screen_manager.network)
+
+        # ========================== RED BORDER OF THE SCREEN =====================================
         # Borde Izquierdo (La cámara llegó a X = 0)
         if self.camera.x <= 0:
             pygame.draw.rect(self.screen, color_alerta, (0, 0, grosor, pantalla_h))
@@ -125,3 +125,5 @@ class GameScreen:
             pygame.draw.rect(
                 self.screen, color_alerta, (0, pantalla_h - grosor, pantalla_w, grosor)
             )
+
+        # ========================================================================================
