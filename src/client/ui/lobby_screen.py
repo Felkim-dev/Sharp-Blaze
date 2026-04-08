@@ -81,8 +81,24 @@ class LobbyScreen:
 
                         if Config.OFFLINE_DEBUG_MODE: # DEBUG MODE
 
-                            units = {'5':(2500,2500)}
-                            structures = {'100':(1500,1500)}
+                            units = {
+                            1000: (450, 4550),
+                            1001: (550, 4450),
+                            3002: (350, 4450),
+                            
+                            6000: (4550,450),
+                            6001: (4450,550),
+                            8002: (4650,550)
+                                }
+
+                            structures = {
+                                100: (300, 4700),
+                                5000: (4700, 300),
+                                # Neutral entity in the exact center of a 5000x5000 map
+                                11000: (2500, 2500),
+                                10000: (2000, 1000),
+                                10001: (1000, 2000),
+                            }
 
                             game_screen = self.screen_manager.screens["GAME"]
                             game_screen.load_initial_state(units,structures)
@@ -123,7 +139,7 @@ class LobbyScreen:
 
                     self.textbox_nickname1.text = local_player_id
                     self.textbox_nickname2.text = enemy_player_id
-                    
+
                     self.textbox_nickname2.text_color = self.WHITE
 
                 if data.get("type") == "START_GAME" and data["payload"]["start"]:

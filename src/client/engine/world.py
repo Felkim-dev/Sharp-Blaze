@@ -17,9 +17,15 @@ class GameWorld:
 
     def entity_team_changer(self,id):
         if  0 <= id <= 4999:
-            self.units[id].change_color(self.local_color)
+            if 0 <= id <= 999:
+                self.structures[id].change_color(self.local_color)
+            else:
+                self.units[id].change_color(self.local_color)
         elif 5000 <= id <= 9999:
-            self.units[id].change_color(self.enemy_color)
+            if 5000 <= id <= 5999:
+                self.structures[id].change_color(self.enemy_color)
+            else:
+                self.units[id].change_color(self.enemy_color)
 
     def return_entities_object(self,id,net_x,net_y):
         """
@@ -59,6 +65,7 @@ class GameWorld:
 
     def build_initial_state(self,units, structures):
 
+        print(units, structures)
         for entity_id,(net_x, net_y) in units.items(): 
             entity_id2 =int(entity_id)
 

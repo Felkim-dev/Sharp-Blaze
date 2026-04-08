@@ -27,11 +27,9 @@ class Minimap:
 
     def handle_click(self, mouse_x, mouse_y, camera):
         """Translates a click on the minimap to camera movement in the world."""
-        # Calculate the Euclidean distance from the click to the center of the minimap
-        distance_to_center = math.hypot(mouse_x - self.cx, mouse_y - self.cy)
 
         # If the click was INSIDE the minimap square
-        if distance_to_center <= self.radius:
+        if self.rect.collidepoint(mouse_x, mouse_y):
             ## 1. Get the relative coordinate inside the minimap square bounding box
             rel_x = mouse_x - self.x
             rel_y = mouse_y - self.y
@@ -56,12 +54,71 @@ class Minimap:
         # A. Draw the black background of the minimap directly to the main screen
         pygame.draw.rect(screen, self.bg_color, self.rect)
 
-        # B. Draw the entities
-        for entity in world.units.values():
-            # Using absolute screen coordinates directly
-            mini_x = int(self.x + (entity.x * self.scale_x))
-            mini_y = int(self.y + (entity.y * self.scale_y))
-            pygame.draw.circle(screen, entity.color, (mini_x, mini_y), 3)
+        # B. Iterate through BOTH dictionaries (units and structures)
+        # This prevents code duplication and keeps rendering efficient
+        for entity_dictionary in (world.units, world.structures):
+            for entity in entity_dictionary.values():
+
+                # Scale coordinates to the minimap
+                mini_x = int(self.x + (entity.x * self.scale_x))
+                mini_y = int(self.y + (entity.y * self.scale_y))
+
+                # Miniature icon size (radius/half-width)
+                icon_size = 4
+
+                # Get the exact class name of the object as a string
+                entity_type = entity.__class__.__name__
+
+                if entity_type == "Recolectors":
+                    # Draw a standard Circle
+                    pygame.draw.circle(
+                        screen, entity.color, (mini_x, mini_y), icon_size
+                    )
+
+                elif entity_type == "Base":
+                    # Draw a Square (centered on mini_x, mini_y)
+                    base_rect = (
+                        mini_x - icon_size,
+                        mini_y - icon_size,
+                        icon_size * 2,
+                        icon_size * 2,
+                    )
+                    pygame.draw.rect(screen, entity.color, base_rect)
+
+                elif entity_type == "Attacker":
+                    # Draw an upward-pointing Triangle
+                    p1 = (mini_x, mini_y - icon_size)
+                    p2 = (mini_x - icon_size, mini_y + icon_size)
+                    p3 = (mini_x + icon_size, mini_y + icon_size)
+                    pygame.draw.polygon(screen, entity.color, [p1, p2, p3])
+
+                elif entity_type == "Shop":
+                    # Draw a Diamond (Rhombus)
+                    p1 = (mini_x, mini_y - icon_size)
+                    p2 = (mini_x + icon_size, mini_y)
+                    p3 = (mini_x, mini_y + icon_size)
+                    p4 = (mini_x - icon_size, mini_y)
+                    pygame.draw.polygon(screen, entity.color, [p1, p2, p3, p4])
+
+                elif entity_type == "GoldMine":
+                    # Draw a miniature 5-point Star
+                    star_points = []
+                    angle = math.pi / 2 * 3
+                    angle_increment = math.pi / 5
+
+                    for i in range(10):
+                        # Alternate between outer and inner radius
+                        radius = icon_size if i % 2 == 0 else icon_size / 2
+                        px = mini_x + math.cos(angle) * radius
+                        py = mini_y + math.sin(angle) * radius
+                        star_points.append((px, py))
+                        angle += angle_increment
+
+                    pygame.draw.polygon(screen, entity.color, star_points)
+
+                else:
+                    # Fallback just in case an unknown entity is added later
+                    pygame.draw.circle(screen, entity.color, (mini_x, mini_y), 2)
 
         # 4. Draw the camera rectangle
         cam_mini_x = int(self.x + (camera.x * self.scale_x))
