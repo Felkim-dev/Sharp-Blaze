@@ -7,7 +7,7 @@ class NetworkManager_XML(NetworkManager):
     def __init__(self):
         super().__init__()
 
-    def receive_XML(xml_string:str):
+    def receive_XML(self,xml_string:str):
         try:
             root = ET.fromstring(xml_string)
             msg_type = root.find("Type").text
@@ -19,12 +19,8 @@ class NetworkManager_XML(NetworkManager):
                     return {"type": msg_type, "status": status, "reason": reason}
                 return {"type": msg_type, "status": status}
 
-            elif msg_type == "CONNECTION_ACK":
-                status = root.find("Status").text
-                return {"type": msg_type, "status": status}
-
             elif msg_type == "QUEUE_STATUS":
-                payload_node = root.find("Payload").text
+                payload_node = root.find("Payload")
                 if payload_node is None:
                     raise ValueError("Missing <Payload> node in QUEUE_STATUS")
 
@@ -42,7 +38,7 @@ class NetworkManager_XML(NetworkManager):
                 }
 
             elif msg_type == "MATCH_FOUND":
-                payload_node = root.find("Payload").text
+                payload_node = root.find("Payload")
                 if payload_node is None:
                     raise ValueError("Missing <Payload> node in MATCH_FOUND")
 
@@ -55,12 +51,12 @@ class NetworkManager_XML(NetworkManager):
                     "payload": {
                         "session_id": session_id_string,
                         "you": you,
-                        "opponnet": opponent
+                        "opponent": opponent
                     }
                 }
 
             elif msg_type == "START_GAME":
-                payload_node = root.find("Payload").text
+                payload_node = root.find("Payload")
                 if payload_node is None:
                     raise ValueError("Missing <Payload> node in START_GAME")
 
@@ -99,7 +95,7 @@ class NetworkManager_XML(NetworkManager):
                         "session_id": session_id_string,
                         "start": start_bool,
                         "structures": structures_dict,
-                        "units": {},
+                        "units": units_dict,
                     }
                 }
 
