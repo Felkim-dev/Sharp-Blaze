@@ -36,7 +36,7 @@ class MainScreen:
 
         # FONT
         CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-        TITLE_FONT = os.path.join(CURRENT_DIR, "assets", "Anton-Regular.ttf")
+        TITLE_FONT = os.path.join(CURRENT_DIR, "..","assets", "Anton-Regular.ttf")
 
         # TEXT
         self.text_title = Text((self.screen.get_rect().centerx, self.screen.get_rect().centery//2),"SHARP BLAZE", 100,self.WHITE,TITLE_FONT)

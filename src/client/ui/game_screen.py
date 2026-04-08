@@ -36,9 +36,9 @@ class GameScreen:
         white = (255, 255, 255)
         CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-        GOLD_PATH = os.path.join(CURRENT_DIR, "assets", "gold.png")
-        HAT_PATH = os.path.join(CURRENT_DIR, "assets", "hat.png")
-        SWORD_PATH = os.path.join(CURRENT_DIR, "assets", "sword.png")
+        GOLD_PATH = os.path.join(CURRENT_DIR, "..","assets", "gold.png")
+        HAT_PATH = os.path.join(CURRENT_DIR, "..", "assets", "hat.png")
+        SWORD_PATH = os.path.join(CURRENT_DIR, "..", "assets", "sword.png")
 
         # Instantiate the Text Boxes of Gold, Collectors and Attackers
         self.infobox_gold = InfoBox((50,650),(175,40),gray,"GOLD","54",white,15,GOLD_PATH)

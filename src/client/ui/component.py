@@ -2,7 +2,7 @@ import pygame
 import os
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-COMPONENTS_FONT = os.path.join(CURRENT_DIR, "assets", "IntroRust.otf")
+COMPONENTS_FONT = os.path.join(CURRENT_DIR, "..","assets", "IntroRust.otf")
 
 class Button:
 
