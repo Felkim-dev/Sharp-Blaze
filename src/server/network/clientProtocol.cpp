@@ -166,6 +166,18 @@ std::string client_protocol::BuildMatchStartResponse(const std::string& sessionI
         {
             units[std::to_string(unit.entity_id)] = json::array({unit.x, unit.y});
         }
+        
+        auto shopSnapShot = session->getShopsSnapshot();
+        for (const auto& shop : shopSnapShot)
+        {
+            structures[std::to_string(shop.entityId)] = json::array({shop.x,shop.y});
+        }
+
+        auto resourcesSnapShot = session->getResourcesSnapshot();
+        for (const auto &resource : resourcesSnapShot)
+        {
+            structures[std::to_string(resource.entityId)] = json::array({resource.x, resource.y});
+        }
     }
 
     json response = {
