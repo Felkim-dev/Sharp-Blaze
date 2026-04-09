@@ -41,7 +41,7 @@ class GameScreen:
         self.shop_autorization = False
 
         # PLAYER PARAMETERS
-        self.player_gold = 500
+        self.player_gold = 0
         self.player_attacker_units = 0
         self.player_recolector_units = 0
 
@@ -67,7 +67,7 @@ class GameScreen:
     def load_initial_state(self, gold, units, structures):
         
         self.player_gold = gold
-        self.player_gold_string = str(self.player_gold)
+        self.infobox_gold.update_text(str(self.player_gold)) 
         
         #TODO:ADD UNIT UI
         
@@ -151,7 +151,7 @@ class GameScreen:
                         self.world.spawn_unit(self.new_unit_id,self.new_spawn_x,self.new_spawn_y)
                         
                         self.player_gold = self.new_gold
-                        self.player_gold_string = str(self.player_gold)
+                        self.infobox_gold.update_text(str(self.player_gold)) 
                         
                         
                 elif data.get("type") == "UNIT_SPAWNED":
