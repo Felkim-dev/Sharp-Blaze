@@ -41,7 +41,7 @@ class GameScreen:
         self.shop_autorization = False
 
         # PLAYER PARAMETERS
-        self.player_gold = 50
+        self.player_gold = 500
         self.player_attacker_units = 0
         self.player_recolector_units = 0
 
@@ -140,7 +140,17 @@ class GameScreen:
                         self.new_unit_id = data["payload"]["unit_id"]
                         self.new_spawn_x = data["payload"]["spawn_x"]
                         self.new_spawn_y = data["payload"]["spawn_y"]
-
+                        
+                        self.world.spawn_unit(self.new_unit_id,self.new_spawn_x,self.new_spawn_y)
+                elif data.get("type") == "UNIT_SPAWNED":
+                    self.new_unit_id = data["payload"]["unit_id"]
+                    
+                    if 5000<=self.new_unit_id <= 9999: 
+                        self.world.units[self.new_unit_id] = self.world.return_entities_object(self.new_unit_id,4700, 300)
+                    elif 0 <= self.new_unit_id <= 4999:
+                        self.world.units[self.new_unit_id] = self.world.return_entities_object(self.new_unit_id,300, 4700)
+                        
+                    self.world.entity_team_changer(self.new_unit_id)
         else:
             # DEBUG MODE
             if self.player_gold > 100:

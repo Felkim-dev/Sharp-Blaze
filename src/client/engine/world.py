@@ -108,20 +108,20 @@ class GameWorld:
 
         network_data = self.network.get_latest_positions()
 
-        print(network_data)
-
         for entity_id,(net_x, net_y) in network_data.items():
 
             entity_id2 = int(entity_id)
-
-            if entity_id2 not in self.units:
-                self.units[entity_id2] = self.return_entities_object(entity_id2,net_x,net_y)
-                self.entity_team_changer(entity_id2)
-            else:
+            
+            if entity_id2 in self.units:
                 self.units[entity_id2].update_target(net_x,net_y)
 
         for unit in self.units.values():
             unit.update_physics()
+
+    def spawn_unit(self, ID, x, y):
+        if ID not in self.units:
+            self.units[ID] = self.return_entities_object(ID, x, y)
+            self.entity_team_changer(ID)
 
     def draw(self,screen,camera):
 

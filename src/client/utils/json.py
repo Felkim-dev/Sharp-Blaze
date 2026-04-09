@@ -41,7 +41,7 @@ class JSON_Manager:
         recolector_payload = {
             "type": "BUY_UNIT",
             "payload": {
-                "type": "Collector",
+                "unit_type": "Collector",
                 "quantity": 1,
             },
         }
