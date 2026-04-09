@@ -4,7 +4,7 @@ import math
 
 class Structures:
     def __init__(self,structure_id,final_x,final_y):
-        
+
         self.id = structure_id
 
         # Initial Position
@@ -15,9 +15,29 @@ class Structures:
         self.hp = 1000
         self.color = (255, 255, 255)
         self.attackable = True
-        
+
+        # SELECTION
+        self.is_selected = False
+        self.hitbox_radius = 60  # How forgiving the click detection is
+
     def change_color(self,color):
         self.color = color
+
+    def check_click(self, world_click_x, world_click_y):
+        """Returns True if the world coordinates fall inside this unit's hitbox."""
+        distance = math.hypot(self.x - world_click_x, self.y - world_click_y)
+        return distance <= self.hitbox_radius
+
+    def draw_selection_ring(self, screen, camera_x, camera_y):
+        """Draws a green ring around the unit if it is selected."""
+        if self.is_selected:
+            screen_x = int(self.x - camera_x)
+            screen_y = int(self.y - camera_y)
+
+            # Draw a green circle with 2px thickness (outline only)
+            pygame.draw.circle(
+                screen, (0, 255, 0), (screen_x, screen_y), self.hitbox_radius + 2, 2
+            )
 
 class Base(Structures):
     def __init__(self, structure_id, final_x, final_y):
@@ -97,4 +117,4 @@ class Shop(Structures):
             ]
 
             pygame.draw.polygon(screen, self.color, diamond_points)
-        
+            self.draw_selection_ring(screen, camera_x, camera_y)

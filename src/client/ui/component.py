@@ -344,6 +344,12 @@ class ShopButton(Button):
     def __init__(self, Position, RectangleDimension, ButtonColor, Text, TextColor, TextSize,CostText,ItemIconPath,GoldIconPath):
         super().__init__(Position, RectangleDimension, ButtonColor, Text, TextColor, TextSize)
 
+        self.cost = int(CostText)
+        self.is_active = False
+
+        self.active_color = ButtonColor
+        self.inactive_color = (204, 5, 35)
+
         self.cost_text = CostText
         self.BORDER_SIZE = 2
 
@@ -355,6 +361,15 @@ class ShopButton(Button):
 
         raw_gold = pygame.image.load(GoldIconPath).convert_alpha()
         self.gold_icon = pygame.transform.scale(raw_gold, (icon_size, icon_size))
+
+    def update_availability(self, gold):
+        if gold >= self.cost:
+            self.is_active = True
+            self.ButtonColor = self.active_color
+        else:
+            self.is_active = False
+            self.ButtonColor = self.inactive_color
+
 
     def draw(self, screen):
 

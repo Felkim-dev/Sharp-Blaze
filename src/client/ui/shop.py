@@ -2,6 +2,7 @@ import pygame
 import os
 
 from ui.component import ShopButton
+from ui.component import CloseButton
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 TITLE_FONT = os.path.join(CURRENT_DIR, "..", "assets", "Anton-Regular.ttf")
@@ -74,15 +75,35 @@ class Shop:
             GoldIconPath=GOLD_ICON,
         )
 
-        # Note: You have plenty of space at (self.x + self.width - 50, self.y + 20)
-        # to place your Close (X) Button later.
+        self.cross_btn = CloseButton(self.x + self.width - 50, self.y + 20)
+
+    def update(self, gold):
+        """Updates color based on gold and processes mouse hover"""
+
+        self.collector_shop_button.update_availability(gold)
+        self.attacker_shop_button.update_availability(gold)
+
+
+    def handle_click(self, event,mouse_pos) -> str:
+        """
+        Checks if any button was clicked.
+        Returns a string command ('CLOSE', 'BUY_COLLECTOR', 'BUY_ATTACKER') or None.
+        """
+        if self.cross_btn.handle_event(event):
+            return "CLOSE"
+        # Only return the BUY command if the button is actually active
+        if self.collector_shop_button.button_rectangle.collidepoint(mouse_pos):
+            if self.collector_shop_button.is_active:
+                return "BUY_COLLECTOR"
+
+        if self.attacker_shop_button.button_rectangle.collidepoint(mouse_pos):
+            if self.attacker_shop_button.is_active:
+                return "BUY_ATTACKER"
+
+        return None
 
     def draw(self, screen):
         """Draws the shop panel and its buttons on the screen."""
-
-        # A. Draw the Panel Background
-        # Using draw.rect with SRCALPHA target allows rounded corners directly!
-        panel_rect = (self.x, self.y, self.width, self.height)
 
         # We draw onto a temporary transparent surface to handle the alpha correctly
         # with rounded corners in Pygame.
@@ -101,3 +122,4 @@ class Shop:
         # C. Draw the Shop Buttons
         self.collector_shop_button.draw(screen)
         self.attacker_shop_button.draw(screen)
+        self.cross_btn.draw(screen)

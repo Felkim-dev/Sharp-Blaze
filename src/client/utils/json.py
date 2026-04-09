@@ -33,5 +33,29 @@ class JSON_Manager:
                 "target_y": y,
             },
         }
-        
+
         return command_payload
+
+    def get_unit_recolectors():
+
+        recolector_payload = {
+            "type": "BUY_UNIT",
+            "payload": {
+                "type": "Collector",
+                "quantity": 1,
+            },
+        }
+
+        return recolector_payload
+
+    def get_unit_attacker():
+
+        attacker_payload = {
+            "type": "BUY_UNIT",
+            "payload": {
+                "unit_type": "Attacker",
+                "quantity": 1,
+            },
+        }
+
+        return attacker_payload
