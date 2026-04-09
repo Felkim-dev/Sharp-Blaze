@@ -116,6 +116,7 @@ class GameWorld:
 
             if entity_id2 not in self.units:
                 self.units[entity_id2] = self.return_entities_object(entity_id2,net_x,net_y)
+                self.entity_team_changer(entity_id2)
             else:
                 self.units[entity_id2].update_target(net_x,net_y)
 
