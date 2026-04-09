@@ -5,241 +5,188 @@
 #include <deque>
 #include <string>
 #include <algorithm>
-#include <atomic>
-#include <unordered_map>
-#include <unordered_set>
-#include <memory>
 
 
-//#include "third_party/json.hpp"
 #include "NetworkManager.h"
 #include "clientProtocol.h"
 #include "platform_socket.h"
-#include "GameEngine.h"
-#include "GameSession.h"
-#include "UDPBroadcaster.h"
 
-// #ifdef _MSC_VER
-// #pragma comment(lib, "Ws2_32.lib")
-// #endif
-
-namespace
+bool NetworkManager::sendText(SOCKET socket, const std::string& text)
 {
-    struct PlayerState
+    std::lock_guard<std::mutex> lock(sendMutex);
+    size_t totalSent = 0;
+    while(totalSent < text.size())
     {
-        SOCKET socket = INVALID_SOCKET;
-        int internalPlayerId  = 0;
-        std::string playerName;
-        std::string sessionId;
-        bool ready = false;
-    };
-    std::mutex g_matchMutex;
-    std::deque<SOCKET> g_waitingQueue;
-    std::unordered_map<SOCKET, PlayerState> g_players;
-    std::unordered_map<std::string, std::pair<SOCKET,SOCKET>> g_sessions;
-    std::unordered_map<std::string, std::shared_ptr<GameSession>> g_gameSessions;
-    std::unordered_map<std::string, std::shared_ptr<GameEngine>> g_gameEngines;
-    std::unordered_map<std::string, std::unique_ptr<KinematicSender>> g_udpSenders;
-    std::unordered_set<std::string> g_startedSessions;
-    std::atomic<int> g_sessionCounter{1};
-    constexpr int kGameUdpPort = 5556;
-    
-    bool SendText(SOCKET socket, const std::string& text)
-    {
-        size_t totalSent = 0;
-        while(totalSent < text.size())
+        const int sent = send(
+            socket,
+            text.c_str() + totalSent,
+            static_cast<int>(text.size() - totalSent),
+            0);
+        if (sent == SOCKET_ERROR)
         {
-            const int sent = send(
-                socket,
-                text.c_str() + totalSent,
-                static_cast<int>(text.size() - totalSent),
-                0);
-            if (sent == SOCKET_ERROR)
-            {
-                return false;
-            }
-            else
-            {
-                totalSent += static_cast<size_t>(sent);
-            }
+            return false;
         }
-        return true;
-    }
-
-    std::string MakeSessionId()
-    {
-        const int id = g_sessionCounter.fetch_add(1);
-        return "session_" + std::to_string(id);
-    }
-
-    void RemoveFromQueueNoLock(SOCKET socket)
-    {
-        g_waitingQueue.erase(
-            std::remove(g_waitingQueue.begin(),g_waitingQueue.end(),socket),
-            g_waitingQueue.end());
-    }
-
-    void TryMatchPlayersNoLock()
-    {
-        while (g_waitingQueue.size() >= 2)
+        else
         {
-            const SOCKET a = g_waitingQueue.front();
-            g_waitingQueue.pop_front();
-
-            const SOCKET b = g_waitingQueue.front();
-            g_waitingQueue.pop_front();
-
-            if (!g_players.count(a) || !g_players.count(b))
-            {
-                continue;
-            }
-
-            PlayerState& p1 = g_players[a];
-            PlayerState& p2 = g_players[b];
-
-            if ( !p1.sessionId.empty() || !p2.sessionId.empty())
-            {
-                continue;
-            }
-            const std::string sessionId = MakeSessionId();
-            p1.sessionId = sessionId;
-            p2.sessionId = sessionId;
-            p1.ready = false;
-            p2.ready = false;
-            g_sessions[ sessionId ] = {a, b};
-
-            const std::string msg1 = client_protocol::BuildMatchFoundResponse(
-                sessionId,
-                p1.playerName,
-                p2.playerName);
-            const std::string msg2 = client_protocol::BuildMatchFoundResponse(
-                sessionId,
-                p2.playerName,
-                p1.playerName);
-            SendText(a,msg1);
-            SendText(b,msg2);
-
-            std::cout << "[MATCH] " << p1.playerName << " vs " << p2.playerName
-                      << " | " << sessionId << "\n";
-            auto gameSession = std::make_shared<GameSession>(
-                p1.internalPlayerId,
-                p2.internalPlayerId,
-                sessionId);
-
-            auto udpSender = std::make_unique<KinematicSender>(kGameUdpPort);
-            udpSender->setSession(gameSession);
-            udpSender->start();
-
-            g_gameSessions[sessionId] = gameSession;
-            g_gameEngines[sessionId] = std::make_shared<GameEngine>(gameSession);
-            g_udpSenders[sessionId] = std::move(udpSender);
-            
+            totalSent += static_cast<size_t>(sent);
         }
     }
+    return true;
+}
 
-    void HandleReadyNoLock(SOCKET socket, const std::string &sessionId)
+void NetworkManager::removeFromQueueNoLock(SOCKET socket)
+{
+    g_waitingQueue.erase(
+        std::remove(g_waitingQueue.begin(),g_waitingQueue.end(),socket),
+        g_waitingQueue.end());
+}
+
+void NetworkManager::tryMatchPlayersNoLock()
+{
+    while (g_waitingQueue.size() >= 2)
     {
-        if (!g_players.count(socket))
+        const SOCKET a = g_waitingQueue.front();
+        g_waitingQueue.pop_front();
+
+        const SOCKET b = g_waitingQueue.front();
+        g_waitingQueue.pop_front();
+
+        if (!g_players.count(a) || !g_players.count(b))
         {
-            return;
+            continue;
         }
 
-        PlayerState &me = g_players[socket];
-        const std::string effectiveSessionId = sessionId.empty() ? me.sessionId : sessionId;
+        PlayerState& p1 = g_players[a];
+        PlayerState& p2 = g_players[b];
 
-        if (effectiveSessionId.empty())
+        if ( !p1.sessionId.empty() || !p2.sessionId.empty())
         {
-            return;
+            continue;
         }
 
-        if (me.sessionId != effectiveSessionId)
-        {
-            return;
-        }
+        MatchCandidate c1{};
+        c1.socket = p1.socket;
+        c1.internalPlayerId = p1.internalPlayerId;
+        c1.playerName = p1.playerName;
+        MatchCandidate c2{};
+        c2.socket = p2.socket;
+        c2.internalPlayerId = p2.internalPlayerId;
+        c2.playerName = p2.playerName;
 
-        if (!g_sessions.count(effectiveSessionId))
-        {
-            return;
-        }
+        const std::string sessionId = sessionOrchestrator.createMatch(c1, c2);
+        p1.sessionId = sessionId;
+        p2.sessionId = sessionId;
 
-        if (g_startedSessions.count(effectiveSessionId))
-        {
-            return;
-        }
+        const std::string msg1 = client_protocol::BuildMatchFoundResponse(
+            sessionId,
+            p1.playerName,
+            p2.playerName);
+        const std::string msg2 = client_protocol::BuildMatchFoundResponse(
+            sessionId,
+            p2.playerName,
+            p1.playerName);
+        sendText(a,msg1);
+        sendText(b,msg2);
 
-        me.ready = true;
-        const auto pair = g_sessions[effectiveSessionId];
-
-        if (!g_players.count(pair.first) || !g_players.count(pair.second))
-        {
-            return;
-        }
-
-        const std::string startMsg = client_protocol::BuildMatchStartResponse(
-            effectiveSessionId,
-            g_gameSessions[effectiveSessionId]);
-        if (SendText(pair.first, startMsg))
-        {
-            std::cout << "GAME_START ENVIADO CORRECTAMENTE\n";
-        };
-        SendText(pair.second, startMsg);
-        g_startedSessions.insert(effectiveSessionId);
-
-        std::cout << "[MATCH] " << effectiveSessionId << " started.\n";
-    }
-
-    void CleanupDisconnectedNoLock(SOCKET socket)
-    {
-        RemoveFromQueueNoLock(socket);
-
-        if (!g_players.count(socket))
-        {
-            return;
-        }
-
-        const PlayerState me = g_players[socket];
-        g_players.erase(socket);
-
-        if (me.sessionId.empty())
-        {
-            return;
-        }
-
-        if (!g_sessions.count(me.sessionId))
-        {
-            return;
-        }
-
-        const auto pair = g_sessions[me.sessionId];
-        g_sessions.erase(me.sessionId);
-
-        auto senderIt = g_udpSenders.find(me.sessionId);
-        if (senderIt != g_udpSenders.end())
-        {
-            senderIt->second->stop();
-            g_udpSenders.erase(senderIt);
-        }
-        g_gameEngines.erase(me.sessionId);
-        g_gameSessions.erase(me.sessionId);
-        g_startedSessions.erase(me.sessionId);
-
-        const SOCKET other = (pair.first == socket) ? pair.second : pair.first;
-        if (g_players.count(other))
-        {
-            PlayerState &opponent = g_players[other];
-            opponent.sessionId.clear();
-            opponent.ready = false;
-            g_waitingQueue.push_back(other);
-
-            const std::string queueMsg =
-                client_protocol::BuildQueueStatusResponse(static_cast<int>(g_waitingQueue.size()), me.playerName);
-            SendText(other, queueMsg);            
-            TryMatchPlayersNoLock();
-        }
+        std::cout << "[MATCH] " << p1.playerName << " vs " << p2.playerName
+                    << " | " << sessionId << "\n";
     }
 }
 
-//TODO: corregir para que funcione con windows  y linux
+void NetworkManager::handleReadyNoLock(SOCKET socket, const std::string &sessionId)
+{
+    if (!g_players.count(socket))
+    {
+        return;
+    }
+
+    PlayerState &me = g_players[socket];
+    const std::string effectiveSessionId = sessionId.empty() ? me.sessionId : sessionId;
+
+    if (effectiveSessionId.empty())
+    {
+        return;
+    }
+
+    if (me.sessionId != effectiveSessionId)
+    {
+        return;
+    }
+
+    const bool shouldStart = sessionOrchestrator.markReady(socket, effectiveSessionId);
+    if (!shouldStart)
+    {
+        return;
+    }
+
+    std::pair<SOCKET, SOCKET> players{};
+    if (!sessionOrchestrator.getPlayers(effectiveSessionId, players))
+    {
+        return;
+    }
+
+    const auto session = sessionOrchestrator.getSession(effectiveSessionId);
+    if (!session)
+    {
+        return;
+    }
+
+    const std::string startMsg = client_protocol::BuildMatchStartResponse(
+        effectiveSessionId,
+        session);
+    if (sendText(players.first, startMsg))
+    {
+        std::cout << "GAME_START ENVIADO CORRECTAMENTE\n";
+    };
+    sendText(players.second, startMsg);
+
+    std::cout << "[MATCH] " << effectiveSessionId << " started.\n";
+}
+
+void NetworkManager::cleanupDisconnectedNoLock(SOCKET socket)
+{
+    removeFromQueueNoLock(socket);
+
+    if (!g_players.count(socket))
+    {
+        sessionOrchestrator.closeByClient(socket);
+        return;
+    }
+
+    const PlayerState me = g_players[socket];
+    g_players.erase(socket);
+
+    if (me.sessionId.empty())
+    {
+        sessionOrchestrator.closeByClient(socket);
+        return;
+    }
+
+    std::pair<SOCKET, SOCKET> pair{};
+    const bool hasPair = sessionOrchestrator.getPlayers(me.sessionId, pair);
+    sessionOrchestrator.closeByClient(socket);
+
+    if (!hasPair)
+    {
+        return;
+    }
+
+    const SOCKET other = (pair.first == socket) ? pair.second : pair.first;
+    if (g_players.count(other))
+    {
+        PlayerState &opponent = g_players[other];
+        opponent.sessionId.clear();
+        g_waitingQueue.push_back(other);
+
+        const std::string queueMsg =
+            client_protocol::BuildQueueStatusResponse(static_cast<int>(g_waitingQueue.size()), me.playerName);
+        sendText(other, queueMsg);            
+        tryMatchPlayersNoLock();
+    }
+}
+
+
+
 NetworkManager::NetworkManager(int p):port(p){
     // Initialize variables
     isRunning = false;
@@ -250,6 +197,18 @@ NetworkManager::NetworkManager(int p):port(p){
     {
         std::cerr << "[ERROR] Socket library failed.\n";
     }
+
+    sessionOrchestrator.setResourceBalanceCallback(
+        [this](SOCKET socket, int newBalance)
+        {
+            if (!isRunning)
+            {
+                return;
+            }
+
+            const std::string goldMessage = client_protocol::BuildResourcesResponse(newBalance);
+            sendText(socket, goldMessage);
+        });
 };
 
 NetworkManager::~NetworkManager(){
@@ -357,7 +316,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
 
                 if (!responseToSend.empty())
                 {
-                    if (!SendText(clientSocket, responseToSend))
+                    if (!sendText(clientSocket, responseToSend))
                     {
                         std::cerr << "[ERROR] send() failed for P" << playerId
                                   << " code=" << net::GetLastError() << "\n";
@@ -376,11 +335,12 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
 
                     if (!g_players.count(clientSocket))
                     {
-                        PlayerState st;
-                        st.socket = clientSocket;
-                        st.internalPlayerId = playerId;
-                        st.playerName = parsed.initialConnect.playerId;
-                        g_players[clientSocket] = st;
+                        g_players[clientSocket] = PlayerState{
+                            clientSocket,
+                            playerId,
+                            parsed.initialConnect.playerId,
+                            std::string{}
+                        };
                     }
 
                     if (g_players[clientSocket].sessionId.empty())
@@ -394,11 +354,11 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
 
                             const std::string queueMsg =
                                 client_protocol::BuildQueueStatusResponse(static_cast<int>(g_waitingQueue.size()), g_players[clientSocket].playerName);
-                            SendText(clientSocket, queueMsg);
+                            sendText(clientSocket, queueMsg);
                             
                         }
 
-                        TryMatchPlayersNoLock();
+                        tryMatchPlayersNoLock();
                     }
 
                     std::cout << "[QUEUE] P" << playerId << " (" << parsed.initialConnect.playerId
@@ -407,37 +367,139 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                 else if (parsed.type == client_protocol::ParsedMessageType::PlayerReady)
                 {
                     std::lock_guard<std::mutex> lock(g_matchMutex);
-                    HandleReadyNoLock(clientSocket, parsed.playerReady.sessionId);
+                    handleReadyNoLock(clientSocket, parsed.playerReady.sessionId);
                 }
                 else if (parsed.type == client_protocol::ParsedMessageType::MoveUnit)
                 {
-                    std::lock_guard<std::mutex> lock(g_matchMutex);
-
-                    if (!g_players.count(clientSocket))
+                    std::string sessionId;
+                    int internalPlayerId = 0;
                     {
-                        continue;
+                        std::lock_guard<std::mutex> lock(g_matchMutex);
+                        if (!g_players.count(clientSocket))
+                        {
+                            continue;
+                        }
+
+                        const PlayerState& me = g_players[clientSocket];
+                        if (me.sessionId.empty())
+                        {
+                            continue;
+                        }
+
+                        sessionId = me.sessionId;
+                        internalPlayerId = me.internalPlayerId;
                     }
 
-                    const PlayerState& me = g_players[clientSocket];
-                    if (me.sessionId.empty())
-                    {
-                        continue;
-                    }
-
-                    auto engineIt = g_gameEngines.find(me.sessionId);
-                    if (engineIt == g_gameEngines.end())
+                    auto engine = sessionOrchestrator.getEngine(sessionId);
+                    if (!engine)
                     {
                         continue;
                     }
 
                     games_types::PlayerCommand cmd{};
-                    cmd.playerId = me.internalPlayerId;
+                    cmd.playerId = internalPlayerId;
                     cmd.unitId = parsed.moveUnit.unitId;
                     cmd.destX = parsed.moveUnit.destX;
                     cmd.destY = parsed.moveUnit.destY;
 
-                    engineIt->second->tcpCommandEnqueue(cmd);
-                    engineIt->second->commandQueueProcess();
+                    engine->tcpCommandEnqueue(cmd);
+                    engine->commandQueueProcess();
+
+                    games_types::ShopAuthorizationState shopState{};
+                    if (engine->reconcileShopAuthorization(internalPlayerId, shopState))
+                    {
+                        const std::string authMsg = client_protocol::BuildShopAuthorizationResponse(
+                            internalPlayerId,
+                            shopState);
+                        sendText(clientSocket, authMsg);
+                    }
+                }
+                else if (parsed.type == client_protocol::ParsedMessageType::BuyUnit)
+                {
+                    std::string sessionId;
+                    int internalPlayerId = 0;
+                    {
+                        std::lock_guard<std::mutex> lock(g_matchMutex);
+                        if (!g_players.count(clientSocket))
+                        {
+                            continue;
+                        }
+
+                        const PlayerState& me = g_players[clientSocket];
+                        if (me.sessionId.empty())
+                        {
+                            continue;
+                        }
+
+                        sessionId = me.sessionId;
+                        internalPlayerId = me.internalPlayerId;
+                    }
+
+                    auto engine = sessionOrchestrator.getEngine(sessionId);
+                    if (!engine)
+                    {
+                        continue;
+                    }
+
+                    const auto purchase = engine->processUnitPurchase(
+                        internalPlayerId,
+                        parsed.buyUnit.unitType,
+                        parsed.buyUnit.quantity);
+
+                    std::string buyerMsg;
+                    if (!purchase.success)
+                    {
+                        buyerMsg =
+                            std::string("{\"type\":\"BUY_UNIT_RESULT\",\"status\":\"rejected\",\"reason\":\"") +
+                            purchase.reason +
+                            "\"}\n";
+                        sendText(clientSocket, buyerMsg);
+                        continue;
+                    }
+
+                    buyerMsg =
+                        std::string("{\"type\":\"BUY_UNIT_RESULT\",\"status\":\"accepted\",\"payload\":{") +
+                        "\"unit_id\":" + std::to_string(purchase.unitId) + "," +
+                        "\"unit_type\":" + std::to_string(static_cast<int>(purchase.unitType)) + "," +
+                        "\"spawn_x\":" + std::to_string(purchase.spawnX) + "," +
+                        "\"spawn_y\":" + std::to_string(purchase.spawnY) + "," +
+                        "\"new_balance\":" + std::to_string(purchase.newBalance) +
+                        "}}\n";
+                    sendText(clientSocket, buyerMsg);
+
+                    const std::string goldMessage = client_protocol::BuildResourcesResponse(
+                        purchase.newBalance);
+                    sendText(clientSocket, goldMessage);
+
+                    std::pair<SOCKET, SOCKET> players{};
+                    if (sessionOrchestrator.getPlayers(sessionId, players))
+                    {
+                        const std::string spawnBroadcast =
+                            std::string("{\"type\":\"UNIT_SPAWNED\",\"payload\":{") +
+                            "\"unit_id\":" + std::to_string(purchase.unitId) + "," +
+                            "\"unit_type\":" + std::to_string(static_cast<int>(purchase.unitType)) + "," +
+                            "\"owner_player\":" + std::to_string(internalPlayerId) +
+                            "}}\n";
+                        sendText(players.first, spawnBroadcast);
+                        if (players.second != players.first)
+                        {
+                            sendText(players.second, spawnBroadcast);
+                        }
+                    }
+                }
+                else if (parsed.type == client_protocol::ParsedMessageType::DepositResource)
+                {
+                    {
+                        std::lock_guard<std::mutex> lock(g_matchMutex);
+                        if (!g_players.count(clientSocket))
+                        {
+                            continue;
+                        }
+                    }
+
+                    const std::string depositAck =
+                        "{\"type\":\"DEPOSIT_RESOURCE_RESULT\",\"status\":\"ignored\",\"reason\":\"server_authoritative_fsm\"}\n";
+                    sendText(clientSocket, depositAck);
                 }
             }
         }
@@ -456,7 +518,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
 
     {
         std::lock_guard<std::mutex> lock(g_matchMutex);
-        CleanupDisconnectedNoLock(clientSocket);
+        cleanupDisconnectedNoLock(clientSocket);
     }
 
     net::CloseSocket(clientSocket);
