@@ -7,6 +7,5 @@ class Config:
     
     # ----- DEVELOPER MODE -------
     
-    OFFLINE_DEBUG_MODE = False
-    
+    OFFLINE_DEBUG_MODE = True
     

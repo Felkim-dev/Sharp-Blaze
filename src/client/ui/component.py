@@ -337,3 +337,112 @@ class InfoBox(TextBox):
         screen.blit(self.text_surface,self.text_rect)
         screen.blit(self.text_surface2, self.text_rect2)
         screen.blit(self.image,self.image_rect)
+
+
+class ShopButton(Button):
+
+    def __init__(self, Position, RectangleDimension, ButtonColor, Text, TextColor, TextSize,CostText,ItemIconPath,GoldIconPath):
+        super().__init__(Position, RectangleDimension, ButtonColor, Text, TextColor, TextSize)
+
+        self.cost = int(CostText)
+        self.is_active = False
+
+        self.active_color = ButtonColor
+        self.inactive_color = (204, 5, 35)
+
+        self.cost_text = CostText
+        self.BORDER_SIZE = 2
+
+        padding = 10
+        icon_size = self.RectangleDimension[1] - (padding * 2)
+
+        raw_item = pygame.image.load(ItemIconPath).convert_alpha()
+        self.item_icon = pygame.transform.scale(raw_item, (icon_size, icon_size))
+
+        raw_gold = pygame.image.load(GoldIconPath).convert_alpha()
+        self.gold_icon = pygame.transform.scale(raw_gold, (icon_size, icon_size))
+
+    def update_availability(self, gold):
+        if gold >= self.cost:
+            self.is_active = True
+            self.ButtonColor = self.active_color
+        else:
+            self.is_active = False
+            self.ButtonColor = self.inactive_color
+
+
+    def draw(self, screen):
+
+        # -------------------------------------------------------------
+        # 1. BACKGROUND & BORDERS
+        # -------------------------------------------------------------
+
+        # Draw the solid background
+        pygame.draw.rect(
+            screen,
+            self.ButtonColor,
+            self.button_rectangle,
+            border_radius=self.CORNERS_RADIUS,
+        )
+
+        # Draw the outer white border
+        pygame.draw.rect(
+            screen,
+            self.WHITE,
+            self.button_rectangle,
+            self.BORDER_SIZE,
+            border_radius=self.CORNERS_RADIUS,
+        )
+
+        # -------------------------------------------------------------
+        # 2. LAYOUT MATH (The 70/30 Split)
+        # -------------------------------------------------------------
+
+        # We calculate the X coordinate where the vertical divider line goes
+        split_x = self.button_rectangle.left + int(self.button_rectangle.width * 0.7)
+
+        # Draw the vertical divider line
+        pygame.draw.line(
+            screen,
+            self.WHITE,
+            (split_x, self.button_rectangle.top),
+            (split_x, self.button_rectangle.bottom),
+            self.BORDER_SIZE,
+        )
+
+        # Text rendering
+        main_text_surf = self.button_font.render(self.text, True, self.text_color)
+        cost_text_surf = self.button_font.render(self.cost_text, True, self.text_color)
+        padding = 10
+
+        # -------------------------------------------------------------
+        # 3. LEFT SECTION: Item Icon + Main Text
+        # -------------------------------------------------------------
+        item_icon_rect = self.item_icon.get_rect()
+        item_icon_rect.centery = self.button_rectangle.centery
+        item_icon_rect.left = self.button_rectangle.left + padding
+
+        main_text_rect = main_text_surf.get_rect()
+        main_text_rect.centery = self.button_rectangle.centery
+        # Center the text perfectly between the item icon and the divider line
+        available_space = split_x - item_icon_rect.right
+        main_text_rect.centerx = item_icon_rect.right + (available_space // 2)
+
+        # -------------------------------------------------------------
+        # 4. RIGHT SECTION: Coin Icon + Cost Text
+        # -------------------------------------------------------------
+        coin_icon_rect = self.gold_icon.get_rect()
+        coin_icon_rect.centery = self.button_rectangle.centery
+        coin_icon_rect.left = split_x + padding
+
+        cost_text_rect = cost_text_surf.get_rect()
+        cost_text_rect.centery = self.button_rectangle.centery
+        cost_text_rect.left = coin_icon_rect.right + padding
+
+        # -------------------------------------------------------------
+        # 5. BLIT EVERYTHING
+        # -------------------------------------------------------------
+        screen.blit(self.item_icon, item_icon_rect)
+        screen.blit(main_text_surf, main_text_rect)
+        screen.blit(self.gold_icon, coin_icon_rect)
+        screen.blit(cost_text_surf, cost_text_rect)

@@ -132,18 +132,28 @@ class GameWorld:
 
     def handle_left_click(self, world_x, world_y):
         """Processes a left click in world coordinates to select units."""
-        unit_was_clicked = False
+        # We will store the entity we clicked on to return it later
+        clicked_entity = None
 
-        for unit in self.units.values():
-            # Check if this object has the check_click method (e.g., it's a Unit, not a Structure)
-            if hasattr(unit, "check_click"):
-                if unit.check_click(world_x, world_y):
-                    unit.is_selected = True
-                    unit_was_clicked = True
-                    print(f"[WORLD] Unit {unit.id} selected.")
-                else:
-                    # If we clicked somewhere else, deselect this unit
-                    unit.is_selected = False
+        # Iterate through both dictionaries (units and structures)
+        for entity_dictionary in (self.units, self.structures):
+            for entity in entity_dictionary.values():
 
-        if not unit_was_clicked:
-            print("[WORLD] Clicked empty ground. Deselected all units.")
+                if hasattr(entity, "check_click"):
+                    if entity.check_click(world_x, world_y):
+
+                        entity.is_selected = True
+                        clicked_entity = entity  # SAVE THE CLICKED ENTITY
+                        print(
+                            f"[WORLD] Selected own entity: {entity.id} ({entity.__class__.__name__})"
+                        )
+
+                    else:
+                        # Deselect if click was outside this entity
+                        entity.is_selected = False
+
+        if not clicked_entity:
+            print("[WORLD] Clicked empty ground.")
+
+        # RETURN THE OBJECT TO THE GAME SCREEN
+        return clicked_entity
