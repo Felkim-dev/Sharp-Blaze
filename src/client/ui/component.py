@@ -288,8 +288,43 @@ class InfoBox(TextBox):
         icon_size = self.RectangleDimension[1] - 10
         self.image = pygame.transform.scale(raw_image, (icon_size, icon_size))
 
+        self.floating_numbers = []  # List to store active animations
+        self.float_speed = 1.0  # How fast the text moves up (pixels per frame)
+        self.fade_speed = 5  # How fast it disappears (alpha reduction per frame)
+
     def update_text(self, new_value: str):
-        """Allows updating the dynamic value (e.g., '54' to '100') without recreating the object."""
+        """Updates the text and triggers a floating number if it's a numeric change."""
+
+        # 1. Calculate the mathematical difference
+        try:
+            old_int = int(self.text_variable)
+            new_int = int(new_value)
+            diff = new_int - old_int
+
+            # 2. If there is a change, create a new floating text particle
+            if diff != 0:
+                color = (
+                    (50, 220, 50) if diff > 0 else (220, 50, 50)
+                )  # Green for +, Red for -
+                sign = (
+                    "+" if diff > 0 else ""
+                )  # Negative numbers already include the '-'
+                text_str = f"{sign}{diff}"
+
+                # Store the animation state as a dictionary
+                self.floating_numbers.append(
+                    {
+                        "text": text_str,
+                        "color": color,
+                        "y_offset": 0,  # Starts at 0 displacement
+                        "alpha": 255,  # Starts fully opaque
+                    }
+                )
+        except ValueError:
+            # If the value isn't a number (e.g., "MAX"), we just ignore the animation
+            pass
+
+        # 3. Update the actual value on the UI
         self.text_variable = new_value
 
     def draw(self, screen):
@@ -337,6 +372,37 @@ class InfoBox(TextBox):
         screen.blit(self.text_surface,self.text_rect)
         screen.blit(self.text_surface2, self.text_rect2)
         screen.blit(self.image,self.image_rect)
+
+        # -------------------------------------------------------------
+        # NEW: DRAW AND UPDATE FLOATING NUMBERS
+        # -------------------------------------------------------------
+        # We iterate over a copy of the list [:] so we can safely remove items
+        
+        for anim in self.floating_numbers[:]:
+
+            # Render the floating text
+            float_surf = self.inputbox_font.render(anim["text"], True, anim["color"])
+
+            # Apply alpha transparency to fade it out
+            float_surf.set_alpha(anim["alpha"])
+
+            # Position it perfectly centered above the actual gold/resource number
+            float_rect = float_surf.get_rect()
+            float_rect.centerx = self.text_rect2.centerx
+
+            # Start at the top of the text box and move up by y_offset
+            float_rect.bottom = self.textbox_rectangle.top - anim["y_offset"]
+
+            # Draw it
+            screen.blit(float_surf, float_rect)
+
+            # Update animation physics for the next frame
+            anim["y_offset"] += self.float_speed
+            anim["alpha"] -= self.fade_speed
+
+            # Destroy the animation particle if it's completely invisible
+            if anim["alpha"] <= 0:
+                self.floating_numbers.remove(anim)
 
 
 class ShopButton(Button):
