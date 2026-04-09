@@ -11,6 +11,7 @@ using games_types::RegisteredClient;
 using games_types::CollectorUnit;
 using games_types::ResourceNode;
 using games_types::UnitPosition;
+using games_types::ShopUnit;
 
 class GameSession
 {
@@ -24,9 +25,11 @@ class GameSession
         std::unordered_map<int, UnitPosition> units;
         std::unordered_map<int, CollectorUnit> collectors;
         std::unordered_map<int, ResourceNode> resources;
+        std::unordered_map<int, ShopUnit> shops;
         std::unordered_map<int, int> playerGold;
         std::unordered_map<int, int> playerGoldSpent;
         std::unordered_map<games_types::EntityType, int> unitGoldCostByType;
+        std::unordered_map<int, games_types::ShopAuthorizationState> shopAuthorizationByPlayer;
         int nextP1AttackerId = games_types::id_ranges::p1Attackers.minId;
         int nextP1CollectorId = games_types::id_ranges::p1Collectors.minId;
         int nextP2AttackerId = games_types::id_ranges::p2Attackers.minId;
@@ -54,6 +57,10 @@ class GameSession
         bool upsertCollector(const CollectorUnit& collector);
         std::vector<UnitPosition> getStructuresSnapshot() const;
         std::vector<ResourceNode> getResourcesSnapshot() const;
+        std::vector<ShopUnit> getShopsSnapshot() const;
+        bool getShopAuthorizationState(int playerId, games_types::ShopAuthorizationState& outState) const;
+        void setShopAuthorizationState(int playerId, const games_types::ShopAuthorizationState& state);
+        void clearShopAuthorizationState(int playerId);
         bool upsertResourceNode(const ResourceNode& node);
         int extractResource(int resourceId, int requestedAmount);
 

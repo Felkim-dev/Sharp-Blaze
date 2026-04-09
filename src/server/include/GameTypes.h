@@ -147,7 +147,20 @@ namespace games_types
         int depositDurationMs = 500;
         int stateTimeRemainingMs = 0;
     };
+    struct ShopUnit
+    {
+        int entityId = 0;
+        float x = 0.0f;
+        float y = 0.0f;
+        float radius = 0.0f;
+    };
 
+    struct ShopAuthorizationState
+    {
+        bool authorized = false;
+        int shopId = -1;
+        int unitId = -1;
+    };
     struct BuyUnitPayload
     {
         EntityType unitType = EntityType::Collector;

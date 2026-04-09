@@ -12,6 +12,14 @@ namespace
         auto session = std::make_shared<GameSession>(1, 2, "test_session_a");
         GameEngine engine(session);
 
+        session->upsertUnitPosition(3000, 2500.0f, 2500.0f);
+        games_types::ShopAuthorizationState shopState{};
+        const bool authChanged = engine.reconcileShopAuthorization(1, shopState);
+        assert(authChanged);
+        assert(shopState.authorized);
+        assert(shopState.shopId == 11000);
+        assert(shopState.unitId == 3000);
+
         const auto result = engine.processUnitPurchase(1, games_types::EntityType::Collector, 1);
         assert(result.success);
         assert(result.unitId >= games_types::id_ranges::p1Collectors.minId);
@@ -19,9 +27,19 @@ namespace
         assert(result.newBalance == 400);
     }
 
-    void testPurchaseStructureRejected()
+    void testPurchaseWithoutShopAuthorizationRejected()
     {
         auto session = std::make_shared<GameSession>(1, 2, "test_session_b");
+        GameEngine engine(session);
+
+        const auto result = engine.processUnitPurchase(1, games_types::EntityType::Collector, 1);
+        assert(!result.success);
+        assert(result.reason == "shop_not_authorized");
+    }
+
+    void testPurchaseStructureRejected()
+    {
+        auto session = std::make_shared<GameSession>(1, 2, "test_session_c");
         GameEngine engine(session);
 
         const auto result = engine.processUnitPurchase(1, games_types::EntityType::Structure, 1);
@@ -31,7 +49,7 @@ namespace
 
     void testResourceExtractionFinite()
     {
-        GameSession session(1, 2, "test_session_c");
+        GameSession session(1, 2, "test_session_d");
         const int first = session.extractResource(10000, 3900);
         const int second = session.extractResource(10000, 500);
         const int third = session.extractResource(10000, 10);
@@ -43,7 +61,7 @@ namespace
 
     void testCollectorStateAdvancesWithCollision()
     {
-        auto session = std::make_shared<GameSession>(1, 2, "test_session_d");
+        auto session = std::make_shared<GameSession>(1, 2, "test_session_e");
         GameEngine engine(session);
 
         // Place collector on top of a mine so collision immediately starts gathering.
@@ -64,14 +82,36 @@ namespace
                collector.state == games_types::CollectorState::Depositing ||
                collector.state == games_types::CollectorState::Idle);
     }
+
+    void testShopAuthorizationGrantAndRevoke()
+    {
+        auto session = std::make_shared<GameSession>(1, 2, "test_session_f");
+        GameEngine engine(session);
+
+        session->upsertUnitPosition(1000, 2500.0f, 2500.0f);
+
+        games_types::ShopAuthorizationState shopState{};
+        bool changed = engine.reconcileShopAuthorization(1, shopState);
+        assert(changed);
+        assert(shopState.authorized);
+        assert(engine.hasShopAuthorization(1));
+
+        session->upsertUnitPosition(1000, 100.0f, 100.0f);
+        changed = engine.reconcileShopAuthorization(1, shopState);
+        assert(changed);
+        assert(!shopState.authorized);
+        assert(!engine.hasShopAuthorization(1));
+    }
 }
 
 int main()
 {
     testPurchaseCollectorSuccess();
+    testPurchaseWithoutShopAuthorizationRejected();
     testPurchaseStructureRejected();
     testResourceExtractionFinite();
     testCollectorStateAdvancesWithCollision();
+    testShopAuthorizationGrantAndRevoke();
 
     std::cout << "server_logic_tests: all checks passed\n";
     return 0;

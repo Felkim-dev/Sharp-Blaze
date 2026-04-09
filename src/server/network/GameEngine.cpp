@@ -55,6 +55,35 @@ namespace
         return unitType == games_types::EntityType::Attacker ||
                unitType == games_types::EntityType::Collector;
     }
+
+    bool findShopAuthorizationState(const std::vector<games_types::UnitPosition>& units,
+                                    const std::vector<games_types::ShopUnit>& shops,
+                                    int playerId,
+                                    games_types::ShopAuthorizationState& outState)
+    {
+        outState = games_types::ShopAuthorizationState{};
+
+        for (const auto& unit : units)
+        {
+            if (!games_types::isPlayerControllableUnitId(playerId, unit.entity_id))
+            {
+                continue;
+            }
+
+            for (const auto& shop : shops)
+            {
+                if (circlesIntersect(unit.x, unit.y, 0.0f, shop.x, shop.y, shop.radius))
+                {
+                    outState.authorized = true;
+                    outState.shopId = shop.entityId;
+                    outState.unitId = unit.entity_id;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 }
 
 GameEngine::GameEngine(std::shared_ptr<GameSession> sessionRef,
@@ -211,6 +240,49 @@ void GameEngine::advanceCollectors(int deltaMs)
     session->setCollectorsSnapshot(collectors);
 }
 
+bool GameEngine::reconcileShopAuthorization(int playerId, games_types::ShopAuthorizationState& outState)
+{
+    outState = games_types::ShopAuthorizationState{};
+    if (!session || !session->hasPlayer(playerId))
+    {
+        return false;
+    }
+
+    const std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
+    const std::vector<games_types::ShopUnit> shops = session->getShopsSnapshot();
+    findShopAuthorizationState(units, shops, playerId, outState);
+
+    games_types::ShopAuthorizationState previousState{};
+    const bool hadPrevious = session->getShopAuthorizationState(playerId, previousState);
+    const bool changed = hadPrevious
+        ? (previousState.authorized != outState.authorized ||
+           previousState.shopId != outState.shopId ||
+           previousState.unitId != outState.unitId)
+        : outState.authorized;
+
+    if (outState.authorized)
+    {
+        session->setShopAuthorizationState(playerId, outState);
+    }
+    else
+    {
+        session->clearShopAuthorizationState(playerId);
+    }
+
+    return changed;
+}
+
+bool GameEngine::hasShopAuthorization(int playerId) const
+{
+    if (!session || !session->hasPlayer(playerId))
+    {
+        return false;
+    }
+
+    games_types::ShopAuthorizationState state{};
+    return session->getShopAuthorizationState(playerId, state) && state.authorized;
+}
+
 GameEngine::PurchaseResult GameEngine::processUnitPurchase(
     int playerId,
     games_types::EntityType unitType,
@@ -228,6 +300,12 @@ GameEngine::PurchaseResult GameEngine::processUnitPurchase(
     if (!isPurchasableTroop(unitType))
     {
         result.reason = "unit_type_not_purchasable";
+        return result;
+    }
+
+    if (!hasShopAuthorization(playerId))
+    {
+        result.reason = "shop_not_authorized";
         return result;
     }
 

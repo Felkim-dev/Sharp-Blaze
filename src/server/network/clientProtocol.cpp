@@ -180,6 +180,23 @@ std::string client_protocol::BuildMatchStartResponse(const std::string& sessionI
     return response.dump() + '\n';
 }
 
+std::string client_protocol::BuildShopAuthorizationResponse(
+    int playerId,
+    const games_types::ShopAuthorizationState& state)
+{
+    json response = {
+        {"type", "SHOP_AUTHORIZATION"},
+        {"payload", {
+            {"player_id", playerId},
+            {"authorized", state.authorized},
+            {"shop_id", state.authorized ? state.shopId : -1},
+            {"unit_id", state.authorized ? state.unitId : -1}
+        }}
+    };
+
+    return response.dump() + '\n';
+}
+
 //framing del buffer por delimitador "\n"
 //Recibe bytes crudos de recv, acumula en el carrybuffer y extrae los mensajes completos en outMessages.
 

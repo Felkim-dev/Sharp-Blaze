@@ -391,6 +391,15 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
 
                     engine->tcpCommandEnqueue(cmd);
                     engine->commandQueueProcess();
+
+                    games_types::ShopAuthorizationState shopState{};
+                    if (engine->reconcileShopAuthorization(internalPlayerId, shopState))
+                    {
+                        const std::string authMsg = client_protocol::BuildShopAuthorizationResponse(
+                            internalPlayerId,
+                            shopState);
+                        sendText(clientSocket, authMsg);
+                    }
                 }
                 else if (parsed.type == client_protocol::ParsedMessageType::BuyUnit)
                 {
