@@ -115,7 +115,7 @@ class GameWorld:
             entity_id2 = int(entity_id)
 
             if entity_id2 not in self.units:
-                self.units[entity_id2] = Recolectors(entity_id2,net_x,net_y)
+                self.units[entity_id2] = self.return_entities_object(entity_id2,net_x,net_y)
             else:
                 self.units[entity_id2].update_target(net_x,net_y)
 
