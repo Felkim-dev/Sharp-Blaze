@@ -106,6 +106,7 @@ std::string client_protocol::BuildErrorResponse(const std::string &reason)
         {"status", "rejected"},
         {"reason", reason}
     };
+    std::cout << reason <<'\n';
     std::cout << "error en el msj\n";
     return response.dump() +"\n"; 
 }
