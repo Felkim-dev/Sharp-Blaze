@@ -73,6 +73,7 @@ namespace client_protocol
     
     std::string BuildMatchStartResponse(const std::string& sessionId, std::shared_ptr<GameSession> session);
     std::string BuildShopAuthorizationResponse(int playerId, const games_types::ShopAuthorizationState& state);
+    std::string BuildResourcesResponse(int newBalance);
     bool MessageFramer(
     std::string&              carryBuffer, 
     const char*               chunk, 

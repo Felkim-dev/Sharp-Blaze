@@ -241,6 +241,16 @@ void GameEngine::advanceCollectors(int deltaMs)
     session->setCollectorsSnapshot(collectors);
 }
 
+std::vector<games_types::EconomyTransaction> GameEngine::drainEconomyTransactions()
+{
+    if (!session)
+    {
+        return {};
+    }
+
+    return session->drainEconomyTransactions();
+}
+
 bool GameEngine::reconcileShopAuthorization(int playerId, games_types::ShopAuthorizationState& outState)
 {
     outState = games_types::ShopAuthorizationState{};

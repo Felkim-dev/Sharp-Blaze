@@ -4,6 +4,7 @@
 #include <mutex>
 #include <queue>
 #include <string>
+#include <vector>
 
 #include "GameTypes.h"
 
@@ -31,6 +32,7 @@ class GameEngine
 		void tcpCommandEnqueue(const games_types::PlayerCommand& cmd);
 		void commandQueueProcess();
 		void advanceCollectors(int deltaMs);
+		std::vector<games_types::EconomyTransaction> drainEconomyTransactions();
 		bool reconcileShopAuthorization(int playerId, games_types::ShopAuthorizationState& outState);
 		bool hasShopAuthorization(int playerId) const;
 		PurchaseResult processUnitPurchase(int playerId, games_types::EntityType unitType, int quantity);

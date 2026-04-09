@@ -28,6 +28,7 @@ class GameSession
         std::unordered_map<int, ShopUnit> shops;
         std::unordered_map<int, int> playerGold;
         std::unordered_map<int, int> playerGoldSpent;
+        std::vector<games_types::EconomyTransaction> pendingEconomyTransactions;
         std::unordered_map<games_types::EntityType, int> unitGoldCostByType;
         std::unordered_map<int, games_types::ShopAuthorizationState> shopAuthorizationByPlayer;
         int nextP1AttackerId = games_types::id_ranges::p1Attackers.minId;
@@ -69,6 +70,7 @@ class GameSession
         bool addGold(int playerId, int amount);
         int getPlayerSpentGold(int playerId) const;
         std::unordered_map<int, int> getPlayerGoldSnapshot() const;
+        std::vector<games_types::EconomyTransaction> drainEconomyTransactions();
 
         int getUnitGoldCost(games_types::EntityType unitType) const;
         bool isUnitPurchasable(games_types::EntityType unitType) const;

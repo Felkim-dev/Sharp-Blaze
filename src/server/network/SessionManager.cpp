@@ -26,7 +26,12 @@ SessionOrchestrator::~SessionOrchestrator()
 }
 
 void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
-                                         std::shared_ptr<std::atomic<bool>> runningFlag)
+                                         std::shared_ptr<std::atomic<bool>> runningFlag,
+                                         SOCKET p1Socket,
+                                         int p1InternalPlayerId,
+                                         SOCKET p2Socket,
+                                         int p2InternalPlayerId,
+                                         std::function<void(SOCKET, int)> resourceBalanceCallback)
 {
     constexpr int kTickMs = 16;
     const std::chrono::milliseconds targetFrame(kTickMs);
@@ -38,6 +43,30 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
         if (engine)
         {
             engine->advanceCollectors(kTickMs);
+
+            const auto economyEvents = engine->drainEconomyTransactions();
+            for (const auto& event : economyEvents)
+            {
+                if (event.deltaGold <= 0)
+                {
+                    continue;
+                }
+
+                SOCKET targetSocket = INVALID_SOCKET;
+                if (event.playerId == p1InternalPlayerId)
+                {
+                    targetSocket = p1Socket;
+                }
+                else if (event.playerId == p2InternalPlayerId)
+                {
+                    targetSocket = p2Socket;
+                }
+
+                if (targetSocket != INVALID_SOCKET && resourceBalanceCallback)
+                {
+                    resourceBalanceCallback(targetSocket, event.resultingGold);
+                }
+            }
         }
 
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -47,6 +76,12 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
             std::this_thread::sleep_for(targetFrame - elapsed);
         }
     }
+}
+
+void SessionOrchestrator::setResourceBalanceCallback(std::function<void(SOCKET, int)> callback)
+{
+    std::lock_guard<std::mutex> lock(mtx);
+    resourceBalanceCallback = std::move(callback);
 }
 
 void SessionOrchestrator::startSimulationNoLock(SessionRecord& record)
@@ -70,7 +105,12 @@ void SessionOrchestrator::startSimulationNoLock(SessionRecord& record)
     record.simulationThread = std::thread(
         &SessionOrchestrator::simulationLoop,
         record.engine,
-        record.simulationRunning);
+        record.simulationRunning,
+        record.p1,
+        record.p1InternalPlayerId,
+        record.p2,
+        record.p2InternalPlayerId,
+        resourceBalanceCallback);
 }
 
 void SessionOrchestrator::stopSimulationNoLock(SessionRecord& record)
@@ -108,6 +148,8 @@ std::string SessionOrchestrator::createMatch(const MatchCandidate& a, const Matc
     SessionRecord record;
     record.p1 = a.socket;
     record.p2 = b.socket;
+    record.p1InternalPlayerId = a.internalPlayerId;
+    record.p2InternalPlayerId = b.internalPlayerId;
     record.session = session;
     record.engine = engine;
     record.udpSender = std::move(sender);

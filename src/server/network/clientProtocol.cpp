@@ -211,6 +211,18 @@ std::string client_protocol::BuildShopAuthorizationResponse(
     return response.dump() + '\n';
 }
 
+std::string client_protocol::BuildResourcesResponse(int newBalance)
+{
+    json response = {
+        {"type", "RESOURCES"},
+        {"payload", {
+            {"new_balance", newBalance}
+        }}
+    };
+
+    return response.dump() + '\n';
+}
+
 //framing del buffer por delimitador "\n"
 //Recibe bytes crudos de recv, acumula en el carrybuffer y extrae los mensajes completos en outMessages.
 

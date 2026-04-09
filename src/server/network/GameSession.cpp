@@ -73,6 +73,11 @@ bool GameSession::addGold(int playerId, int amount)
 	}
 
 	it->second += amount;
+	pendingEconomyTransactions.push_back(games_types::EconomyTransaction{
+		playerId,
+		amount,
+		it->second,
+		"collector_deposit"});
 	return true;
 }
 
@@ -91,6 +96,14 @@ std::unordered_map<int, int> GameSession::getPlayerGoldSnapshot() const
 {
 	std::lock_guard<std::mutex> lock(sessionMutex);
 	return playerGold;
+}
+
+std::vector<games_types::EconomyTransaction> GameSession::drainEconomyTransactions()
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	std::vector<games_types::EconomyTransaction> events;
+	events.swap(pendingEconomyTransactions);
+	return events;
 }
 
 int GameSession::getUnitGoldCost(games_types::EntityType unitType) const
@@ -539,6 +552,7 @@ void GameSession::initializeGameState()
 	playerGold[player2] = kInitialGold;
 	playerGoldSpent[player1] = 0;
 	playerGoldSpent[player2] = 0;
+	pendingEconomyTransactions.clear();
 	shopAuthorizationByPlayer.clear();
 
 	//bases de los jugadores

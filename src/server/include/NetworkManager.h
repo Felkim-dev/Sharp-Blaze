@@ -38,6 +38,7 @@ private:
     SessionOrchestrator sessionOrchestrator;
 
     std::mutex g_matchMutex;
+    std::mutex sendMutex;
     std::deque<SOCKET> g_waitingQueue;
     std::unordered_map<SOCKET, PlayerState> g_players;
 

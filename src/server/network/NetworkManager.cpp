@@ -13,6 +13,7 @@
 
 bool NetworkManager::sendText(SOCKET socket, const std::string& text)
 {
+    std::lock_guard<std::mutex> lock(sendMutex);
     size_t totalSent = 0;
     while(totalSent < text.size())
     {
@@ -196,6 +197,18 @@ NetworkManager::NetworkManager(int p):port(p){
     {
         std::cerr << "[ERROR] Socket library failed.\n";
     }
+
+    sessionOrchestrator.setResourceBalanceCallback(
+        [this](SOCKET socket, int newBalance)
+        {
+            if (!isRunning)
+            {
+                return;
+            }
+
+            const std::string goldMessage = client_protocol::BuildResourcesResponse(newBalance);
+            sendText(socket, goldMessage);
+        });
 };
 
 NetworkManager::~NetworkManager(){
@@ -453,11 +466,9 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         "\"new_balance\":" + std::to_string(purchase.newBalance) +
                         "}}\n";
                     sendText(clientSocket, buyerMsg);
-                    
-                    std::string goldMessage;
-                    goldMessage = std::string("{\"type\":\"RESOURCES\",\"payload\":{") +
-                                  "\"new_balance\":" + std::to_string(purchase.newBalance) +
-                                  "}}\n";
+
+                    const std::string goldMessage = client_protocol::BuildResourcesResponse(
+                        purchase.newBalance);
                     sendText(clientSocket, goldMessage);
 
                     std::pair<SOCKET, SOCKET> players{};
