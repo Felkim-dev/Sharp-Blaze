@@ -64,7 +64,13 @@ class GameScreen:
         self.infobox_hat = InfoBox((250,650),(200,40),gray,"COLLECTORS",self.player_recolector_units_string,white,15,HAT_PATH)
         self.infobox_sword = InfoBox((470,650),(200,40),gray,"ATTACKERS",self.player_attacker_units_string,white,15,SWORD_PATH)
 
-    def load_initial_state(self, units, structures):
+    def load_initial_state(self, gold, units, structures):
+        
+        self.player_gold = gold
+        self.player_gold_string = str(self.player_gold)
+        
+        #TODO:ADD UNIT UI
+        
         self.world.build_initial_state(units,structures)
 
     def handle_events(self, events, keys):
@@ -122,7 +128,7 @@ class GameScreen:
                 # -------------------------------------------------------------
                 elif event.button == 3:
                     self.world.handle_right_click(world_x, world_y)
-
+    
     def update(self):
 
         if not Config.OFFLINE_DEBUG_MODE:
@@ -140,8 +146,14 @@ class GameScreen:
                         self.new_unit_id = data["payload"]["unit_id"]
                         self.new_spawn_x = data["payload"]["spawn_x"]
                         self.new_spawn_y = data["payload"]["spawn_y"]
+                        self.new_gold = data["payload"]["new_balance"]
                         
                         self.world.spawn_unit(self.new_unit_id,self.new_spawn_x,self.new_spawn_y)
+                        
+                        self.player_gold = self.new_gold
+                        self.player_gold_string = str(self.player_gold)
+                        
+                        
                 elif data.get("type") == "UNIT_SPAWNED":
                     self.new_unit_id = data["payload"]["unit_id"]
                     
@@ -151,6 +163,7 @@ class GameScreen:
                         self.world.units[self.new_unit_id] = self.world.return_entities_object(self.new_unit_id,300, 4700)
                         
                     self.world.entity_team_changer(self.new_unit_id)
+                
         else:
             # DEBUG MODE
             if self.player_gold > 100:

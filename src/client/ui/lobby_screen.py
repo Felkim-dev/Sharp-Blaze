@@ -148,9 +148,11 @@ class LobbyScreen:
 
                     structures = data["payload"]["structures"]
 
+                    gold = data["payload"]["gold"]
+
                     game_screen = self.screen_manager.screens["GAME"]
 
-                    game_screen.load_initial_state(units,structures)
+                    game_screen.load_initial_state(gold,units,structures)
 
                     self.screen_manager.network.init_udp_connection()
 
