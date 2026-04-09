@@ -6,6 +6,7 @@ from engine.camera import Camera
 from ui.minimap import Minimap
 from ui.telemetry import TelemetryPanel
 from ui.component import InfoBox
+from ui.shop import Shop
 
 class GameScreen:
     def __init__(self, screen_manager , screen):
@@ -31,6 +32,9 @@ class GameScreen:
         # Instantiate the Telemetry Panel
         self.telemetry = TelemetryPanel(self.screen.get_width())
 
+        #SHOP
+        self.shop = Shop()
+        
         # COLOR FOR BOXE
         gray = (84, 84, 84)
         white = (255, 255, 255)
@@ -144,3 +148,4 @@ class GameScreen:
         self.infobox_gold.draw(self.screen)
         self.infobox_hat.draw(self.screen)
         self.infobox_sword.draw(self.screen)
+        self.shop.draw(self.screen)
