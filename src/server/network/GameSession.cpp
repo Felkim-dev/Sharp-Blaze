@@ -552,9 +552,10 @@ void GameSession::initializeGameState()
 
 	//3 minas en el mapa
 	resources.clear();
-	resources[10000] = ResourceNode{10000, games_types::ResourceType::Gold, 2500.0f, 2500.0f, 60.0f, 4000, 25};
+	resources[10000] = ResourceNode{10000, games_types::ResourceType::Gold, 3500.0f, 3500.0f, 60.0f, 4000, 25};
 	resources[10001] = ResourceNode{10001, games_types::ResourceType::Gold, 2100.0f, 2900.0f, 60.0f, 4000, 25};
 	resources[10002] = ResourceNode{10002, games_types::ResourceType::Gold, 2900.0f, 2100.0f, 60.0f, 4000, 25};
+	resources[10003] = ResourceNode{10003, games_types::ResourceType::Gold, 1500.0f, 1500.0f, 60.0f, 4000, 25};
 
 	//atacantes jugador 1
 	units[1000] = UnitPosition{1000, 400.0f, 4600.0f};
