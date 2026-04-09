@@ -187,7 +187,8 @@ std::string client_protocol::BuildMatchStartResponse(const std::string& sessionI
             {"session_id", sessionId},
             {"start", true},
             {"structures", structures},
-            {"units", units}
+            {"units", units},
+            {"gold",500}
         }}
     };
     return response.dump() + '\n';

@@ -222,6 +222,7 @@ void GameEngine::advanceCollectors(int deltaMs)
             {
                 collector.state = games_types::CollectorState::Depositing;
                 collector.stateTimeRemainingMs = collector.depositDurationMs;
+                
             }
         }
 
@@ -329,8 +330,10 @@ GameEngine::PurchaseResult GameEngine::processUnitPurchase(
     const float angleStep = 0.55f;
     const float radius = 45.0f;
     const float angle = static_cast<float>(unitId % 11) * angleStep;
-    const float spawnX = basePos.x + radius * std::cos(angle);
-    const float spawnY = basePos.y + radius * std::sin(angle);
+    //const float spawnX = basePos.x + radius * std::cos(angle);
+    const float spawnX = 2500.0;
+    //const float spawnY = basePos.y + radius * std::sin(angle);
+    const float spawnY = 2000.0;
 
     session->upsertUnitPosition(unitId, spawnX, spawnY);
     if (unitType == games_types::EntityType::Collector)

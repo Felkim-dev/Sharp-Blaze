@@ -453,6 +453,12 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         "\"new_balance\":" + std::to_string(purchase.newBalance) +
                         "}}\n";
                     sendText(clientSocket, buyerMsg);
+                    
+                    std::string goldMessage;
+                    goldMessage = std::string("{\"type\":\"RESOURCES\",\"payload\":{") +
+                                  "\"new_balance\":" + std::to_string(purchase.newBalance) +
+                                  "}}\n";
+                    sendText(clientSocket, goldMessage);
 
                     std::pair<SOCKET, SOCKET> players{};
                     if (sessionOrchestrator.getPlayers(sessionId, players))

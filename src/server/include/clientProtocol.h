@@ -67,6 +67,9 @@ namespace client_protocol
         const std::string& sessionId,
         const std::string& you,
         const std::string& opponent);
+    // std::string BuildEconomyResponse(const int playerId,
+    //     const std::string& sessionId,
+    //      )
     
     std::string BuildMatchStartResponse(const std::string& sessionId, std::shared_ptr<GameSession> session);
     std::string BuildShopAuthorizationResponse(int playerId, const games_types::ShopAuthorizationState& state);
