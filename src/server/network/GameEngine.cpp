@@ -11,8 +11,8 @@
 
 namespace
 {
-    constexpr float kCollectorCollisionRadius = 18.0f;
-    constexpr float kBaseCollisionRadius = 75.0f;
+    constexpr float kCollectorCollisionRadius = 15.0f;
+    constexpr float kBaseCollisionRadius = 215.0f;
 
     float distanceSquared(float x1, float y1, float x2, float y2)
     {
