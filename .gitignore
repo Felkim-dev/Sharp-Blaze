@@ -50,3 +50,9 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+example.json
+
+# ==========================================
+# Testing
+# ==========================================
+test_connection.py

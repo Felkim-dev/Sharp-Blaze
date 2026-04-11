@@ -1,0 +1,246 @@
+import pygame
+import os
+
+from engine.world import GameWorld
+from engine.camera import Camera
+from ui.minimap import Minimap
+from ui.telemetry import TelemetryPanel
+from ui.component import InfoBox
+from ui.shop import Shop
+
+from utils.json import JSON_Manager
+from utils.config import Config
+
+class GameScreen:
+    def __init__(self, screen_manager , screen):
+
+        # MAIN SCREEN
+        self.screen_manager = screen_manager
+        self.screen  = screen
+
+        # MAIN COLOR
+        self.MAINDARK = (19, 23, 34)
+
+        # WORLD
+        self.world = GameWorld(self.screen_manager.network)
+
+        # CAMERA
+        screen_w = self.screen.get_width()
+        screen_h = self.screen.get_height()
+        self.camera = Camera(screen_w, screen_h, map_width=5000, map_height=5000)
+
+        # MINIMAP
+        self.minimap = Minimap(screen_w,screen_h,map_width=5000, map_height=5000)
+
+        # Instantiate the Telemetry Panel
+        self.telemetry = TelemetryPanel(self.screen.get_width())
+
+        # SHOP
+        self.shop = Shop()
+        self.is_shop_open = False
+        self.shop_autorization = False
+
+        # PLAYER PARAMETERS
+        self.player_gold = 0
+        self.player_attacker_units = 0
+        self.player_recolector_units = 0
+
+        # Player Parameters (String)
+        self.player_gold_string = str(self.player_gold)
+        self.player_attacker_units_string = str(self.player_attacker_units)
+        self.player_recolector_units_string = str(self.player_recolector_units)
+
+        # COLOR FOR BOXE
+        gray = (84, 84, 84)
+        white = (255, 255, 255)
+        CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+        GOLD_PATH = os.path.join(CURRENT_DIR, "..","assets", "gold.png")
+        HAT_PATH = os.path.join(CURRENT_DIR, "..", "assets", "hat.png")
+        SWORD_PATH = os.path.join(CURRENT_DIR, "..", "assets", "sword.png")
+
+        # Instantiate the Text Boxes of Gold, Collectors and Attackers
+        self.infobox_gold = InfoBox((50,650),(175,40),gray,"GOLD",self.player_gold_string,white,15,GOLD_PATH)
+        self.infobox_hat = InfoBox((250,650),(200,40),gray,"COLLECTORS",self.player_recolector_units_string,white,15,HAT_PATH)
+        self.infobox_sword = InfoBox((470,650),(200,40),gray,"ATTACKERS",self.player_attacker_units_string,white,15,SWORD_PATH)
+
+    def load_initial_state(self, gold, units, structures):
+
+        self.player_gold = gold
+        self.infobox_gold.update_text(str(self.player_gold)) 
+
+        # TODO:ADD UNIT UI
+
+        self.world.build_initial_state(units,structures)
+
+    def handle_events(self, events, keys):
+        """Processes one-time events like mouse clicks."""
+        for event in events:
+            # Detect Mouse Button Press
+            if event.type == pygame.MOUSEBUTTONDOWN:
+
+                mouse_x, mouse_y = event.pos
+
+                # 1. UI PROTECTION: Check if click is on the Square Minimap first!
+                # We simply ask Pygame if the mouse coordinates are inside the minimap's Rect
+                if self.minimap.rect.collidepoint(mouse_x, mouse_y):
+                    # Click was inside the minimap UI, ignore world selection
+                    continue
+
+                if self.is_shop_open:
+
+                    action = self.shop.handle_click(event,event.pos)
+
+                    if action == "CLOSE":
+                        self.is_shop_open = False
+                        continue
+                    elif action == "BUY_COLLECTOR":
+                        print("[GAME] Sending TCP command to buy Collector...")
+                        self.screen_manager.network.send_json(JSON_Manager.get_unit_recolectors())
+                        continue
+                    elif action == "BUY_ATTACKER":
+                        print("[GAME] Sending TCP command to buy Attacker...")
+                        self.screen_manager.network.send_json(JSON_Manager.get_unit_attacker())
+                        continue
+
+                # 2. TRANSLATE: Screen Coordinates -> World Coordinates
+                world_x = mouse_x + self.camera.x
+                world_y = mouse_y + self.camera.y
+
+                # -------------------------------------------------------------
+                # LEFT CLICK (Button 1) -> Select Units
+                # -------------------------------------------------------------
+                if event.button == 1:
+
+                    selected_entity = self.world.handle_left_click(world_x, world_y)
+
+                    if selected_entity and selected_entity.__class__.__name__ == "Shop":
+                        self.is_shop_open = True
+                        print("[GAME SCREEN] Shop selected! Opening UI.")
+                    else:
+                        # Auto-close the shop if we click the ground or another unit
+                        self.is_shop_open = False
+
+                    self.world.handle_left_click(world_x, world_y)
+
+                # -------------------------------------------------------------
+                # RIGHT CLICK (Button 3) -> Issue Move Commands
+                # -------------------------------------------------------------
+                elif event.button == 3:
+                    self.world.handle_right_click(world_x, world_y)
+
+    def update(self):
+
+        if not Config.OFFLINE_DEBUG_MODE:
+            data = self.screen_manager.network.receive_json()
+
+            if data:
+
+                print(data)
+
+                if data.get("type") == "SHOP_AUTORIZATION":
+                    self.shop_autorization = ["payload"]["authorized"]
+
+                elif data.get("type") == "BUY_UNIT_RESULT":
+                    if data["status"] == "accepted":
+                        self.new_unit_id = data["payload"]["unit_id"]
+                        self.new_spawn_x = data["payload"]["spawn_x"]
+                        self.new_spawn_y = data["payload"]["spawn_y"]
+                        self.new_gold = data["payload"]["new_balance"]
+
+                        self.world.spawn_unit(self.new_unit_id,self.new_spawn_x,self.new_spawn_y)
+
+                        self.player_gold = self.new_gold
+                        self.infobox_gold.update_text(str(self.player_gold)) 
+
+                elif data.get("type") == "UNIT_SPAWNED":
+                    self.new_unit_id = data["payload"]["unit_id"]
+
+                    if 5000<=self.new_unit_id <= 9999: 
+                        self.world.units[self.new_unit_id] = self.world.return_entities_object(self.new_unit_id,4700, 300)
+                    elif 0 <= self.new_unit_id <= 4999:
+                        self.world.units[self.new_unit_id] = self.world.return_entities_object(self.new_unit_id,300, 4700)
+
+                    self.world.entity_team_changer(self.new_unit_id)
+
+                elif data.get("type") == "RESOURCES":
+                    
+                    self.new_gold = data["payload"]["new_balance"]
+
+                    self.player_gold = self.new_gold
+                    self.infobox_gold.update_text(str(self.player_gold))
+
+        else:
+            # DEBUG MODE
+            if self.player_gold > 100:
+                self.shop_autorization = True
+
+        keys = pygame.key.get_pressed()
+
+        # Mover Izquierda / Derecha
+        if keys[pygame.K_a]:
+            self.camera.move(-self.camera.speed, 0)
+        elif keys[pygame.K_d]:
+            self.camera.move(self.camera.speed, 0)
+
+        # Mover Arriba / Abajo
+        if keys[pygame.K_w]:
+            self.camera.move(0, -self.camera.speed)
+        elif keys[pygame.K_s]:
+            self.camera.move(0, self.camera.speed)
+
+        if pygame.mouse.get_pressed()[0]:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+
+            # Send the click to the minimap. If the player clicks inside it,
+            # the camera will jump instantly to that location.
+            self.minimap.handle_click(mouse_x, mouse_y, self.camera)
+
+        if self.is_shop_open:
+            self.shop.update(self.player_gold)
+
+        self.world.update()
+
+    def draw(self):
+
+        # ======================= Variables ============================
+        pantalla_w = self.screen.get_width()
+        pantalla_h = self.screen.get_height()
+        grosor = 5
+        color_alerta = (255, 0, 0)  # Rojo
+
+        # ======================= BG COLOR ============================
+        self.screen.fill(self.MAINDARK)
+
+        # ======================= MAIN ELEMENTS ============================
+        self.world.draw(self.screen, self.camera)
+        self.minimap.draw(self.screen,self.world,self.camera)
+        self.telemetry.draw(self.screen, self.screen_manager.clock , self.screen_manager.network)
+        if self.is_shop_open:
+            self.shop.draw(self.screen)
+
+        # ========================== RED BORDER OF THE SCREEN =====================================
+        # Borde Izquierdo (La cámara llegó a X = 0)
+        if self.camera.x <= 0:
+            pygame.draw.rect(self.screen, color_alerta, (0, 0, grosor, pantalla_h))
+
+        # Borde Derecho (La cámara llegó al límite derecho del mapa)
+        if self.camera.x >= self.camera.map_width - self.camera.screen_width:
+            pygame.draw.rect(
+                self.screen, color_alerta, (pantalla_w - grosor, 0, grosor, pantalla_h)
+            )
+
+        # Borde Superior (La cámara llegó a Y = 0)
+        if self.camera.y <= 0:
+            pygame.draw.rect(self.screen, color_alerta, (0, 0, pantalla_w, grosor))
+
+        # Borde Inferior (La cámara llegó al límite inferior del mapa)
+        if self.camera.y >= self.camera.map_height - self.camera.screen_height:
+            pygame.draw.rect(
+                self.screen, color_alerta, (0, pantalla_h - grosor, pantalla_w, grosor)
+            )
+
+        # ================================== INFO BOXES========================================
+        self.infobox_gold.draw(self.screen)
+        self.infobox_hat.draw(self.screen)
+        self.infobox_sword.draw(self.screen)
