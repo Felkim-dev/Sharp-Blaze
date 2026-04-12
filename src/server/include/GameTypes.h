@@ -109,6 +109,24 @@ namespace games_types
         std::string sessionId;
         std::chrono::steady_clock::time_point lastSeen;
     };
+
+    struct UdpHelloMessage
+    {
+        static constexpr std::uint32_t protocolVersion = 1;
+
+        std::uint32_t version = protocolVersion;
+        int playerId = 0;
+        std::string sessionId;
+        std::uint32_t checksum = 0;
+    };
+
+    struct UdpEndpoint
+    {
+        sockaddr_in addr{};
+        std::string sessionId;
+        int playerId = 0;
+        std::chrono::steady_clock::time_point lastSeen{};
+    };
     struct UnitPosition // estructure para los paquetes udp de cada unidad
     {
         int entity_id;

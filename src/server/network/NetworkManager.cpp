@@ -5,6 +5,7 @@
 #include <deque>
 #include <string>
 #include <algorithm>
+#include <cstdint>
 
 
 #include "NetworkManager.h"
@@ -131,14 +132,26 @@ void NetworkManager::handleReadyNoLock(SOCKET socket, const std::string &session
         return;
     }
 
-    const std::string startMsg = client_protocol::BuildMatchStartResponse(
+    const int p1InternalPlayerId = g_players.count(players.first) ? g_players[players.first].internalPlayerId : 0;
+    const int p2InternalPlayerId = g_players.count(players.second) ? g_players[players.second].internalPlayerId : 0;
+
+    const std::uint16_t udpPort = 5556;
+    const std::string startMsgP1 = client_protocol::BuildMatchStartResponse(
         effectiveSessionId,
+        p1InternalPlayerId,
+        udpPort,
         session);
-    if (sendText(players.first, startMsg))
+    const std::string startMsgP2 = client_protocol::BuildMatchStartResponse(
+        effectiveSessionId,
+        p2InternalPlayerId,
+        udpPort,
+        session);
+
+    if (sendText(players.first, startMsgP1))
     {
         std::cout << "GAME_START ENVIADO CORRECTAMENTE\n";
-    };
-    sendText(players.second, startMsg);
+    }
+    sendText(players.second, startMsgP2);
 
     std::cout << "[MATCH] " << effectiveSessionId << " started.\n";
 }

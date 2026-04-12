@@ -149,7 +149,11 @@ std::string client_protocol::BuildMatchFoundResponse(
     return response.dump() + "\n";
 }
 
-std::string client_protocol::BuildMatchStartResponse(const std::string& sessionId, std::shared_ptr<GameSession> session)
+std::string client_protocol::BuildMatchStartResponse(
+    const std::string& sessionId,
+    int playerId,
+    std::uint16_t udpPort,
+    std::shared_ptr<GameSession> session)
 {
     json structures = json::object();
     json units = json::object();
@@ -185,6 +189,9 @@ std::string client_protocol::BuildMatchStartResponse(const std::string& sessionI
         {"type", "START_GAME"},
         {"payload", {
             {"session_id", sessionId},
+            {"player_id", playerId},
+            {"udp_port", udpPort},
+            {"udp_protocol_version", 1},
             {"start", true},
             {"structures", structures},
             {"units", units},

@@ -11,7 +11,6 @@
 #include "platform_socket.h"
 #include "GameSession.h"
 #include "GameEngine.h"
-#include "UDPBroadcaster.h"
 
 struct MatchCandidate {
     SOCKET socket = INVALID_SOCKET;
@@ -35,6 +34,7 @@ public:
 
 private:
     struct SessionRecord {
+        std::string sessionId;
         SOCKET p1 = INVALID_SOCKET;
         SOCKET p2 = INVALID_SOCKET;
         int p1InternalPlayerId = 0;
@@ -44,7 +44,6 @@ private:
         bool started = false;
         std::shared_ptr<GameSession> session;
         std::shared_ptr<GameEngine> engine;
-        std::unique_ptr<KinematicSender> udpSender;
         std::shared_ptr<std::atomic<bool>> simulationRunning;
         std::thread simulationThread;
     };
