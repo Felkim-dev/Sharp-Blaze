@@ -160,9 +160,8 @@ bool GlobalUDPDispatcher::tryParseUdpHello(const char* buffer, int size,
     offset += 4;
 
     // Parse sessionId (4 bytes, interpret as string)
-    char sessionIdBytes[4];
-    std::memcpy(sessionIdBytes, buffer + offset, 4);
-    std::string sessionId(sessionIdBytes, 4);
+    int sessionId;
+    std::memcpy(&sessionId, buffer + offset, 4);
     offset += 4;
 
     // Parse checksum
@@ -265,7 +264,7 @@ void GlobalUDPDispatcher::loopEmision() {
 
     struct BroadcastBatch
     {
-        std::string sessionId;
+        int sessionId;
         std::shared_ptr<GameSession> session;
         std::vector<games_types::UdpEndpoint> endpoints;
     };
@@ -282,7 +281,7 @@ void GlobalUDPDispatcher::loopEmision() {
 
             for (const auto& sessionPair : activeSessions)
             {
-                const std::string& sessionId = sessionPair.first;
+                const int& sessionId = sessionPair.first;
                 const SessionRegistration& reg = sessionPair.second;
 
                 if (!reg.session || reg.endpointsByPlayer.empty())
@@ -358,7 +357,7 @@ API PARA SESIONES
 */
 
 void GlobalUDPDispatcher::onSessionStarted(
-    const std::string& sessionId,
+    const int& sessionId,
     int p1InternalPlayerId,
     int p2InternalPlayerId,
     std::shared_ptr<GameSession> session)
@@ -371,7 +370,7 @@ void GlobalUDPDispatcher::onSessionStarted(
     std::cout << "[UDP] Session started: " << sessionId << '\n';
 }
 
-void GlobalUDPDispatcher::onSessionClosed(const std::string& sessionId)
+void GlobalUDPDispatcher::onSessionClosed(const int& sessionId)
 {
     std::lock_guard<std::mutex> lock(sessionsMutex);
     activeSessions.erase(sessionId);
@@ -405,7 +404,7 @@ void GlobalUDPDispatcher::registerEndpoint(
 }
 
 void GlobalUDPDispatcher::unregisterEndpoint(
-    const std::string& sessionId,
+    const int& sessionId,
     int playerId)
 {
     std::lock_guard<std::mutex> lock(sessionsMutex);
@@ -421,7 +420,7 @@ void GlobalUDPDispatcher::unregisterEndpoint(
               << " player=" << playerId << '\n';
 }
 
-std::shared_ptr<GameSession> GlobalUDPDispatcher::getSession(const std::string& sessionId) const
+std::shared_ptr<GameSession> GlobalUDPDispatcher::getSession(const int& sessionId) const
 {
     std::lock_guard<std::mutex> lock(sessionsMutex);
     auto it = activeSessions.find(sessionId);

@@ -20,7 +20,7 @@ namespace client_protocol
 
     struct PlayerReadyData
     {
-        std::string sessionId;
+        int sessionId;
     };
     struct MoveUnitData
     {
@@ -67,7 +67,7 @@ namespace client_protocol
 
     std::string BuildQueueStatusResponse(int playerWaiting, const std::string& playerId);
     std::string BuildMatchFoundResponse(
-        const std::string& sessionId,
+        const int& sessionId,
         const std::string& you,
         const std::string& opponent);
     // std::string BuildEconomyResponse(const int playerId,
@@ -75,7 +75,7 @@ namespace client_protocol
     //      )
     
     std::string BuildMatchStartResponse(
-        const std::string& sessionId,
+        const int& sessionId,
         int playerId,
         std::uint16_t udpPort,
         std::shared_ptr<GameSession> session);

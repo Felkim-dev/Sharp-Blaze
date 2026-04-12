@@ -60,7 +60,7 @@ void NetworkManager::tryMatchPlayersNoLock()
         PlayerState& p1 = g_players[a];
         PlayerState& p2 = g_players[b];
 
-        if ( !p1.sessionId.empty() || !p2.sessionId.empty())
+        if ( !p1.sessionId == 0 || !p2.sessionId == 0)
         {
             continue;
         }
@@ -74,7 +74,7 @@ void NetworkManager::tryMatchPlayersNoLock()
         c2.internalPlayerId = p2.internalPlayerId;
         c2.playerName = p2.playerName;
 
-        const std::string sessionId = sessionOrchestrator.createMatch(c1, c2);
+        const int sessionId = sessionOrchestrator.createMatch(c1, c2);
         p1.sessionId = sessionId;
         p2.sessionId = sessionId;
 
@@ -94,7 +94,7 @@ void NetworkManager::tryMatchPlayersNoLock()
     }
 }
 
-void NetworkManager::handleReadyNoLock(SOCKET socket, const std::string &sessionId)
+void NetworkManager::handleReadyNoLock(SOCKET socket, const int &sessionId)
 {
     if (!g_players.count(socket))
     {
@@ -102,9 +102,9 @@ void NetworkManager::handleReadyNoLock(SOCKET socket, const std::string &session
     }
 
     PlayerState &me = g_players[socket];
-    const std::string effectiveSessionId = sessionId.empty() ? me.sessionId : sessionId;
+    const int effectiveSessionId = sessionId == 0 ? me.sessionId : sessionId;
 
-    if (effectiveSessionId.empty())
+    if (effectiveSessionId == 0)
     {
         return;
     }
@@ -169,7 +169,7 @@ void NetworkManager::cleanupDisconnectedNoLock(SOCKET socket)
     const PlayerState me = g_players[socket];
     g_players.erase(socket);
 
-    if (me.sessionId.empty())
+    if (me.sessionId == 0)
     {
         sessionOrchestrator.closeByClient(socket);
         return;
@@ -188,7 +188,7 @@ void NetworkManager::cleanupDisconnectedNoLock(SOCKET socket)
     if (g_players.count(other))
     {
         PlayerState &opponent = g_players[other];
-        opponent.sessionId.clear();
+        opponent.sessionId = 0;
         g_waitingQueue.push_back(other);
 
         const std::string queueMsg =
@@ -352,11 +352,11 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                             clientSocket,
                             playerId,
                             parsed.initialConnect.playerId,
-                            std::string{}
+                            int{}
                         };
                     }
 
-                    if (g_players[clientSocket].sessionId.empty())
+                    if (g_players[clientSocket].sessionId == 0)
                     {
                         const bool alreadyQueued =
                             std::find(g_waitingQueue.begin(), g_waitingQueue.end(), clientSocket) != g_waitingQueue.end();
@@ -384,7 +384,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                 }
                 else if (parsed.type == client_protocol::ParsedMessageType::MoveUnit)
                 {
-                    std::string sessionId;
+                    int sessionId;
                     int internalPlayerId = 0;
                     {
                         std::lock_guard<std::mutex> lock(g_matchMutex);
@@ -394,7 +394,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         }
 
                         const PlayerState& me = g_players[clientSocket];
-                        if (me.sessionId.empty())
+                        if (me.sessionId == 0)
                         {
                             continue;
                         }
@@ -429,7 +429,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                 }
                 else if (parsed.type == client_protocol::ParsedMessageType::BuyUnit)
                 {
-                    std::string sessionId;
+                    int sessionId;
                     int internalPlayerId = 0;
                     {
                         std::lock_guard<std::mutex> lock(g_matchMutex);
@@ -439,7 +439,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         }
 
                         const PlayerState& me = g_players[clientSocket];
-                        if (me.sessionId.empty())
+                        if (me.sessionId == 0)
                         {
                             continue;
                         }

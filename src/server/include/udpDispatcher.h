@@ -29,19 +29,19 @@ class GlobalUDPDispatcher
         void shutdown();
 
         //API para las sesiones 
-        void onSessionStarted(const std::string& sessionId,
+        void onSessionStarted(const int& sessionId,
                             int p1InternalPlayerId,
                             int p2InternalPlayerId,
                             std::shared_ptr<GameSession> session);
-        void onSessionClosed(const std::string& sessionId);
+        void onSessionClosed(const int& sessionId);
 
         //API de endpoint
         void registerEndpoint(const games_types::UdpHelloMessage& hello,
                               const sockaddr_in& address);
-        void unregisterEndpoint(const std::string& sessionId, int playerId);
+        void unregisterEndpoint(const int& sessionId, int playerId);
 
         //acceso a la session
-        std::shared_ptr<GameSession> getSession(const std::string& sessionId) const;
+        std::shared_ptr<GameSession> getSession(const int& sessionId) const;
 
     private:
         GlobalUDPDispatcher();
@@ -78,7 +78,7 @@ class GlobalUDPDispatcher
             std::unordered_map<int, games_types::UdpEndpoint> endpointsByPlayer;
         };
 
-        std::unordered_map<std::string, SessionRegistration> activeSessions;
+        std::unordered_map<int, SessionRegistration> activeSessions;
         mutable std::mutex sessionsMutex;
 
 

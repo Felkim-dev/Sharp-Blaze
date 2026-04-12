@@ -9,7 +9,7 @@ SessionOrchestrator::SessionOrchestrator() = default;
 
 SessionOrchestrator::~SessionOrchestrator()
 {
-    std::unordered_map<std::string, SessionRecord> sessionsToStop;
+    std::unordered_map<int, SessionRecord> sessionsToStop;
     {
         std::lock_guard<std::mutex> lock(mtx);
         sessionsToStop = std::move(sessionsById);
@@ -130,17 +130,17 @@ void SessionOrchestrator::stopSimulationNoLock(SessionRecord& record)
     }
 }
 
-std::string SessionOrchestrator::makeSessionId()
+int SessionOrchestrator::makeSessionId()
 {
     const int id = sessionCounter.fetch_add(1);
-    return "session_" + std::to_string(id);
+    return id;
 }
 
-std::string SessionOrchestrator::createMatch(const MatchCandidate& a, const MatchCandidate& b)
+int SessionOrchestrator::createMatch(const MatchCandidate& a, const MatchCandidate& b)
 {
     std::lock_guard<std::mutex> lock(mtx);
 
-    const std::string sessionId = makeSessionId();
+    const int sessionId = makeSessionId();
 
     auto session = std::make_shared<GameSession>(a.internalPlayerId, b.internalPlayerId, sessionId);
     auto engine = std::make_shared<GameEngine>(session);
@@ -162,7 +162,7 @@ std::string SessionOrchestrator::createMatch(const MatchCandidate& a, const Matc
     return sessionId;
 }
 
-bool SessionOrchestrator::markReady(SOCKET clientSocket, const std::string& sessionId)
+bool SessionOrchestrator::markReady(SOCKET clientSocket, const int& sessionId)
 {
     std::lock_guard<std::mutex> lock(mtx);
 
@@ -204,7 +204,7 @@ bool SessionOrchestrator::markReady(SOCKET clientSocket, const std::string& sess
 void SessionOrchestrator::closeByClient(SOCKET clientSocket)
 {
     SessionRecord recordToStop;
-    std::string sessionId;
+    int sessionId;
     bool found = false;
 
     {
@@ -239,7 +239,7 @@ void SessionOrchestrator::closeByClient(SOCKET clientSocket)
     }
 }
 
-std::shared_ptr<GameSession> SessionOrchestrator::getSession(const std::string& sessionId) const
+std::shared_ptr<GameSession> SessionOrchestrator::getSession(const int& sessionId) const
 {
     std::lock_guard<std::mutex> lock(mtx);
 
@@ -251,7 +251,7 @@ std::shared_ptr<GameSession> SessionOrchestrator::getSession(const std::string& 
     return it->second.session;
 }
 
-std::shared_ptr<GameEngine> SessionOrchestrator::getEngine(const std::string& sessionId) const
+std::shared_ptr<GameEngine> SessionOrchestrator::getEngine(const int& sessionId) const
 {
     std::lock_guard<std::mutex> lock(mtx);
 
@@ -263,7 +263,7 @@ std::shared_ptr<GameEngine> SessionOrchestrator::getEngine(const std::string& se
     return it->second.engine;
 }
 
-bool SessionOrchestrator::getPlayers(const std::string& sessionId, std::pair<SOCKET, SOCKET>& players) const
+bool SessionOrchestrator::getPlayers(const int& sessionId, std::pair<SOCKET, SOCKET>& players) const
 {
     std::lock_guard<std::mutex> lock(mtx);
 
