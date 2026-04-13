@@ -68,6 +68,7 @@ namespace client_protocol
     std::string BuildQueueStatusResponse(int playerWaiting, const std::string& playerId);
     std::string BuildMatchFoundResponse(
         const int& sessionId,
+        const int& playerId,
         const std::string& you,
         const std::string& opponent);
     // std::string BuildEconomyResponse(const int playerId,

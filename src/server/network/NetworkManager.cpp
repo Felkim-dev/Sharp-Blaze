@@ -60,10 +60,14 @@ void NetworkManager::tryMatchPlayersNoLock()
         PlayerState& p1 = g_players[a];
         PlayerState& p2 = g_players[b];
 
-        if ( !p1.sessionId == 0 || !p2.sessionId == 0)
+        if (p1.sessionId != 0 || p2.sessionId != 0)
         {
             continue;
         }
+
+        // Internal gameplay ids are per-session roles, not global connection counters.
+        p1.internalPlayerId = 1;
+        p2.internalPlayerId = 2;
 
         MatchCandidate c1{};
         c1.socket = p1.socket;
@@ -80,10 +84,12 @@ void NetworkManager::tryMatchPlayersNoLock()
 
         const std::string msg1 = client_protocol::BuildMatchFoundResponse(
             sessionId,
+            p1.internalPlayerId,
             p1.playerName,
             p2.playerName);
         const std::string msg2 = client_protocol::BuildMatchFoundResponse(
             sessionId,
+            p2.internalPlayerId,
             p2.playerName,
             p1.playerName);
         sendText(a,msg1);
@@ -350,7 +356,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                     {
                         g_players[clientSocket] = PlayerState{
                             clientSocket,
-                            playerId,
+                            0,
                             parsed.initialConnect.playerId,
                             int{}
                         };

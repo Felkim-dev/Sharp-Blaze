@@ -137,13 +137,15 @@ std::string client_protocol::BuildQueueStatusResponse(
 
 std::string client_protocol::BuildMatchFoundResponse(
     const int& sessionId,
+    const int& playerId,
     const std::string& you,
     const std::string& opponent)
 {
     json response = {
         {"type", "MATCH_FOUND"},
         {"payload", {
-            {"session_id", sessionId}, 
+            {"session_id", sessionId},
+            {"global_player_id",playerId}, 
             {"you", you}, 
             {"opponent", opponent}}}};
     return response.dump() + "\n";

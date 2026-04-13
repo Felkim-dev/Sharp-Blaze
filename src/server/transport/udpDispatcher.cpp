@@ -136,9 +136,9 @@ void GlobalUDPDispatcher::closeSocket()
 bool GlobalUDPDispatcher::tryParseUdpHello(const char* buffer, int size,
                                               games_types::UdpHelloMessage& out)
 {
-    // Binary format (simplified):
-    // [version: 4 bytes] [playerId: 4 bytes] [sessionId: 4 bytes fixed] [checksum: 4 bytes]
-    const int expectedSize = 4 + 4 + 4;  // 16 bytes
+    // Binary format:
+    // [sessionId: 4 bytes][playerId: 4 bytes][checksum: 4 bytes] (network byte order)
+    const int expectedSize = 4 + 4 + 4;
     
     if (size != expectedSize)
     {
@@ -147,31 +147,21 @@ bool GlobalUDPDispatcher::tryParseUdpHello(const char* buffer, int size,
         return false;
     }
 
-    int offset = 0;
+    std::uint32_t sessionNet = 0;
+    std::uint32_t playerNet = 0;
+    std::uint32_t checksumNet = 0;
 
-    // Parse version (no validation)
-    // std::uint32_t version;
-    // std::memcpy(&version, buffer + offset, 4);
-    // offset += 4;
+    std::memcpy(&sessionNet, buffer, 4);
+    std::memcpy(&playerNet, buffer + 4, 4);
+    std::memcpy(&checksumNet, buffer + 8, 4);
 
-    // Parse playerId
-    int playerId;
-    std::memcpy(&playerId, buffer + offset, 4);
-    offset += 4;
+    const int sessionId = static_cast<int>(ntohl(sessionNet));
+    const int playerId = static_cast<int>(ntohl(playerNet));
+    const std::uint32_t checksumReceived = ntohl(checksumNet);
 
-    // Parse sessionId (4 bytes, interpret as string)
-    int sessionId;
-    std::memcpy(&sessionId, buffer + offset, 4);
-    offset += 4;
-
-    // Parse checksum
-    std::uint32_t checksumReceived;
-    std::memcpy(&checksumReceived, buffer + offset, 4);
-    offset += 4;
-
-    // Validate checksum: XOR of version + playerId + sessionId bytes
+    // Validate checksum using the first 8 bytes (sessionId + playerId in network order).
     std::uint32_t checksumComputed = 0;
-    for (int i = 0; i < 12; ++i)  // First 12 bytes (version + playerId + sessionId)
+    for (int i = 0; i < 8; ++i)
     {
         checksumComputed ^= static_cast<std::uint8_t>(buffer[i]);
     }
@@ -184,7 +174,6 @@ bool GlobalUDPDispatcher::tryParseUdpHello(const char* buffer, int size,
         return false;
     }
 
-    //out.version = version;
     out.playerId = playerId;
     out.sessionId = sessionId;
     out.checksum = checksumReceived;
@@ -194,7 +183,7 @@ bool GlobalUDPDispatcher::tryParseUdpHello(const char* buffer, int size,
 void GlobalUDPDispatcher::pruneStaleEndpointsLocked()
 {
     const auto now = std::chrono::steady_clock::now();
-    constexpr auto kEndpointTimeout = std::chrono::seconds(15);
+    constexpr auto kEndpointTimeout = std::chrono::seconds(60);
 
     for (auto& sessionPair : activeSessions)
     {
