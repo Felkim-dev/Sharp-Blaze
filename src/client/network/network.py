@@ -23,7 +23,7 @@ class NetworkManager:
 
         # ------------------- UDP INITIAL STATES -------------------
         self.client_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.client_udp.bind(("0.0.0.0",Config.UDP_PORT))
+        self.client_udp.bind(("0.0.0.0",Config.UDP_PORT_CLIENT))
         self.udp_port_server = None
         self.server_ip = None
 
@@ -80,7 +80,7 @@ class NetworkManager:
     def connect(self, datos_iniciales):
 
         self.server_ip = Config.SERVER_IP
-        self.tcp_port_server = Config.TCP_PORT
+        self.tcp_port_server = Config.TCP_PORT_SERVER
 
         if self.connection_status == "CONNECTING":
             return
