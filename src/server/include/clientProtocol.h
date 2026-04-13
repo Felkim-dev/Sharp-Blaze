@@ -1,3 +1,6 @@
+#pragma once
+
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <memory>
@@ -17,7 +20,7 @@ namespace client_protocol
 
     struct PlayerReadyData
     {
-        std::string sessionId;
+        int sessionId;
     };
     struct MoveUnitData
     {
@@ -64,14 +67,19 @@ namespace client_protocol
 
     std::string BuildQueueStatusResponse(int playerWaiting, const std::string& playerId);
     std::string BuildMatchFoundResponse(
-        const std::string& sessionId,
+        const int& sessionId,
+        const int& playerId,
         const std::string& you,
         const std::string& opponent);
     // std::string BuildEconomyResponse(const int playerId,
     //     const std::string& sessionId,
     //      )
     
-    std::string BuildMatchStartResponse(const std::string& sessionId, std::shared_ptr<GameSession> session);
+    std::string BuildMatchStartResponse(
+        const int& sessionId,
+        int playerId,
+        std::uint16_t udpPort,
+        std::shared_ptr<GameSession> session);
     std::string BuildShopAuthorizationResponse(int playerId, const games_types::ShopAuthorizationState& state);
     std::string BuildResourcesResponse(int newBalance);
     bool MessageFramer(

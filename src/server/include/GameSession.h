@@ -20,7 +20,7 @@ class GameSession
 
         int player1;
         int player2;
-        std::string sessionId;
+        int sessionId;
         std::unordered_map<int, UnitPosition> structures;
         std::unordered_map<int, UnitPosition> units;
         std::unordered_map<int, CollectorUnit> collectors;
@@ -39,10 +39,10 @@ class GameSession
         mutable std::mutex sessionMutex;
 
     public:
-        GameSession(int player1, int player2, std::string sessionId);
+        GameSession(int player1, int player2, int sessionId);
         ~GameSession() = default;
 
-        std::string getSessionId() const;
+        int getSessionId() const;
         bool hasPlayer(int playerId) const;
 
         void registerUdpClient(const std::string& clientKey, const RegisteredClient& client);

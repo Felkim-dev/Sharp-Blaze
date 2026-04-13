@@ -2,13 +2,13 @@
 
 #include <limits>
 
-GameSession::GameSession(int player1, int player2, std::string sessionId)
+GameSession::GameSession(int player1, int player2, int sessionId)
 	: player1(player1), player2(player2), sessionId(sessionId)
 {
 	initializeGameState();
 }
 
-std::string GameSession::getSessionId() const
+int GameSession::getSessionId() const
 {
 	return sessionId;
 }

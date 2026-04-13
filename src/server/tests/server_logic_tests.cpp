@@ -9,7 +9,7 @@ namespace
 {
     void testPurchaseCollectorSuccess()
     {
-        auto session = std::make_shared<GameSession>(1, 2, "test_session_a");
+        auto session = std::make_shared<GameSession>(1, 2, 1);
         GameEngine engine(session);
 
         session->upsertUnitPosition(3000, 2500.0f, 2500.0f);
@@ -29,7 +29,7 @@ namespace
 
     void testPurchaseWithoutShopAuthorizationRejected()
     {
-        auto session = std::make_shared<GameSession>(1, 2, "test_session_b");
+        auto session = std::make_shared<GameSession>(1, 2, 2);
         GameEngine engine(session);
 
         const auto result = engine.processUnitPurchase(1, games_types::EntityType::Collector, 1);
@@ -39,7 +39,7 @@ namespace
 
     void testPurchaseStructureRejected()
     {
-        auto session = std::make_shared<GameSession>(1, 2, "test_session_c");
+        auto session = std::make_shared<GameSession>(1, 2, 3);
         GameEngine engine(session);
 
         const auto result = engine.processUnitPurchase(1, games_types::EntityType::Structure, 1);
@@ -49,7 +49,7 @@ namespace
 
     void testResourceExtractionFinite()
     {
-        GameSession session(1, 2, "test_session_d");
+        GameSession session(1, 2, 4);
         const int first = session.extractResource(10000, 3900);
         const int second = session.extractResource(10000, 500);
         const int third = session.extractResource(10000, 10);
@@ -61,7 +61,7 @@ namespace
 
     void testCollectorStateAdvancesWithCollision()
     {
-        auto session = std::make_shared<GameSession>(1, 2, "test_session_e");
+        auto session = std::make_shared<GameSession>(1, 2, 5);
         GameEngine engine(session);
 
         // Place collector on top of a mine so collision immediately starts gathering.
@@ -85,7 +85,7 @@ namespace
 
     void testShopAuthorizationGrantAndRevoke()
     {
-        auto session = std::make_shared<GameSession>(1, 2, "test_session_f");
+        auto session = std::make_shared<GameSession>(1, 2, 6);
         GameEngine engine(session);
 
         session->upsertUnitPosition(1000, 2500.0f, 2500.0f);

@@ -12,7 +12,7 @@ add_executable(sharp_blaze_server
     ../network/NetworkManager.cpp
     ../network/SessionManager.cpp
     ../network/clientProtocol.cpp
-    ../transport/UDPBroadcaster.cpp
+    ../transport/udpDispatcher.cpp
     ../network/GameSession.cpp
     ../network/GameEngine.cpp
     ../network/PathFinder.cpp

@@ -106,8 +106,26 @@ namespace games_types
     struct RegisteredClient // estructura para registrar a los clientes
     {
         sockaddr_in addr;
-        std::string sessionId;
+        int sessionId;
         std::chrono::steady_clock::time_point lastSeen;
+    };
+
+    struct UdpHelloMessage
+    {
+        static constexpr std::uint32_t protocolVersion = 1;
+
+        std::uint32_t version = protocolVersion;
+        int playerId = 0;
+        int sessionId;
+        std::uint32_t checksum = 0;
+    };
+
+    struct UdpEndpoint
+    {
+        sockaddr_in addr{};
+        int sessionId;
+        int playerId = 0;
+        std::chrono::steady_clock::time_point lastSeen{};
     };
     struct UnitPosition // estructure para los paquetes udp de cada unidad
     {
