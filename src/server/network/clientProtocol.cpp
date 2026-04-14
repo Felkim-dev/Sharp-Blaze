@@ -136,20 +136,26 @@ std::string client_protocol::BuildQueueStatusResponse(
 }
 
 std::string client_protocol::BuildMatchFoundResponse(
-    const std::string& sessionId,
+    const int& sessionId,
+    const int& playerId,
     const std::string& you,
     const std::string& opponent)
 {
     json response = {
         {"type", "MATCH_FOUND"},
         {"payload", {
-            {"session_id", sessionId}, 
+            {"session_id", sessionId},
+            {"global_player_id",playerId}, 
             {"you", you}, 
             {"opponent", opponent}}}};
     return response.dump() + "\n";
 }
 
-std::string client_protocol::BuildMatchStartResponse(const std::string& sessionId, std::shared_ptr<GameSession> session)
+std::string client_protocol::BuildMatchStartResponse(
+    const int& sessionId,
+    int playerId,
+    std::uint16_t udpPort,
+    std::shared_ptr<GameSession> session)
 {
     json structures = json::object();
     json units = json::object();
@@ -185,6 +191,9 @@ std::string client_protocol::BuildMatchStartResponse(const std::string& sessionI
         {"type", "START_GAME"},
         {"payload", {
             {"session_id", sessionId},
+            {"player_id", playerId},
+            {"udp_port", udpPort},
+            {"udp_protocol_version", 1},
             {"start", true},
             {"structures", structures},
             {"units", units},
@@ -351,7 +360,7 @@ bool client_protocol::MessageProtocol(
         }
 
         outMessage.type = ParsedMessageType::PlayerReady;
-        outMessage.playerReady.sessionId = payload["session_id"].get<std::string>();
+        outMessage.playerReady.sessionId = payload["session_id"].get<int>();
         return true;
     }
 
@@ -378,13 +387,13 @@ bool client_protocol::MessageProtocol(
         }
 
         outMessage.type = ParsedMessageType::PlayerReady;
-        if (payload.contains("session_id") && payload["session_id"].is_string())
+        if (payload.contains("session_id") && payload["session_id"].is_number_integer())
         {
-            outMessage.playerReady.sessionId = payload["session_id"].get<std::string>();
+            outMessage.playerReady.sessionId = payload["session_id"].get<int>();
         }
         else
         {
-            outMessage.playerReady.sessionId.clear();
+            outMessage.playerReady.sessionId = 0;
         }
         return true;
     }

@@ -25,14 +25,14 @@ private:
         SOCKET socket = INVALID_SOCKET;
         int internalPlayerId = 0;
         std::string playerName;
-        std::string sessionId;
+        int sessionId=0;
     };
 
     bool sendText(SOCKET socket, const std::string& text);
     void handleClient(SOCKET clientSocket, int playerId);
     void removeFromQueueNoLock(SOCKET socket);
     void tryMatchPlayersNoLock();
-    void handleReadyNoLock(SOCKET socket, const std::string& sessionId);
+    void handleReadyNoLock(SOCKET socket, const int& sessionId);
     void cleanupDisconnectedNoLock(SOCKET socket);
 
     SessionOrchestrator sessionOrchestrator;

@@ -23,7 +23,7 @@ class NetworkManager:
 
         # ------------------- UDP INITIAL STATES -------------------
         self.client_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.client_udp.bind(("0.0.0.0",Config.UDP_PORT))
+        self.client_udp.bind(("0.0.0.0",Config.UDP_PORT_CLIENT))
         self.udp_port_server = None
         self.server_ip = None
 
@@ -31,13 +31,23 @@ class NetworkManager:
         self.is_udp_listening = False
 
     # --------------------------- UDP Methods -------------------------------------
-    def init_udp_connection(self):
+    def init_udp_connection(self,session_id,player_id):
         """It is called when the Lobby Start button is clicked"""
         self.server_ip = Config.SERVER_IP
         self.udp_port_server = 5556
 
-        welcome_message = b"HELLO_UDP"
+        local_session_id = int(session_id)
+        local_player_id = int(player_id)
+        
+        header = struct.pack("!ii", session_id,player_id)
+        checksum = 0
+        for b in header:
+            checksum ^= b
+            
+        welcome_message = header + struct.pack("!I", checksum)
 
+        print(f"Session_id {local_session_id}, player_id {local_player_id}, checksum {checksum}")
+        
         try:
             self.client_udp.sendto(welcome_message,(self.server_ip,self.udp_port_server))
             print("UDP Channel open. Waiting for positions")
@@ -80,7 +90,7 @@ class NetworkManager:
     def connect(self, datos_iniciales):
 
         self.server_ip = Config.SERVER_IP
-        self.tcp_port_server = Config.TCP_PORT
+        self.tcp_port_server = Config.TCP_PORT_SERVER
 
         if self.connection_status == "CONNECTING":
             return

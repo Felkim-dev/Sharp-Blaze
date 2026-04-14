@@ -1,27 +1,25 @@
 #include "../include/SessionManager.h"
+#include "../include/udpDispatcher.h"
 
 #include <chrono>
 #include <thread>
 #include <utility>
 
-namespace
-{
-    constexpr int kGameUdpPort = 5556;
-}
-
 SessionOrchestrator::SessionOrchestrator() = default;
 
 SessionOrchestrator::~SessionOrchestrator()
 {
-    std::lock_guard<std::mutex> lock(mtx);
-    for (auto& entry : sessionsById)
+    std::unordered_map<int, SessionRecord> sessionsToStop;
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        sessionsToStop = std::move(sessionsById);
+        sessionIdByClient.clear();
+    }
+
+    for (auto& entry : sessionsToStop)
     {
         stopSimulationNoLock(entry.second);
-
-        if (entry.second.udpSender)
-        {
-            entry.second.udpSender->stop();
-        }
+        GlobalUDPDispatcher::getInstance().onSessionClosed(entry.first);
     }
 }
 
@@ -101,6 +99,12 @@ void SessionOrchestrator::startSimulationNoLock(SessionRecord& record)
         return;
     }
 
+    GlobalUDPDispatcher::getInstance().onSessionStarted(
+        record.sessionId,
+        record.p1InternalPlayerId,
+        record.p2InternalPlayerId,
+        record.session);
+
     record.simulationRunning->store(true);
     record.simulationThread = std::thread(
         &SessionOrchestrator::simulationLoop,
@@ -126,33 +130,29 @@ void SessionOrchestrator::stopSimulationNoLock(SessionRecord& record)
     }
 }
 
-std::string SessionOrchestrator::makeSessionId()
+int SessionOrchestrator::makeSessionId()
 {
     const int id = sessionCounter.fetch_add(1);
-    return "session_" + std::to_string(id);
+    return id;
 }
 
-std::string SessionOrchestrator::createMatch(const MatchCandidate& a, const MatchCandidate& b)
+int SessionOrchestrator::createMatch(const MatchCandidate& a, const MatchCandidate& b)
 {
     std::lock_guard<std::mutex> lock(mtx);
 
-    const std::string sessionId = makeSessionId();
+    const int sessionId = makeSessionId();
 
     auto session = std::make_shared<GameSession>(a.internalPlayerId, b.internalPlayerId, sessionId);
     auto engine = std::make_shared<GameEngine>(session);
 
-    auto sender = std::make_unique<KinematicSender>(kGameUdpPort);
-    sender->setSession(session);
-    sender->start();
-
     SessionRecord record;
+    record.sessionId = sessionId;
     record.p1 = a.socket;
     record.p2 = b.socket;
     record.p1InternalPlayerId = a.internalPlayerId;
     record.p2InternalPlayerId = b.internalPlayerId;
     record.session = session;
     record.engine = engine;
-    record.udpSender = std::move(sender);
     record.simulationRunning = std::make_shared<std::atomic<bool>>(false);
 
     sessionsById[sessionId] = std::move(record);
@@ -162,7 +162,7 @@ std::string SessionOrchestrator::createMatch(const MatchCandidate& a, const Matc
     return sessionId;
 }
 
-bool SessionOrchestrator::markReady(SOCKET clientSocket, const std::string& sessionId)
+bool SessionOrchestrator::markReady(SOCKET clientSocket, const int& sessionId)
 {
     std::lock_guard<std::mutex> lock(mtx);
 
@@ -203,39 +203,43 @@ bool SessionOrchestrator::markReady(SOCKET clientSocket, const std::string& sess
 
 void SessionOrchestrator::closeByClient(SOCKET clientSocket)
 {
-    std::lock_guard<std::mutex> lock(mtx);
+    SessionRecord recordToStop;
+    int sessionId;
+    bool found = false;
 
-    auto clientIt = sessionIdByClient.find(clientSocket);
-    if (clientIt == sessionIdByClient.end())
     {
-        return;
-    }
+        std::lock_guard<std::mutex> lock(mtx);
 
-    const std::string sessionId = clientIt->second;
-    auto sessionIt = sessionsById.find(sessionId);
-    if (sessionIt == sessionsById.end())
-    {
+        auto clientIt = sessionIdByClient.find(clientSocket);
+        if (clientIt == sessionIdByClient.end())
+        {
+            return;
+        }
+
+        sessionId = clientIt->second;
+        auto sessionIt = sessionsById.find(sessionId);
+        if (sessionIt == sessionsById.end())
+        {
+            sessionIdByClient.erase(clientIt);
+            return;
+        }
+
+        recordToStop = std::move(sessionIt->second);
+        sessionsById.erase(sessionIt);
         sessionIdByClient.erase(clientIt);
-        return;
+        sessionIdByClient.erase(recordToStop.p1);
+        sessionIdByClient.erase(recordToStop.p2);
+        found = true;
     }
 
-    const SOCKET p1 = sessionIt->second.p1;
-    const SOCKET p2 = sessionIt->second.p2;
-
-    stopSimulationNoLock(sessionIt->second);
-
-    if (sessionIt->second.udpSender)
+    if (found)
     {
-        sessionIt->second.udpSender->stop();
+        stopSimulationNoLock(recordToStop);
+        GlobalUDPDispatcher::getInstance().onSessionClosed(sessionId);
     }
-
-    sessionsById.erase(sessionIt);
-    sessionIdByClient.erase(clientIt);
-    sessionIdByClient.erase(p1);
-    sessionIdByClient.erase(p2);
 }
 
-std::shared_ptr<GameSession> SessionOrchestrator::getSession(const std::string& sessionId) const
+std::shared_ptr<GameSession> SessionOrchestrator::getSession(const int& sessionId) const
 {
     std::lock_guard<std::mutex> lock(mtx);
 
@@ -247,7 +251,7 @@ std::shared_ptr<GameSession> SessionOrchestrator::getSession(const std::string& 
     return it->second.session;
 }
 
-std::shared_ptr<GameEngine> SessionOrchestrator::getEngine(const std::string& sessionId) const
+std::shared_ptr<GameEngine> SessionOrchestrator::getEngine(const int& sessionId) const
 {
     std::lock_guard<std::mutex> lock(mtx);
 
@@ -259,7 +263,7 @@ std::shared_ptr<GameEngine> SessionOrchestrator::getEngine(const std::string& se
     return it->second.engine;
 }
 
-bool SessionOrchestrator::getPlayers(const std::string& sessionId, std::pair<SOCKET, SOCKET>& players) const
+bool SessionOrchestrator::getPlayers(const int& sessionId, std::pair<SOCKET, SOCKET>& players) const
 {
     std::lock_guard<std::mutex> lock(mtx);
 

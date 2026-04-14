@@ -11,7 +11,6 @@
 #include "platform_socket.h"
 #include "GameSession.h"
 #include "GameEngine.h"
-#include "UDPBroadcaster.h"
 
 struct MatchCandidate {
     SOCKET socket = INVALID_SOCKET;
@@ -24,17 +23,18 @@ public:
     SessionOrchestrator();
     ~SessionOrchestrator();
 
-    std::string createMatch(const MatchCandidate& a, const MatchCandidate& b);
-    bool markReady(SOCKET clientSocket, const std::string& sessionId);
+    int createMatch(const MatchCandidate& a, const MatchCandidate& b);
+    bool markReady(SOCKET clientSocket, const int& sessionId);
     void closeByClient(SOCKET clientSocket);
     void setResourceBalanceCallback(std::function<void(SOCKET, int)> callback);
 
-    std::shared_ptr<GameSession> getSession(const std::string& sessionId) const;
-    std::shared_ptr<GameEngine> getEngine(const std::string& sessionId) const;
-    bool getPlayers(const std::string& sessionId, std::pair<SOCKET, SOCKET>& players) const;
+    std::shared_ptr<GameSession> getSession(const int& sessionId) const;
+    std::shared_ptr<GameEngine> getEngine(const int& sessionId) const;
+    bool getPlayers(const int& sessionId, std::pair<SOCKET, SOCKET>& players) const;
 
 private:
     struct SessionRecord {
+        int sessionId;
         SOCKET p1 = INVALID_SOCKET;
         SOCKET p2 = INVALID_SOCKET;
         int p1InternalPlayerId = 0;
@@ -44,12 +44,11 @@ private:
         bool started = false;
         std::shared_ptr<GameSession> session;
         std::shared_ptr<GameEngine> engine;
-        std::unique_ptr<KinematicSender> udpSender;
         std::shared_ptr<std::atomic<bool>> simulationRunning;
         std::thread simulationThread;
     };
 
-    std::string makeSessionId();
+    int makeSessionId();
     void startSimulationNoLock(SessionRecord& record);
     void stopSimulationNoLock(SessionRecord& record);
     static void simulationLoop(std::shared_ptr<GameEngine> engine,
@@ -63,7 +62,7 @@ private:
     mutable std::mutex mtx;
     std::atomic<int> sessionCounter{1};
 
-    std::unordered_map<std::string, SessionRecord> sessionsById;
-    std::unordered_map<SOCKET, std::string> sessionIdByClient;
+    std::unordered_map<int, SessionRecord> sessionsById;
+    std::unordered_map<SOCKET, int> sessionIdByClient;
     std::function<void(SOCKET, int)> resourceBalanceCallback;
 };
