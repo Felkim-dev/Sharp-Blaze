@@ -40,6 +40,9 @@ class Structures:
                 screen, (0, 255, 0), (screen_x, screen_y), self.hitbox_radius + 2, 2
             )
 
+    def reduce_health(self, current_health):
+        self.hp = current_health
+
 class Base(Structures):
     def __init__(self, structure_id, final_x, final_y):
         super().__init__(structure_id, final_x, final_y)
@@ -62,7 +65,7 @@ class Base(Structures):
 
             self.rectangle = pygame.Rect((rect_x,rect_y), (self.width,self.height))
             pygame.draw.rect(screen,self.color,self.rectangle)
-            
+
             self.health_bar.draw(screen, self.hp, self.x, self.y-150 , (camera_x, camera_y))
 
 class GoldMine(Structures):

@@ -53,6 +53,8 @@ class Unit:
             pygame.draw.circle(
                 screen, (0, 255, 0), (screen_x, screen_y), self.hitbox_radius + 2, 2
             )
+    def reduce_health(self,current_health):
+        self.hp = current_health
 
 
 class Attacker(Unit):

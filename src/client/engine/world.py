@@ -65,7 +65,6 @@ class GameWorld:
 
     def build_initial_state(self,units, structures):
 
-        print(units, structures)
         for entity_id,(net_x, net_y) in units.items(): 
             entity_id2 =int(entity_id)
 

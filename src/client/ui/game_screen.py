@@ -164,11 +164,22 @@ class GameScreen:
                     self.world.entity_team_changer(self.new_unit_id)
 
                 elif data.get("type") == "RESOURCES":
-                    
+
                     self.new_gold = data["payload"]["new_balance"]
 
                     self.player_gold = self.new_gold
                     self.infobox_gold.update_text(str(self.player_gold))
+
+                elif data.get("type") == "UNIT_DAMAGED":
+                    
+                    #INFORMACION SOBRE EL OBJETIVO
+                    self.target_entity_id = data["payload"]["target_entity_id"]
+                    self.target_current_hp = data["payload"]["current_hp"]
+
+                    #Informacion sobre el ATACANTE
+                    self.attacker_entity_id = data["payload"]["attacker_entity_id"]
+                    
+                    self.world.units[self.target_entity_id].reduce_health(self.target_entity_id)
 
         else:
             # DEBUG MODE
