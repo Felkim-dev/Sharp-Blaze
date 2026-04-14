@@ -64,14 +64,13 @@ class GameScreen:
         self.infobox_hat = InfoBox((250,650),(200,40),gray,"COLLECTORS",self.player_recolector_units_string,white,15,HAT_PATH)
         self.infobox_sword = InfoBox((470,650),(200,40),gray,"ATTACKERS",self.player_attacker_units_string,white,15,SWORD_PATH)
 
-    def load_initial_state(self, gold, units, structures):
+    def load_initial_state(self, gold, units, structures, player_ID):
 
         self.player_gold = gold
         self.infobox_gold.update_text(str(self.player_gold)) 
 
         # TODO:ADD UNIT UI
-
-        self.world.build_initial_state(units,structures)
+        self.world.build_initial_state(units,structures,player_ID)
 
     def handle_events(self, events, keys):
         """Processes one-time events like mouse clicks."""

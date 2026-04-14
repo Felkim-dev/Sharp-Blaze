@@ -63,8 +63,26 @@ class GameWorld:
         elif 11000 <= id <= 11999:
             return Shop(id, net_x, net_y)
 
-    def build_initial_state(self,units, structures):
+    def get_owner_from_id(self, entity_id: int) -> int:
+        """
+        Determines the owner based on the hardcoded ID ranges.
+        Returns 1 for Player 1, 2 for Player 2, and 0 for Neutral (Map structures).
+        """
+        if 0 <= entity_id <= 4999:
+            return 1  # Belongs to Player 1
 
+        elif 5000 <= entity_id <= 9999:
+            return 2  # Belongs to Player 2
+
+        elif entity_id >= 10000:
+            return 0  # Neutral map entity (Mines, Shops)
+
+        return -1  # Fallback for invalid IDs
+
+    def build_initial_state(self,units, structures,local_player_ID):
+
+        self.local_player_id = local_player_ID
+        
         for entity_id,(net_x, net_y) in units.items(): 
             entity_id2 =int(entity_id)
 
@@ -110,7 +128,7 @@ class GameWorld:
         for entity_id,(net_x, net_y) in network_data.items():
 
             entity_id2 = int(entity_id)
-            
+
             if entity_id2 in self.units:
                 self.units[entity_id2].update_target(net_x,net_y)
 
@@ -142,18 +160,30 @@ class GameWorld:
                 if hasattr(entity, "check_click"):
                     if entity.check_click(world_x, world_y):
 
-                        entity.is_selected = True
-                        clicked_entity = entity  # SAVE THE CLICKED ENTITY
-                        print(
-                            f"[WORLD] Selected own entity: {entity.id} ({entity.__class__.__name__})"
-                        )
+                        # 1. MATHEMATICAL OWNERSHIP CHECK
+                        entity_owner = self.get_owner_from_id(entity.id)
 
+                        # 2. SELECTION LOGIC
+                        # You can only select it if the owner matches your local player ID
+                        if entity_owner == self.local_player_id:
+                            entity.is_selected = True
+                            clicked_entity = entity
+                            print(f"[WORLD] Selected own entity: ID {entity.id}")
+
+                        # Optional: Allow selecting neutral shops/mines to see their stats
+                        elif entity_owner == 0:
+                            entity.is_selected = True
+                            clicked_entity = entity
+                            print(f"[WORLD] Selected neutral structure: ID {entity.id}")
+
+                        else:
+                            # It's an enemy unit! Don't select it.
+                            entity.is_selected = False
+                            print(
+                                f"[WORLD] Ignored click: Entity {entity.id} belongs to Player {entity_owner}"
+                            )
                     else:
-                        # Deselect if click was outside this entity
+                        # Click was outside this entity's bounds
                         entity.is_selected = False
 
-        if not clicked_entity:
-            print("[WORLD] Clicked empty ground.")
-
-        # RETURN THE OBJECT TO THE GAME SCREEN
         return clicked_entity

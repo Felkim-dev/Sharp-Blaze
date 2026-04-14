@@ -22,6 +22,7 @@ class Unit:
 
         # SELECTION
         self.is_selected = False
+        self.is_targeted = False
         self.hitbox_radius = 20  # How forgiving the click detection is
 
     def update_target(self, new_x, new_y):

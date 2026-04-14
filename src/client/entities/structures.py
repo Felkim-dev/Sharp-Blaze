@@ -19,6 +19,7 @@ class Structures:
 
         # SELECTION
         self.is_selected = False
+        self.is_targeted = False
         self.hitbox_radius = 60  # How forgiving the click detection is
 
     def change_color(self,color):
