@@ -228,6 +228,17 @@ NetworkManager::NetworkManager(int p):port(p){
             const std::string goldMessage = client_protocol::BuildResourcesResponse(newBalance);
             sendText(socket, goldMessage);
         });
+
+    sessionOrchestrator.setMatchEventCallback(
+        [this](SOCKET socket, const std::string& message)
+        {
+            if (!isRunning)
+            {
+                return;
+            }
+
+            sendText(socket, message);
+        });
 };
 
 NetworkManager::~NetworkManager(){

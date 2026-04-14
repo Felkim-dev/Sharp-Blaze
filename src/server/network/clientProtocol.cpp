@@ -232,6 +232,65 @@ std::string client_protocol::BuildResourcesResponse(int newBalance)
     return response.dump() + '\n';
 }
 
+std::string client_protocol::BuildUnitDamagedResponse(
+    int sessionId,
+    int targetPlayerId,
+    int targetEntityId,
+    int attackerPlayerId,
+    int attackerEntityId,
+    int currentHp,
+    int maxHp)
+{
+    (void)maxHp;
+
+    json response = {
+        {"type", "UNIT_DAMAGED"},
+        {"payload", {
+            {"session_id", sessionId},
+            {"target_player_id", targetPlayerId},
+            {"target_entity_id", targetEntityId},
+            {"attacker_player_id", attackerPlayerId},
+            {"attacker_entity_id", attackerEntityId},
+            {"current_hp", currentHp},
+        }}
+    };
+
+    return response.dump() + '\n';
+}
+
+std::string client_protocol::BuildEntityDestroyedResponse(
+    int sessionId,
+    int entityId,
+    int ownerPlayerId,
+    int attackerPlayerId)
+{
+    json response = {
+        {"type", "ENTITY_DESTROYED"},
+        {"payload", {
+            {"session_id", sessionId},
+            {"entity_id", entityId},
+            {"owner_player_id", ownerPlayerId},
+            {"attacker_player_id", attackerPlayerId}
+        }}
+    };
+
+    return response.dump() + '\n';
+}
+
+std::string client_protocol::BuildGameOverResponse(int sessionId, int winnerPlayerId)
+{
+    json response = {
+        {"type", "GAME_OVER"},
+        {"payload", {
+            {"session_id", sessionId},
+            {"winner_player_id", winnerPlayerId},
+            {"reason", "base_destroyed"}
+        }}
+    };
+
+    return response.dump() + '\n';
+}
+
 //framing del buffer por delimitador "\n"
 //Recibe bytes crudos de recv, acumula en el carrybuffer y extrae los mensajes completos en outMessages.
 

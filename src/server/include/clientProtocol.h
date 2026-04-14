@@ -82,6 +82,20 @@ namespace client_protocol
         std::shared_ptr<GameSession> session);
     std::string BuildShopAuthorizationResponse(int playerId, const games_types::ShopAuthorizationState& state);
     std::string BuildResourcesResponse(int newBalance);
+    std::string BuildUnitDamagedResponse(
+        int sessionId,
+        int targetPlayerId,
+        int targetEntityId,
+        int attackerPlayerId,
+        int attackerEntityId,
+        int currentHp,
+        int maxHp = 0);
+    std::string BuildEntityDestroyedResponse(
+        int sessionId,
+        int entityId,
+        int ownerPlayerId,
+        int attackerPlayerId);
+    std::string BuildGameOverResponse(int sessionId, int winnerPlayerId);
     bool MessageFramer(
     std::string&              carryBuffer, 
     const char*               chunk, 

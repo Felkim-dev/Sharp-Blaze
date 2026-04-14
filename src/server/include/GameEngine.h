@@ -4,6 +4,7 @@
 #include <mutex>
 #include <queue>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "GameTypes.h"
@@ -32,7 +33,9 @@ class GameEngine
 		void tcpCommandEnqueue(const games_types::PlayerCommand& cmd);
 		void commandQueueProcess();
 		void advanceCollectors(int deltaMs);
+		void advanceCombat(int deltaMs);
 		std::vector<games_types::EconomyTransaction> drainEconomyTransactions();
+		std::vector<games_types::CombatEvent> drainCombatEvents();
 		bool reconcileShopAuthorization(int playerId, games_types::ShopAuthorizationState& outState);
 		bool hasShopAuthorization(int playerId) const;
 		PurchaseResult processUnitPurchase(int playerId, games_types::EntityType unitType, int quantity);
@@ -44,5 +47,8 @@ class GameEngine
 		std::shared_ptr<GameSession> session;
 		std::shared_ptr<PathFinder> pathFinder;
 		std::queue<games_types::PlayerCommand> commandQueue;
+		std::unordered_map<int, int> attackerCooldownRemainingMs;
+		std::vector<games_types::CombatEvent> pendingCombatEvents;
 		mutable std::mutex mtxCommands;
+		mutable std::mutex mtxCombatEvents;
 };

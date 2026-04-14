@@ -115,7 +115,7 @@ namespace games_types
         static constexpr std::uint32_t protocolVersion = 1;
 
         std::uint32_t version = protocolVersion;
-        int playerId = 0;
+        int playerId           = 0;
         int sessionId;
         std::uint32_t checksum = 0;
     };
@@ -135,41 +135,43 @@ namespace games_types
 
     struct EntityRef
     {
-        int entityId = 0;
-        int ownerPlayerId = 0;
+        int entityId          = 0;
+        int ownerPlayerId     = 0;
         EntityType entityType = EntityType::Unknown;
     };
 
     struct ResourceNode
     {
-        int entityId = 0;
+        int entityId          = 0;
         ResourceType resourceType = ResourceType::Gold;
-        float x = 0.0f;
-        float y = 0.0f;
-        float radius = 50.0f;
+        float x               = 0.0f;
+        float y               = 0.0f;
+        float radius          = 50.0f;
         int remainingCapacity = 0;
         int extractionPerTick = 0;
     };
 
     struct CollectorUnit
     {
-        int entityId = 0;
-        int ownerPlayerId = 0;
+        int entityId             = 0;
+        int ownerPlayerId        = 0;
         CollectorState state = CollectorState::Idle;
-        float x = 0.0f;
-        float y = 0.0f;
-        int targetResourceId = -1;
-        int carriedAmount = 0;
-        int carryCapacity = 200;
-        int gatherDurationMs = 1000;
-        int depositDurationMs = 500;
+        float x                  = 0.0f;
+        float y                  = 0.0f;
+        int targetResourceId     = -1;
+        int carriedAmount        = 0;
+        int carryCapacity        = 200;
+        int gatherDurationMs     = 1000;
+        int depositDurationMs    = 500;
         int stateTimeRemainingMs = 0;
+        int maxHp;
+        int currentHp;
     };
     struct ShopUnit
     {
         int entityId = 0;
-        float x = 0.0f;
-        float y = 0.0f;
+        float x      = 0.0f;
+        float y      = 0.0f;
         float radius = 50.0f;
     };
 
@@ -189,30 +191,62 @@ namespace games_types
     {
         int collectorId = 0;
         ResourceType resourceType = ResourceType::Gold;
-        int amount = 0;
+        int amount      = 0;
     };
 
     struct GatherResourcePayload
     {
-        int collectorId = 0;
+        int collectorId    = 0;
         int resourceNodeId = 0;
     };
 
     struct EconomyTransaction
     {
-        int playerId = 0;
-        int deltaGold = 0;
-        int resultingGold = 0;
+        int playerId       = 0;
+        int deltaGold      = 0;
+        int resultingGold  = 0;
         std::string reason;
+    };
+
+    enum class CombatEventType : std::uint8_t
+    {
+        UnitDamaged,
+        EntityDestroyed,
+        GameOver
+    };
+
+    struct CombatEvent
+    {
+        CombatEventType type = CombatEventType::UnitDamaged;
+        int sessionId = 0;
+        int attackerPlayerId = 0;
+        int attackerEntityId = 0;
+        int targetPlayerId   = 0;
+        int targetEntityId   = 0;
+        int currentHp        = 0;
+        int maxHp            = 0;
+        int winnerPlayerId   = 0;
+    };
+
+    struct DamageResolution
+    {
+        bool applied       = false;
+        int entityId       = 0;
+        int ownerPlayerId  = 0;
+        int currentHp      = 0;
+        int maxHp          = 0;
+        bool destroyed     = false;
+        bool gameOver      = false;
+        int winnerPlayerId = 0;
     };
 
     struct PlayerCommand
     {
         CommandType type = CommandType::MoveUnit;
-        int playerId = 0;
-        int unitId = 0;
-        float destX = 0.0f;
-        float destY = 0.0f;
+        int playerId     = 0;
+        int unitId       = 0;
+        float destX      = 0.0f;
+        float destY      = 0.0f;
 
         BuyUnitPayload buyUnit;
         DepositResourcePayload deposit;

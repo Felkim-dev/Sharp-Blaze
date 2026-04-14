@@ -251,6 +251,165 @@ std::vector<games_types::EconomyTransaction> GameEngine::drainEconomyTransaction
     return session->drainEconomyTransactions();
 }
 
+void GameEngine::advanceCombat(int deltaMs)
+{
+    if (!session || deltaMs <= 0)
+    {
+        return;
+    }
+
+    int winnerPlayerId = 0;
+    if (session->isGameOver(winnerPlayerId))
+    {
+        return;
+    }
+
+    const int attackerRange = session->getAttackerRange();
+    const float attackerRangeSq = static_cast<float>(attackerRange * attackerRange);
+    const int attackerDamage = std::max(session->getMinDamage(), session->getAttackerDamage());
+    const int cooldownMs = session->getAttackerCooldownMs();
+
+    const std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
+    for (const auto& attacker : units)
+    {
+        const bool isP1Attacker = games_types::id_ranges::p1Attackers.contains(attacker.entity_id);
+        const bool isP2Attacker = games_types::id_ranges::p2Attackers.contains(attacker.entity_id);
+        if (!isP1Attacker && !isP2Attacker)
+        {
+            continue;
+        }
+
+        int currentHp = 0;
+        int maxHp = 0;
+        if (!session->getEntityHealth(attacker.entity_id, currentHp, maxHp) || currentHp <= 0)
+        {
+            continue;
+        }
+
+        int& remainingCooldown = attackerCooldownRemainingMs[attacker.entity_id];
+        remainingCooldown = std::max(0, remainingCooldown - deltaMs);
+        if (remainingCooldown > 0)
+        {
+            continue;
+        }
+
+        const int ownerPlayerId = isP1Attacker ? 1 : 2;
+        int bestTargetId = -1;
+        float bestDistSq = std::numeric_limits<float>::max();
+
+        for (const auto& candidate : units)
+        {
+            if (candidate.entity_id == attacker.entity_id)
+            {
+                continue;
+            }
+
+            if (ownerPlayerId == 1)
+            {
+                if (!games_types::id_ranges::p2Attackers.contains(candidate.entity_id) &&
+                    !games_types::id_ranges::p2Collectors.contains(candidate.entity_id))
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                if (!games_types::id_ranges::p1Attackers.contains(candidate.entity_id) &&
+                    !games_types::id_ranges::p1Collectors.contains(candidate.entity_id))
+                {
+                    continue;
+                }
+            }
+
+            int targetHp = 0;
+            int targetMaxHp = 0;
+            if (!session->getEntityHealth(candidate.entity_id, targetHp, targetMaxHp) || targetHp <= 0)
+            {
+                continue;
+            }
+
+            const float distSq = distanceSquared(attacker.x, attacker.y, candidate.x, candidate.y);
+            if (distSq <= attackerRangeSq && distSq < bestDistSq)
+            {
+                bestDistSq = distSq;
+                bestTargetId = candidate.entity_id;
+            }
+        }
+
+        if (bestTargetId < 0)
+        {
+            const int enemyBaseId = ownerPlayerId == 1 ? games_types::id_ranges::p2Structures.minId
+                                                       : games_types::id_ranges::p1Structures.minId;
+            games_types::UnitPosition enemyBasePos{};
+            if (session->getEntityPosition(enemyBaseId, enemyBasePos))
+            {
+                const float distSq = distanceSquared(attacker.x, attacker.y, enemyBasePos.x, enemyBasePos.y);
+                if (distSq <= attackerRangeSq)
+                {
+                    bestTargetId = enemyBaseId;
+                }
+            }
+        }
+
+        if (bestTargetId < 0)
+        {
+            continue;
+        }
+
+        games_types::DamageResolution resolution{};
+        if (!session->applyDamageToEntity(ownerPlayerId, bestTargetId, attackerDamage, resolution) || !resolution.applied)
+        {
+            continue;
+        }
+
+        remainingCooldown = cooldownMs;
+
+        {
+            std::lock_guard<std::mutex> lock(mtxCombatEvents);
+
+            games_types::CombatEvent damagedEvent{};
+            damagedEvent.type = games_types::CombatEventType::UnitDamaged;
+            damagedEvent.sessionId = session->getSessionId();
+            damagedEvent.attackerPlayerId = ownerPlayerId;
+            damagedEvent.attackerEntityId = attacker.entity_id;
+            damagedEvent.targetEntityId = resolution.entityId;
+            damagedEvent.targetPlayerId = resolution.ownerPlayerId;
+            damagedEvent.currentHp = resolution.currentHp;
+            damagedEvent.maxHp = resolution.maxHp;
+            pendingCombatEvents.push_back(damagedEvent);
+
+            if (resolution.destroyed)
+            {
+                games_types::CombatEvent destroyedEvent{};
+                destroyedEvent.type = games_types::CombatEventType::EntityDestroyed;
+                destroyedEvent.sessionId = session->getSessionId();
+                destroyedEvent.attackerPlayerId = ownerPlayerId;
+                destroyedEvent.targetEntityId = resolution.entityId;
+                destroyedEvent.targetPlayerId = resolution.ownerPlayerId;
+                destroyedEvent.attackerEntityId = attacker.entity_id;
+                pendingCombatEvents.push_back(destroyedEvent);
+            }
+
+            if (resolution.gameOver)
+            {
+                games_types::CombatEvent gameOverEvent{};
+                gameOverEvent.type = games_types::CombatEventType::GameOver;
+                gameOverEvent.sessionId = session->getSessionId();
+                gameOverEvent.winnerPlayerId = resolution.winnerPlayerId;
+                pendingCombatEvents.push_back(gameOverEvent);
+            }
+        }
+    }
+}
+
+std::vector<games_types::CombatEvent> GameEngine::drainCombatEvents()
+{
+    std::lock_guard<std::mutex> lock(mtxCombatEvents);
+    std::vector<games_types::CombatEvent> out;
+    out.swap(pendingCombatEvents);
+    return out;
+}
+
 bool GameEngine::reconcileShopAuthorization(int playerId, games_types::ShopAuthorizationState& outState)
 {
     outState = games_types::ShopAuthorizationState{};
@@ -346,6 +505,7 @@ GameEngine::PurchaseResult GameEngine::processUnitPurchase(
     const float spawnY = 2000.0;
 
     session->upsertUnitPosition(unitId, spawnX, spawnY);
+    session->registerSpawnedUnit(unitId, playerId, unitType);
     if (unitType == games_types::EntityType::Collector)
     {
         games_types::CollectorUnit collector{};
