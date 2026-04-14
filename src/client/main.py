@@ -4,7 +4,6 @@ import sys
 
 # IMPORT OF SCREENS
 from ui.main_screen import MainScreen
-from ui.host_screen import HostScreen
 from ui.join_screen import JoinScreen
 from ui.lobby_screen import LobbyScreen
 from ui.conecting_screen import ConnectingScreen
@@ -34,7 +33,6 @@ class GAME:
         #DICTIONARY OF THE VALID SCREENS
         self.screens = {
             "MAIN": MainScreen(self, self.screen),
-            "HOST": HostScreen(self, self.screen),
             "JOIN": JoinScreen(self, self.screen),
             "LOBBY": LobbyScreen(self, self.screen),
             "CONNECTING": ConnectingScreen(self, self.screen),
