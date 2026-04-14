@@ -1,6 +1,8 @@
 import pygame
 import math
 
+from ui.component import Health_Indicator
+
 class Unit:
     def __init__(self, unit_id, start_x, start_y):
 
@@ -58,6 +60,7 @@ class Attacker(Unit):
         super().__init__(unit_id, start_x, start_y)
 
         self.size = 15
+        self.health_bar = Health_Indicator(self.hp, self.size*2)
 
     def draw(self,screen, camera_x, camera_y):
         """The unit is drawed"""
@@ -73,6 +76,8 @@ class Attacker(Unit):
             p3 = (screen_x + self.size, screen_y + self.size)
 
             pygame.draw.polygon(screen, self.color, [p1, p2, p3])
+        
+            self.health_bar.draw(screen,self.hp,self.x,self.y,(camera_x,camera_y))
 
 
 class Recolectors(Unit):
@@ -80,6 +85,8 @@ class Recolectors(Unit):
         super().__init__(unit_id, start_x, start_y)
 
         self.radius = 15
+        self.health_bar = Health_Indicator(self.hp, self.radius*2)
+
     def draw(self,screen,camera_x,camera_y):
 
         pos_x = int(self.x - camera_x)
@@ -89,3 +96,5 @@ class Recolectors(Unit):
 
         if (-self.radius < pos_x < screen.get_width() + self.radius) and (-self.radius < pos_y < screen.get_height() + self.radius):
             pygame.draw.circle(screen, self.color, (pos_x,pos_y), 15)
+
+            self.health_bar.draw(screen, self.hp, self.x, self.y, (camera_x,camera_y))

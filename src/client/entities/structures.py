@@ -1,6 +1,7 @@
 import pygame
 import math
 
+from ui.component import Health_Indicator
 
 class Structures:
     def __init__(self,structure_id,final_x,final_y):
@@ -45,20 +46,24 @@ class Base(Structures):
 
         self.width = 300
         self.height = 300
-        
+
+        self.health_bar = Health_Indicator(self.hp, self.width)
+
     def draw(self,screen,camera_x,camera_y):
 
-        #CAMERA MOVEMENTE
+        # CAMERA MOVEMENTE
         screen_x = int(self.x - camera_x)
         screen_y = int(self.y - camera_y)
-        
+
         if (-self.width < screen_x < screen.get_width()+self.width) and (-self.height < screen_y < screen.get_height()+self.height):
-            
+
             rect_x = screen_x - (self.width//2)
             rect_y = screen_y - (self.height//2)
-            
+
             self.rectangle = pygame.Rect((rect_x,rect_y), (self.width,self.height))
             pygame.draw.rect(screen,self.color,self.rectangle)
+            
+            self.health_bar.draw(screen, self.hp, self.x, self.y-150 , (camera_x, camera_y))
 
 class GoldMine(Structures):
     def __init__(self, structure_id, final_x, final_y):
