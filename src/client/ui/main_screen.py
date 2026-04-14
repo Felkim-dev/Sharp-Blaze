@@ -3,6 +3,7 @@ import sys
 import os
 
 from ui.component import Button, Text
+from ui.floating_shapes import FloatingShape
 
 class MainScreen:
     def __init__(self, screen_manager,screen):
@@ -40,6 +41,15 @@ class MainScreen:
         # TEXT
         self.text_title = Text((self.screen.get_rect().centerx, self.screen.get_rect().centery//2),"SHARP BLAZE", 100,self.WHITE,TITLE_FONT)
 
+        # Create a list of background shapes (e.g., 25 floating shapes)
+        self.screen_width = screen.get_width()
+        self.screen_height = screen.get_height()
+
+        self.background_shapes = []
+        for _ in range(25):
+            shape = FloatingShape(self.screen_width, self.screen_height)
+            self.background_shapes.append(shape)
+
     def handle_events(self, events,keys):
 
         for event in events:
@@ -74,11 +84,16 @@ class MainScreen:
                 self.btn_exit.check_hover(mouse_pos)
 
     def update(self):
-        pass
+        for shape in self.background_shapes:
+            shape.update(self.screen_width, self.screen_height)
 
     def draw(self):
         # SCREEN DRAW
         self.screen.fill((self.MAINDARK))  # Fondo oscuro
+
+        # Figures
+        for shape in self.background_shapes:
+            shape.draw(self.screen)
 
         # BUTTONS DRAW
         self.btn_join.draw(self.screen)
