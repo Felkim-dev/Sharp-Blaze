@@ -136,6 +136,9 @@ class LobbyScreen:
 
                     local_player_id = data["payload"]["you"]
                     enemy_player_id = data["payload"]["opponent"]
+                    
+                    self.session_id = data["payload"]["session_id"]
+                    self.player_id = data["payload"]["global_player_id"]
 
                     self.textbox_nickname1.text = local_player_id
                     self.textbox_nickname2.text = enemy_player_id
@@ -154,7 +157,7 @@ class LobbyScreen:
 
                     game_screen.load_initial_state(gold,units,structures)
 
-                    self.screen_manager.network.init_udp_connection()
+                    self.screen_manager.network.init_udp_connection(self.session_id,self.player_id)
 
                     self.screen_manager.change_screen("GAME")
 

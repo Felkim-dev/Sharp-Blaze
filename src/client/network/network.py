@@ -31,13 +31,23 @@ class NetworkManager:
         self.is_udp_listening = False
 
     # --------------------------- UDP Methods -------------------------------------
-    def init_udp_connection(self):
+    def init_udp_connection(self,session_id,player_id):
         """It is called when the Lobby Start button is clicked"""
         self.server_ip = Config.SERVER_IP
         self.udp_port_server = 5556
 
-        welcome_message = b"HELLO_UDP"
+        local_session_id = int(session_id)
+        local_player_id = int(player_id)
+        
+        header = struct.pack("!ii", session_id,player_id)
+        checksum = 0
+        for b in header:
+            checksum ^= b
+            
+        welcome_message = header + struct.pack("!I", checksum)
 
+        print(f"Session_id {local_session_id}, player_id {local_player_id}, checksum {checksum}")
+        
         try:
             self.client_udp.sendto(welcome_message,(self.server_ip,self.udp_port_server))
             print("UDP Channel open. Waiting for positions")
