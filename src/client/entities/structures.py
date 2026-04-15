@@ -17,10 +17,6 @@ class Structures:
         self.color = (255, 255, 255)
         self.attackable = True
 
-        # SELECTION
-        self.is_selected = False
-        self.is_targeted = False
-        self.hitbox_radius = 60  # How forgiving the click detection is
 
     def change_color(self,color):
         self.color = color
@@ -59,6 +55,11 @@ class Base(Structures):
 
         self.health_bar = Health_Indicator(self.hp, self.width)
 
+        # SELECTION
+        self.is_selected = False
+        self.is_targeted = False
+        self.hitbox_radius = 60  # How forgiving the click detection is
+
     def draw(self,screen,camera_x,camera_y):
 
         # CAMERA MOVEMENTE
@@ -67,6 +68,13 @@ class Base(Structures):
 
         if (-self.width < screen_x < screen.get_width()+self.width) and (-self.height < screen_y < screen.get_height()+self.height):
 
+            # Dibujar los círculos DEBAJO de la estructura
+            if self.is_selected:
+                pygame.draw.circle(screen, (50, 220, 50), (screen_x, screen_y), self.radius + 10, 3)
+            elif self.is_targeted:
+                # Círculo rojo para cuando el enemigo (o tú) le den clic derecho para atacarla
+                pygame.draw.circle(screen, (220, 50, 50), (screen_x, screen_y), self.radius + 10, 3)
+            
             rect_x = screen_x - (self.width//2)
             rect_y = screen_y - (self.height//2)
 
