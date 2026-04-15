@@ -1,4 +1,5 @@
 #include "spatialGrid.h"
+#include "GameTypes.h"
 
 #include <algorithm>
 
@@ -20,7 +21,7 @@ int SpatialGrid::getRows() const
 	return rows;
 }
 
-bool SpatialGrid::inBounds(const CellCoord& cell) const
+bool SpatialGrid::inBounds(const games_types::CellCoord& cell) const
 {
 	return inBounds(cell.x, cell.y);
 }
@@ -30,7 +31,7 @@ bool SpatialGrid::inBounds(int x, int y) const
 	return x >= 0 && x < cols && y >= 0 && y < rows;
 }
 
-bool SpatialGrid::setStaticBlocked(const CellCoord& cell, bool blocked)
+bool SpatialGrid::setStaticBlocked(const games_types::CellCoord& cell, bool blocked)
 {
 	if (!inBounds(cell))
 	{
@@ -41,7 +42,7 @@ bool SpatialGrid::setStaticBlocked(const CellCoord& cell, bool blocked)
 	return true;
 }
 
-bool SpatialGrid::isStaticBlocked(const CellCoord& cell) const
+bool SpatialGrid::isStaticBlocked(const games_types::CellCoord& cell) const
 {
 	if (!inBounds(cell))
 	{
@@ -59,7 +60,7 @@ void SpatialGrid::clearStaticBlocked()
 	}
 }
 
-bool SpatialGrid::placeEntity(int entityId, const CellCoord& cell)
+bool SpatialGrid::placeEntity(int entityId, const games_types::CellCoord& cell)
 {
 	if (entityId <= 0 || !inBounds(cell) || isStaticBlocked(cell) || isOccupied(cell))
 	{
@@ -69,7 +70,7 @@ bool SpatialGrid::placeEntity(int entityId, const CellCoord& cell)
 	auto existingIt = entityToCell.find(entityId);
 	if (existingIt != entityToCell.end())
 	{
-		const CellCoord old = existingIt->second;
+		const games_types::CellCoord old = existingIt->second;
 		if (inBounds(old) && cellOccupant[old.y][old.x] == entityId)
 		{
 			cellOccupant[old.y][old.x] = -1;
@@ -89,7 +90,7 @@ bool SpatialGrid::removeEntity(int entityId)
 		return false;
 	}
 
-	const CellCoord cell = it->second;
+	const games_types::CellCoord cell = it->second;
 	if (inBounds(cell) && cellOccupant[cell.y][cell.x] == entityId)
 	{
 		cellOccupant[cell.y][cell.x] = -1;
@@ -113,7 +114,7 @@ bool SpatialGrid::removeEntity(int entityId)
 	return true;
 }
 
-bool SpatialGrid::getEntityCell(int entityId, CellCoord& outCell) const
+bool SpatialGrid::getEntityCell(int entityId, games_types::CellCoord& outCell) const
 {
 	auto it = entityToCell.find(entityId);
 	if (it == entityToCell.end())
@@ -125,7 +126,7 @@ bool SpatialGrid::getEntityCell(int entityId, CellCoord& outCell) const
 	return true;
 }
 
-bool SpatialGrid::isOccupied(const CellCoord& cell) const
+bool SpatialGrid::isOccupied(const games_types::CellCoord& cell) const
 {
 	if (!inBounds(cell))
 	{
@@ -134,7 +135,7 @@ bool SpatialGrid::isOccupied(const CellCoord& cell) const
 	return cellOccupant[cell.y][cell.x] >= 0;
 }
 
-int SpatialGrid::getOccupant(const CellCoord& cell) const
+int SpatialGrid::getOccupant(const games_types::CellCoord& cell) const
 {
 	if (!inBounds(cell))
 	{
@@ -143,15 +144,15 @@ int SpatialGrid::getOccupant(const CellCoord& cell) const
 	return cellOccupant[cell.y][cell.x];
 }
 
-SpatialGrid::MoveResult SpatialGrid::tryReserveMove(int entityId, const CellCoord& toCell)
+games_types::MoveResult SpatialGrid::tryReserveMove(int entityId, const games_types::CellCoord& toCell)
 {
-	MoveResult result{};
+	games_types::MoveResult result{};
 	result.to = toCell;
 
 	auto entityIt = entityToCell.find(entityId);
 	if (entityIt == entityToCell.end())
 	{
-		result.status = MoveStatus::InvalidEntity;
+		result.status = games_types::MoveStatus::InvalidEntity;
 		return result;
 	}
 
@@ -159,20 +160,20 @@ SpatialGrid::MoveResult SpatialGrid::tryReserveMove(int entityId, const CellCoor
 
 	if (!inBounds(toCell))
 	{
-		result.status = MoveStatus::OutOfBounds;
+		result.status = games_types::MoveStatus::OutOfBounds;
 		return result;
 	}
 
 	if (isStaticBlocked(toCell))
 	{
-		result.status = MoveStatus::StaticBlocked;
+		result.status = games_types::MoveStatus::StaticBlocked;
 		return result;
 	}
 
 	const int currentOccupant = getOccupant(toCell);
 	if (currentOccupant >= 0 && currentOccupant != entityId)
 	{
-		result.status = MoveStatus::Occupied;
+		result.status = games_types::MoveStatus::Occupied;
 		result.blockerEntityId = currentOccupant;
 		return result;
 	}
@@ -181,32 +182,32 @@ SpatialGrid::MoveResult SpatialGrid::tryReserveMove(int entityId, const CellCoor
 	auto reserveIt = reservationByCellIndex.find(targetIdx);
 	if (reserveIt != reservationByCellIndex.end() && reserveIt->second != entityId)
 	{
-		result.status = MoveStatus::ReservedByOther;
+		result.status = games_types::MoveStatus::ReservedByOther;
 		result.blockerEntityId = reserveIt->second;
 		return result;
 	}
 
 	if (entityIt->second == toCell)
 	{
-		result.status = MoveStatus::Ok;
+		result.status = games_types::MoveStatus::Ok;
 		return result;
 	}
 
 	reservationByCellIndex[targetIdx] = entityId;
 	reservedTargetByEntity[entityId] = toCell;
-	result.status = MoveStatus::Ok;
+	result.status = games_types::MoveStatus::Ok;
 	return result;
 }
 
-std::vector<SpatialGrid::GridDelta> SpatialGrid::commitReservedMoves()
+std::vector<games_types::GridDelta> SpatialGrid::commitReservedMoves()
 {
-	std::vector<GridDelta> deltas;
+	std::vector<games_types::GridDelta> deltas;
 	deltas.reserve(reservedTargetByEntity.size());
 
 	for (const auto& moveEntry : reservedTargetByEntity)
 	{
 		const int entityId = moveEntry.first;
-		const CellCoord toCell = moveEntry.second;
+		const games_types::CellCoord toCell = moveEntry.second;
 
 		auto it = entityToCell.find(entityId);
 		if (it == entityToCell.end())
@@ -214,7 +215,7 @@ std::vector<SpatialGrid::GridDelta> SpatialGrid::commitReservedMoves()
 			continue;
 		}
 
-		const CellCoord fromCell = it->second;
+		const games_types::CellCoord fromCell = it->second;
 		if (fromCell == toCell)
 		{
 			continue;
@@ -234,7 +235,7 @@ std::vector<SpatialGrid::GridDelta> SpatialGrid::commitReservedMoves()
 		cellOccupant[toCell.y][toCell.x] = entityId;
 		it->second = toCell;
 
-		deltas.push_back(GridDelta{entityId, fromCell, toCell});
+		deltas.push_back(games_types::GridDelta{entityId, fromCell, toCell});
 	}
 
 	clearReservations();
@@ -247,17 +248,17 @@ void SpatialGrid::clearReservations()
 	reservedTargetByEntity.clear();
 }
 
-std::vector<SpatialGrid::CellCoord> SpatialGrid::neighbors4(const CellCoord& cell) const
+std::vector<games_types::CellCoord> SpatialGrid::neighbors4(const games_types::CellCoord& cell) const
 {
 	static constexpr int kDx[4] = {1, -1, 0, 0};
 	static constexpr int kDy[4] = {0, 0, 1, -1};
 
-	std::vector<CellCoord> out;
+	std::vector<games_types::CellCoord> out;
 	out.reserve(4);
 
 	for (int i = 0; i < 4; ++i)
 	{
-		const CellCoord next{cell.x + kDx[i], cell.y + kDy[i]};
+		const games_types::CellCoord next{cell.x + kDx[i], cell.y + kDy[i]};
 		if (inBounds(next))
 		{
 			out.push_back(next);
@@ -267,7 +268,7 @@ std::vector<SpatialGrid::CellCoord> SpatialGrid::neighbors4(const CellCoord& cel
 	return out;
 }
 
-int SpatialGrid::toIndex(const CellCoord& cell) const
+int SpatialGrid::toIndex(const games_types::CellCoord& cell) const
 {
 	return (cell.y * cols) + cell.x;
 }

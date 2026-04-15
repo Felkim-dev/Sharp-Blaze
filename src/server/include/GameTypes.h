@@ -7,6 +7,47 @@
 
 namespace games_types
 {
+    //estructuras para el spatialGrid:
+    struct CellCoord
+    {
+        int x = 0;
+        int y = 0;
+
+        bool operator==(const CellCoord &other) const
+        {
+            return x == other.x && y == other.y;
+        }
+    };
+
+    enum class MoveStatus : std::uint8_t
+    {
+        Ok,
+        InvalidEntity,
+        OutOfBounds,
+        StaticBlocked,
+        Occupied,
+        ReservedByOther
+    };
+
+    struct MoveResult
+    {
+        MoveStatus status = MoveStatus::Ok;
+        CellCoord from{};
+        CellCoord to{};
+        int blockerEntityId = -1;
+
+        bool accepted() const
+        {
+            return status == MoveStatus::Ok;
+        }
+    };
+
+    struct GridDelta
+    {
+        int entityId = 0;
+        CellCoord from{};
+        CellCoord to{};
+    };
     enum class EntityType : std::uint8_t
     {
         Structure,
