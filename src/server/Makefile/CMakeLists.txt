@@ -16,6 +16,7 @@ add_executable(sharp_blaze_server
     ../network/GameSession.cpp
     ../network/GameEngine.cpp
     ../network/PathFinder.cpp
+    ../infrastructure/spatialGrid.cpp
 )
 
 target_include_directories(sharp_blaze_server
@@ -41,6 +42,7 @@ add_executable(sharp_blaze_server_tests
     ../network/GameSession.cpp
     ../network/GameEngine.cpp
     ../network/PathFinder.cpp
+    ../infrastructure/spatialGrid.cpp
 )
 
 target_include_directories(sharp_blaze_server_tests

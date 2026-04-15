@@ -4,6 +4,7 @@
 
 #include "GameEngine.h"
 #include "GameSession.h"
+#include "spatialGrid.h"
 
 namespace
 {
@@ -102,6 +103,54 @@ namespace
         assert(!shopState.authorized);
         assert(!engine.hasShopAuthorization(1));
     }
+
+    void testSpatialGridPlaceAndMove()
+    {
+        SpatialGrid grid(100, 100);
+
+        const bool placed = grid.placeEntity(1000, SpatialGrid::CellCoord{10, 10});
+        assert(placed);
+
+        auto moveResult = grid.tryReserveMove(1000, SpatialGrid::CellCoord{11, 10});
+        assert(moveResult.accepted());
+
+        const auto deltas = grid.commitReservedMoves();
+        assert(deltas.size() == 1);
+        assert(deltas.front().entityId == 1000);
+        assert(deltas.front().to.x == 11);
+        assert(deltas.front().to.y == 10);
+
+        SpatialGrid::CellCoord currentCell{};
+        const bool found = grid.getEntityCell(1000, currentCell);
+        assert(found);
+        assert(currentCell.x == 11);
+        assert(currentCell.y == 10);
+    }
+
+    void testSpatialGridRejectsOccupiedCell()
+    {
+        SpatialGrid grid(100, 100);
+        assert(grid.placeEntity(1000, SpatialGrid::CellCoord{5, 5}));
+        assert(grid.placeEntity(1001, SpatialGrid::CellCoord{5, 6}));
+
+        const auto moveResult = grid.tryReserveMove(1001, SpatialGrid::CellCoord{5, 5});
+        assert(moveResult.status == SpatialGrid::MoveStatus::Occupied);
+        assert(moveResult.blockerEntityId == 1000);
+    }
+
+    void testSpatialGridReservationConflict()
+    {
+        SpatialGrid grid(100, 100);
+        assert(grid.placeEntity(2000, SpatialGrid::CellCoord{1, 1}));
+        assert(grid.placeEntity(2001, SpatialGrid::CellCoord{1, 2}));
+
+        const auto first = grid.tryReserveMove(2000, SpatialGrid::CellCoord{2, 2});
+        assert(first.accepted());
+
+        const auto second = grid.tryReserveMove(2001, SpatialGrid::CellCoord{2, 2});
+        assert(second.status == SpatialGrid::MoveStatus::ReservedByOther);
+        assert(second.blockerEntityId == 2000);
+    }
 }
 
 int main()
@@ -112,6 +161,9 @@ int main()
     testResourceExtractionFinite();
     testCollectorStateAdvancesWithCollision();
     testShopAuthorizationGrantAndRevoke();
+    testSpatialGridPlaceAndMove();
+    testSpatialGridRejectsOccupiedCell();
+    testSpatialGridReservationConflict();
 
     std::cout << "server_logic_tests: all checks passed\n";
     return 0;
