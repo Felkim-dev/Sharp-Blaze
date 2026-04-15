@@ -1,3 +1,5 @@
+import pygame
+
 from entities.units import Attacker,Recolectors
 from entities.structures import GoldMine, Shop, Base
 
@@ -102,6 +104,43 @@ class GameWorld:
             if 0 <= entity_id2 <= 999 or 5000 <= entity_id2 <= 5999:
                 self.entity_team_changer(entity_id2)
 
+    def handle_box_selection(self, start_x, start_y, end_x, end_y):
+        """
+        Creates a selection box and selects all own units inside it.
+        """
+        # 1. Normalize the rectangle (Pygame Rect needs top-left, width, and height)
+        left = min(start_x, end_x)
+        top = min(start_y, end_y)
+        width = abs(start_x - end_x)
+        height = abs(start_y - end_y)
+
+        # 2. Distinguish between a single click and a drag
+        # If the box is extremely small (e.g., less than 5 pixels), treat it as a single click
+        if width < 5 and height < 5:
+            return self.handle_left_click(end_x, end_y)
+
+        selection_rect = pygame.Rect(left, top, width, height)
+
+        # 3. Clean up previous selections
+        for unit in self.units.values():
+            if hasattr(unit, "is_selected"):
+                unit.is_selected = False
+
+        # 4. Box Collision Logic
+        selected_count = 0
+        for u_id, unit in self.units.items():
+            owner = self.get_owner_from_id(u_id)
+
+            # Only select our own units (Player 1 or 2, depending on local_id)
+            if owner == self.local_player_id:
+                # Assuming your unit has 'x' and 'y' center coordinates
+                if selection_rect.collidepoint(unit.x, unit.y):
+                    unit.is_selected = True
+                    selected_count += 1
+
+        print(f"[WORLD] Box selection captured {selected_count} units.")
+
+
     def handle_right_click(self, target_world_x, target_world_y):
         """
         Processes right clicks.
@@ -124,7 +163,7 @@ class GameWorld:
 
         if not selected_unit_ids:
             return
-        
+
         # 2. CHECK COLLISIONS: Did we right-click on an entity?
         for entity_dict in (self.units, self.structures):
             for e_id,entity in entity_dict.items():
@@ -142,7 +181,7 @@ class GameWorld:
         if clicked_enemy_entity:
             # We clicked an enemy! Mark it red and return ATTACK command
             clicked_enemy_entity.is_targeted = True
-            
+
             command_payload = JSON_Manager.attack(int(clicked_enemy_id),self.local_player_id)
             self.network.send_json(command_payload)
 

@@ -64,6 +64,11 @@ class GameScreen:
         self.infobox_hat = InfoBox((250,650),(200,40),gray,"COLLECTORS",self.player_recolector_units_string,white,15,HAT_PATH)
         self.infobox_sword = InfoBox((470,650),(200,40),gray,"ATTACKERS",self.player_attacker_units_string,white,15,SWORD_PATH)
 
+        # UI Drag State
+        self.is_dragging = False
+        self.drag_start_screen = None
+        self.drag_current_screen = None
+
     def load_initial_state(self, gold, units, structures, player_ID):
 
         self.player_gold = gold
@@ -79,6 +84,7 @@ class GameScreen:
             if event.type == pygame.MOUSEBUTTONDOWN:
 
                 mouse_x, mouse_y = event.pos
+                mouse_pos = event.pos
 
                 # 1. UI PROTECTION: Check if click is on the Square Minimap first!
                 # We simply ask Pygame if the mouse coordinates are inside the minimap's Rect
@@ -111,22 +117,46 @@ class GameScreen:
                 # -------------------------------------------------------------
                 if event.button == 1:
 
-                    selected_entity = self.world.handle_left_click(world_x, world_y)
+                    self.is_dragging = True
+                    self.drag_start_screen = mouse_pos
+                    self.drag_current_screen = mouse_pos
+
+                # -------------------------------------------------------------
+                # RIGHT CLICK (Button 3) -> Issue Move Commands
+                # -------------------------------------------------------------
+
+                elif event.button == 3:
+                    self.world.handle_right_click(world_x, world_y)
+
+            # FASE 2: Movimiento (Actualizar el dibujo)
+            elif event.type == pygame.MOUSEMOTION:
+                if self.is_dragging:
+                    self.drag_current_screen = event.pos
+
+            # FASE 3: Soltar Click (Ejecutar la selección matemática)
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if self.is_dragging:
+                    self.is_dragging = False
+                    end_screen = event.pos
+
+                    if self.minimap.rect.collidepoint(end_screen[0], end_screen[1]):
+                        continue
+
+                    # Translate screen coordinates to world coordinates
+                    start_world_x = self.drag_start_screen[0] + self.camera.x
+                    start_world_y = self.drag_start_screen[1] + self.camera.y
+                    end_world_x = end_screen[0] + self.camera.x
+                    end_world_y = end_screen[1] + self.camera.y
+
+                    # Send to the engine logic
+                    selected_entity = self.world.handle_box_selection(start_world_x, start_world_y, end_world_x, end_world_y)
 
                     if selected_entity and selected_entity.__class__.__name__ == "Shop":
                         self.is_shop_open = True
                         print("[GAME SCREEN] Shop selected! Opening UI.")
                     else:
-                        # Auto-close the shop if we click the ground or another unit
                         self.is_shop_open = False
 
-                    self.world.handle_left_click(world_x, world_y)
-
-                # -------------------------------------------------------------
-                # RIGHT CLICK (Button 3) -> Issue Move Commands
-                # -------------------------------------------------------------
-                elif event.button == 3:
-                    self.world.handle_right_click(world_x, world_y)
     def update(self):
 
         if not Config.OFFLINE_DEBUG_MODE:
@@ -253,3 +283,22 @@ class GameScreen:
         self.infobox_gold.draw(self.screen)
         self.infobox_hat.draw(self.screen)
         self.infobox_sword.draw(self.screen)
+
+        # ================================= SELECTION BOX =======================================
+        # DRAW SELECTION BOX
+        if self.is_dragging and self.drag_current_screen:
+            # 1. Normalize screen coordinates
+            left = min(self.drag_start_screen[0], self.drag_current_screen[0])
+            top = min(self.drag_start_screen[1], self.drag_current_screen[1])
+            width = abs(self.drag_start_screen[0] - self.drag_current_screen[0])
+            height = abs(self.drag_start_screen[1] - self.drag_current_screen[1])
+
+            # 2. Draw outer border (solid)
+            box_rect = (left, top, width, height)
+            pygame.draw.rect(self.screen, (50, 220, 50), box_rect, 1)
+
+            # 3. Draw inner fill (transparent)
+            # Pygame needs a new Surface to handle alpha transparency on rects
+            alpha_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+            alpha_surface.fill((50, 220, 50, 40))  # Green with low opacity
+            self.screen.blit(alpha_surface, (left, top))
