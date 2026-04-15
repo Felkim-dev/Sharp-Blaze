@@ -157,6 +157,19 @@ class GameScreen:
                     else:
                         self.is_shop_open = False
 
+    def handle_entity_death(self, entity_id: int):
+        """Delete the entity whe it is death."""
+
+        # Delete units
+        if entity_id in self.world.units:
+            del self.world.units[entity_id]
+            print(f"[WORLD] Unit {entity_id} destroyed and removed.")
+
+        # Delete Structures
+        elif entity_id in self.world.structures:
+            del self.world.structures[entity_id]
+            print(f"[WORLD] Structure {entity_id} destroyed and removed.")
+
     def update(self):
 
         if not Config.OFFLINE_DEBUG_MODE:

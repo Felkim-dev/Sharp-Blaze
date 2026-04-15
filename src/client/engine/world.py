@@ -79,7 +79,7 @@ class GameWorld:
         elif entity_id >= 10000:
             return 0  # Neutral map entity (Mines, Shops)
 
-        return -1  # Fallback for invalid IDs
+        return -1  # Fallback for invalid IDs        
 
     def build_initial_state(self,units, structures,local_player_ID):
 
@@ -139,7 +139,6 @@ class GameWorld:
                     selected_count += 1
 
         print(f"[WORLD] Box selection captured {selected_count} units.")
-
 
     def handle_right_click(self, target_world_x, target_world_y):
         """
