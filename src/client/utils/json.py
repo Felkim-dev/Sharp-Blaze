@@ -59,3 +59,15 @@ class JSON_Manager:
         }
 
         return attacker_payload
+
+    def attack(target_unit_id:int,attacker_unit_id:int):
+        
+        attack_payload= {
+            "type": "ATTACK",
+            "payload": {
+                "target_id": target_unit_id,
+                "attacker_id": attacker_unit_id,
+            }
+        }
+        
+        return attack_payload

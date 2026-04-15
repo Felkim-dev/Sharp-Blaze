@@ -1,3 +1,5 @@
+import pygame
+
 from entities.units import Attacker,Recolectors
 from entities.structures import GoldMine, Shop, Base
 
@@ -63,9 +65,26 @@ class GameWorld:
         elif 11000 <= id <= 11999:
             return Shop(id, net_x, net_y)
 
-    def build_initial_state(self,units, structures):
+    def get_owner_from_id(self, entity_id: int) -> int:
+        """
+        Determines the owner based on the hardcoded ID ranges.
+        Returns 1 for Player 1, 2 for Player 2, and 0 for Neutral (Map structures).
+        """
+        if 0 <= entity_id <= 4999:
+            return 1  # Belongs to Player 1
 
-        print(units, structures)
+        elif 5000 <= entity_id <= 9999:
+            return 2  # Belongs to Player 2
+
+        elif entity_id >= 10000:
+            return 0  # Neutral map entity (Mines, Shops)
+
+        return -1  # Fallback for invalid IDs
+
+    def build_initial_state(self,units, structures,local_player_ID):
+
+        self.local_player_id = local_player_ID
+
         for entity_id,(net_x, net_y) in units.items(): 
             entity_id2 =int(entity_id)
 
@@ -85,24 +104,93 @@ class GameWorld:
             if 0 <= entity_id2 <= 999 or 5000 <= entity_id2 <= 5999:
                 self.entity_team_changer(entity_id2)
 
-    def handle_right_click(self, target_world_x, target_world_y):
-        """Finds selected units and sends a MOVE_ORDER to the server."""
+    def handle_box_selection(self, start_x, start_y, end_x, end_y):
+        """
+        Creates a selection box and selects all own units inside it.
+        """
+        # 1. Normalize the rectangle (Pygame Rect needs top-left, width, and height)
+        left = min(start_x, end_x)
+        top = min(start_y, end_y)
+        width = abs(start_x - end_x)
+        height = abs(start_y - end_y)
 
+        # 2. Distinguish between a single click and a drag
+        # If the box is extremely small (e.g., less than 5 pixels), treat it as a single click
+        if width < 5 and height < 5:
+            return self.handle_left_click(end_x, end_y)
+
+        selection_rect = pygame.Rect(left, top, width, height)
+
+        # 3. Clean up previous selections
         for unit in self.units.values():
-            # getattr is a safe way to check if 'is_selected' exists
-            # (in case bases/structures don't have this attribute yet)
+            if hasattr(unit, "is_selected"):
+                unit.is_selected = False
+
+        # 4. Box Collision Logic
+        selected_count = 0
+        for u_id, unit in self.units.items():
+            owner = self.get_owner_from_id(u_id)
+
+            # Only select our own units (Player 1 or 2, depending on local_id)
+            if owner == self.local_player_id:
+                # Assuming your unit has 'x' and 'y' center coordinates
+                if selection_rect.collidepoint(unit.x, unit.y):
+                    unit.is_selected = True
+                    selected_count += 1
+
+        print(f"[WORLD] Box selection captured {selected_count} units.")
+
+
+    def handle_right_click(self, target_world_x, target_world_y):
+        """
+        Processes right clicks.
+        Returns a dictionary with the action ('MOVE' or 'ATTACK') and coordinates/target.
+        """
+
+        clicked_enemy_id = None
+        clicked_enemy_entity = None
+
+        # 1. CLEANUP: Remove the red circle from any previously targeted enemy
+        for entity_dict in (self.units, self.structures):
+            for entity in entity_dict.values():
+                if hasattr(entity, "is_targeted"):
+                    entity.is_targeted = False
+
+        selected_unit_ids = []
+        for u_id, unit in self.units.items():
             if getattr(unit, "is_selected", False):
+                selected_unit_ids.append(u_id)
 
-                # 1. Format the command exactly as agreed for the C++ server
+        if not selected_unit_ids:
+            return
 
-                command_payload = JSON_Manager.get_moveorder(int(unit.id), int(target_world_x), int(target_world_y))
+        # 2. CHECK COLLISIONS: Did we right-click on an entity?
+        for entity_dict in (self.units, self.structures):
+            for e_id,entity in entity_dict.items():
+                if hasattr(entity, "check_click") and entity.check_click(target_world_x, target_world_y):
 
-                # 2. Send it securely via TCP
+                    owner = self.get_owner_from_id(e_id)
+
+                    # 3. LOGIC: Is it an enemy? (Belongs to a player, but not us)
+                    if owner != 0 and owner != self.local_player_id:
+                        clicked_enemy_id = e_id
+                        clicked_enemy_entity = entity
+                        break  # Stop searching, we found the target
+
+        # 4. ACTION ROUTING
+        if clicked_enemy_entity:
+            # We clicked an enemy! Mark it red and return ATTACK command
+            clicked_enemy_entity.is_targeted = True
+
+            command_payload = JSON_Manager.attack(int(clicked_enemy_id),self.local_player_id)
+            self.network.send_json(command_payload)
+
+        else:
+            # We clicked empty ground (or our own unit/neutral structure).
+            # Treat it as a standard move command.
+            for unit_id in selected_unit_ids:
+                command_payload = JSON_Manager.get_moveorder(int(unit_id), int(target_world_x), int(target_world_y))
                 self.network.send_json(command_payload)
-
-                print(
-                    f"[WORLD] Sent MOVE_ORDER: Unit {unit.id} -> X:{int(target_world_x)} Y:{int(target_world_y)}"
-                )
 
     def update(self):
 
@@ -111,7 +199,7 @@ class GameWorld:
         for entity_id,(net_x, net_y) in network_data.items():
 
             entity_id2 = int(entity_id)
-            
+
             if entity_id2 in self.units:
                 self.units[entity_id2].update_target(net_x,net_y)
 
@@ -143,18 +231,30 @@ class GameWorld:
                 if hasattr(entity, "check_click"):
                     if entity.check_click(world_x, world_y):
 
-                        entity.is_selected = True
-                        clicked_entity = entity  # SAVE THE CLICKED ENTITY
-                        print(
-                            f"[WORLD] Selected own entity: {entity.id} ({entity.__class__.__name__})"
-                        )
+                        # 1. MATHEMATICAL OWNERSHIP CHECK
+                        entity_owner = self.get_owner_from_id(entity.id)
 
+                        # 2. SELECTION LOGIC
+                        # You can only select it if the owner matches your local player ID
+                        if entity_owner == self.local_player_id:
+                            entity.is_selected = True
+                            clicked_entity = entity
+                            print(f"[WORLD] Selected own entity: ID {entity.id}")
+
+                        # Optional: Allow selecting neutral shops/mines to see their stats
+                        elif entity_owner == 0:
+                            entity.is_selected = True
+                            clicked_entity = entity
+                            print(f"[WORLD] Selected neutral structure: ID {entity.id}")
+
+                        else:
+                            # It's an enemy unit! Don't select it.
+                            entity.is_selected = False
+                            print(
+                                f"[WORLD] Ignored click: Entity {entity.id} belongs to Player {entity_owner}"
+                            )
                     else:
-                        # Deselect if click was outside this entity
+                        # Click was outside this entity's bounds
                         entity.is_selected = False
 
-        if not clicked_entity:
-            print("[WORLD] Clicked empty ground.")
-
-        # RETURN THE OBJECT TO THE GAME SCREEN
         return clicked_entity
