@@ -38,6 +38,18 @@ namespace games_types
         GatherResource,
         DepositResource
     };
+    enum class CellType : std::uint8_t
+    {
+        Free,
+        OccupiedDynamic,
+        Blocked,
+        Static,
+    };
+    struct Cell
+    {
+        int x;
+        int y;
+    };
 
     struct IdRange
     {

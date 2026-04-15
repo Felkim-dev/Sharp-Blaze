@@ -183,7 +183,7 @@ bool GlobalUDPDispatcher::tryParseUdpHello(const char* buffer, int size,
 void GlobalUDPDispatcher::pruneStaleEndpointsLocked()
 {
     const auto now = std::chrono::steady_clock::now();
-    constexpr auto kEndpointTimeout = std::chrono::seconds(60);
+    constexpr auto kEndpointTimeout = std::chrono::seconds(3600);
 
     for (auto& sessionPair : activeSessions)
     {
