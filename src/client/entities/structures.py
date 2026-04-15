@@ -40,7 +40,13 @@ class Structures:
             pygame.draw.circle(
                 screen, (0, 255, 0), (screen_x, screen_y), self.hitbox_radius + 2, 2
             )
+        elif self.is_targeted:
+            screen_x = int(self.x - camera_x)
+            screen_y = int(self.y - camera_y)
 
+            # Draw a red circle with 2px thickness (outline only)
+            pygame.draw.circle(screen, (220, 50, 50), (screen_x, screen_y), self.hitbox_radius + 2, 2)
+            
     def reduce_health(self, current_health):
         self.hp = current_health
 

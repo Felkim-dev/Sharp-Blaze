@@ -82,7 +82,7 @@ class GameWorld:
     def build_initial_state(self,units, structures,local_player_ID):
 
         self.local_player_id = local_player_ID
-        
+
         for entity_id,(net_x, net_y) in units.items(): 
             entity_id2 =int(entity_id)
 
@@ -103,23 +103,55 @@ class GameWorld:
                 self.entity_team_changer(entity_id2)
 
     def handle_right_click(self, target_world_x, target_world_y):
-        """Finds selected units and sends a MOVE_ORDER to the server."""
+        """
+        Processes right clicks.
+        Returns a dictionary with the action ('MOVE' or 'ATTACK') and coordinates/target.
+        """
 
-        for unit in self.units.values():
-            # getattr is a safe way to check if 'is_selected' exists
-            # (in case bases/structures don't have this attribute yet)
+        clicked_enemy_id = None
+        clicked_enemy_entity = None
+
+        # 1. CLEANUP: Remove the red circle from any previously targeted enemy
+        for entity_dict in (self.units, self.structures):
+            for entity in entity_dict.values():
+                if hasattr(entity, "is_targeted"):
+                    entity.is_targeted = False
+
+        selected_unit_ids = []
+        for u_id, unit in self.units.items():
             if getattr(unit, "is_selected", False):
+                selected_unit_ids.append(u_id)
 
-                # 1. Format the command exactly as agreed for the C++ server
+        if not selected_unit_ids:
+            return
+        
+        # 2. CHECK COLLISIONS: Did we right-click on an entity?
+        for entity_dict in (self.units, self.structures):
+            for e_id,entity in entity_dict.items():
+                if hasattr(entity, "check_click") and entity.check_click(target_world_x, target_world_y):
 
-                command_payload = JSON_Manager.get_moveorder(int(unit.id), int(target_world_x), int(target_world_y))
+                    owner = self.get_owner_from_id(e_id)
 
-                # 2. Send it securely via TCP
+                    # 3. LOGIC: Is it an enemy? (Belongs to a player, but not us)
+                    if owner != 0 and owner != self.local_player_id:
+                        clicked_enemy_id = e_id
+                        clicked_enemy_entity = entity
+                        break  # Stop searching, we found the target
+
+        # 4. ACTION ROUTING
+        if clicked_enemy_entity:
+            # We clicked an enemy! Mark it red and return ATTACK command
+            clicked_enemy_entity.is_targeted = True
+            
+            command_payload = JSON_Manager.attack(int(clicked_enemy_id),self.local_player_id)
+            self.network.send_json(command_payload)
+
+        else:
+            # We clicked empty ground (or our own unit/neutral structure).
+            # Treat it as a standard move command.
+            for unit_id in selected_unit_ids:
+                command_payload = JSON_Manager.get_moveorder(int(unit_id), int(target_world_x), int(target_world_y))
                 self.network.send_json(command_payload)
-
-                print(
-                    f"[WORLD] Sent MOVE_ORDER: Unit {unit.id} -> X:{int(target_world_x)} Y:{int(target_world_y)}"
-                )
 
     def update(self):
 

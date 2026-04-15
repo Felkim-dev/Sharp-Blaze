@@ -127,7 +127,6 @@ class GameScreen:
                 # -------------------------------------------------------------
                 elif event.button == 3:
                     self.world.handle_right_click(world_x, world_y)
-
     def update(self):
 
         if not Config.OFFLINE_DEBUG_MODE:
@@ -170,14 +169,14 @@ class GameScreen:
                     self.infobox_gold.update_text(str(self.player_gold))
 
                 elif data.get("type") == "UNIT_DAMAGED":
-                    
-                    #INFORMACION SOBRE EL OBJETIVO
+
+                    # INFORMACION SOBRE EL OBJETIVO
                     self.target_entity_id = data["payload"]["target_entity_id"]
                     self.target_current_hp = data["payload"]["current_hp"]
 
-                    #Informacion sobre el ATACANTE
+                    # Informacion sobre el ATACANTE
                     self.attacker_entity_id = data["payload"]["attacker_entity_id"]
-                    
+
                     self.world.units[self.target_entity_id].reduce_health(self.target_entity_id)
 
         else:
