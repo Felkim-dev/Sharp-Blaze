@@ -75,6 +75,7 @@ namespace games_types
     enum class CommandType : std::uint8_t
     {
         MoveUnit,
+        AttackUnit,
         BuyUnit,
         GatherResource,
         DepositResource
@@ -247,6 +248,12 @@ namespace games_types
         int amount      = 0;
     };
 
+    struct AttackPayload
+    {
+        int attackerId = 0;
+        int targetId = 0;
+    };
+
     struct GatherResourcePayload
     {
         int collectorId    = 0;
@@ -303,6 +310,7 @@ namespace games_types
 
         BuyUnitPayload buyUnit;
         DepositResourcePayload deposit;
+        AttackPayload attack;
         GatherResourcePayload gather;
     };
 }

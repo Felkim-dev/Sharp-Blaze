@@ -43,8 +43,41 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
 
         if (engine)
         {
+            engine->commandQueueProcess();
             engine->advanceCollectors(kTickMs);
             engine->advanceCombat(kTickMs);
+
+            const auto attackResults = engine->drainAttackResults();
+            for (const auto& result : attackResults)
+            {
+                if (!matchEventCallback)
+                {
+                    continue;
+                }
+
+                SOCKET targetSocket = INVALID_SOCKET;
+                if (result.playerId == p1InternalPlayerId)
+                {
+                    targetSocket = p1Socket;
+                }
+                else if (result.playerId == p2InternalPlayerId)
+                {
+                    targetSocket = p2Socket;
+                }
+
+                if (targetSocket == INVALID_SOCKET)
+                {
+                    continue;
+                }
+
+                const std::string attackResultMessage = client_protocol::BuildAttackResultResponse(
+                    result.attackerId,
+                    result.targetId,
+                    result.accepted,
+                    result.reason,
+                    result.targetCurrentHp);
+                matchEventCallback(targetSocket, attackResultMessage);
+            }
 
             const auto economyEvents = engine->drainEconomyTransactions();
             for (const auto& event : economyEvents)

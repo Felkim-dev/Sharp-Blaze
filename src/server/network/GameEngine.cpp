@@ -84,6 +84,39 @@ namespace
 
         return false;
     }
+
+    int ownerFromEntityId(int entityId)
+    {
+        if (games_types::id_ranges::p1Structures.contains(entityId) ||
+            games_types::id_ranges::p1Attackers.contains(entityId) ||
+            games_types::id_ranges::p1Collectors.contains(entityId))
+        {
+            return 1;
+        }
+
+        if (games_types::id_ranges::p2Structures.contains(entityId) ||
+            games_types::id_ranges::p2Attackers.contains(entityId) ||
+            games_types::id_ranges::p2Collectors.contains(entityId))
+        {
+            return 2;
+        }
+
+        return 0;
+    }
+
+    bool isAttackerUnitOwnedByPlayer(int playerId, int entityId)
+    {
+        if (playerId == 1)
+        {
+            return games_types::id_ranges::p1Attackers.contains(entityId);
+        }
+        if (playerId == 2)
+        {
+            return games_types::id_ranges::p2Attackers.contains(entityId);
+        }
+
+        return false;
+    }
 }
 
 GameEngine::GameEngine(std::shared_ptr<GameSession> sessionRef,
@@ -116,12 +149,22 @@ void GameEngine::commandQueueProcess()
         const games_types::PlayerCommand cmd = pendingCommands.front();
         pendingCommands.pop();
 
-        if (!propertyValidation(cmd.playerId, cmd.unitId))
+        if (cmd.type == games_types::CommandType::MoveUnit)
         {
+            if (!propertyValidation(cmd.playerId, cmd.unitId))
+            {
+                continue;
+            }
+
+            setNewRoute(cmd);
             continue;
         }
 
-        setNewRoute(cmd);
+        if (cmd.type == games_types::CommandType::AttackUnit)
+        {
+            processAttackCommand(cmd);
+            continue;
+        }
     }
 }
 
@@ -253,151 +296,21 @@ std::vector<games_types::EconomyTransaction> GameEngine::drainEconomyTransaction
 
 void GameEngine::advanceCombat(int deltaMs)
 {
-    if (!session || deltaMs <= 0)
+    if (deltaMs <= 0)
     {
         return;
     }
 
-    int winnerPlayerId = 0;
-    if (session->isGameOver(winnerPlayerId))
+    for (auto it = attackerCooldownRemainingMs.begin(); it != attackerCooldownRemainingMs.end();)
     {
-        return;
-    }
-
-    const int attackerRange = session->getAttackerRange();
-    const float attackerRangeSq = static_cast<float>(attackerRange * attackerRange);
-    const int attackerDamage = std::max(session->getMinDamage(), session->getAttackerDamage());
-    const int cooldownMs = session->getAttackerCooldownMs();
-
-    const std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
-    for (const auto& attacker : units)
-    {
-        const bool isP1Attacker = games_types::id_ranges::p1Attackers.contains(attacker.entity_id);
-        const bool isP2Attacker = games_types::id_ranges::p2Attackers.contains(attacker.entity_id);
-        if (!isP1Attacker && !isP2Attacker)
+        it->second = std::max(0, it->second - deltaMs);
+        if (it->second == 0)
         {
-            continue;
+            it = attackerCooldownRemainingMs.erase(it);
         }
-
-        int currentHp = 0;
-        int maxHp = 0;
-        if (!session->getEntityHealth(attacker.entity_id, currentHp, maxHp) || currentHp <= 0)
+        else
         {
-            continue;
-        }
-
-        int& remainingCooldown = attackerCooldownRemainingMs[attacker.entity_id];
-        remainingCooldown = std::max(0, remainingCooldown - deltaMs);
-        if (remainingCooldown > 0)
-        {
-            continue;
-        }
-
-        const int ownerPlayerId = isP1Attacker ? 1 : 2;
-        int bestTargetId = -1;
-        float bestDistSq = std::numeric_limits<float>::max();
-
-        for (const auto& candidate : units)
-        {
-            if (candidate.entity_id == attacker.entity_id)
-            {
-                continue;
-            }
-
-            if (ownerPlayerId == 1)
-            {
-                if (!games_types::id_ranges::p2Attackers.contains(candidate.entity_id) &&
-                    !games_types::id_ranges::p2Collectors.contains(candidate.entity_id))
-                {
-                    continue;
-                }
-            }
-            else
-            {
-                if (!games_types::id_ranges::p1Attackers.contains(candidate.entity_id) &&
-                    !games_types::id_ranges::p1Collectors.contains(candidate.entity_id))
-                {
-                    continue;
-                }
-            }
-
-            int targetHp = 0;
-            int targetMaxHp = 0;
-            if (!session->getEntityHealth(candidate.entity_id, targetHp, targetMaxHp) || targetHp <= 0)
-            {
-                continue;
-            }
-
-            const float distSq = distanceSquared(attacker.x, attacker.y, candidate.x, candidate.y);
-            if (distSq <= attackerRangeSq && distSq < bestDistSq)
-            {
-                bestDistSq = distSq;
-                bestTargetId = candidate.entity_id;
-            }
-        }
-
-        if (bestTargetId < 0)
-        {
-            const int enemyBaseId = ownerPlayerId == 1 ? games_types::id_ranges::p2Structures.minId
-                                                       : games_types::id_ranges::p1Structures.minId;
-            games_types::UnitPosition enemyBasePos{};
-            if (session->getEntityPosition(enemyBaseId, enemyBasePos))
-            {
-                const float distSq = distanceSquared(attacker.x, attacker.y, enemyBasePos.x, enemyBasePos.y);
-                if (distSq <= attackerRangeSq)
-                {
-                    bestTargetId = enemyBaseId;
-                }
-            }
-        }
-
-        if (bestTargetId < 0)
-        {
-            continue;
-        }
-
-        games_types::DamageResolution resolution{};
-        if (!session->applyDamageToEntity(ownerPlayerId, bestTargetId, attackerDamage, resolution) || !resolution.applied)
-        {
-            continue;
-        }
-
-        remainingCooldown = cooldownMs;
-
-        {
-            std::lock_guard<std::mutex> lock(mtxCombatEvents);
-
-            games_types::CombatEvent damagedEvent{};
-            damagedEvent.type = games_types::CombatEventType::UnitDamaged;
-            damagedEvent.sessionId = session->getSessionId();
-            damagedEvent.attackerPlayerId = ownerPlayerId;
-            damagedEvent.attackerEntityId = attacker.entity_id;
-            damagedEvent.targetEntityId = resolution.entityId;
-            damagedEvent.targetPlayerId = resolution.ownerPlayerId;
-            damagedEvent.currentHp = resolution.currentHp;
-            damagedEvent.maxHp = resolution.maxHp;
-            pendingCombatEvents.push_back(damagedEvent);
-
-            if (resolution.destroyed)
-            {
-                games_types::CombatEvent destroyedEvent{};
-                destroyedEvent.type = games_types::CombatEventType::EntityDestroyed;
-                destroyedEvent.sessionId = session->getSessionId();
-                destroyedEvent.attackerPlayerId = ownerPlayerId;
-                destroyedEvent.targetEntityId = resolution.entityId;
-                destroyedEvent.targetPlayerId = resolution.ownerPlayerId;
-                destroyedEvent.attackerEntityId = attacker.entity_id;
-                pendingCombatEvents.push_back(destroyedEvent);
-            }
-
-            if (resolution.gameOver)
-            {
-                games_types::CombatEvent gameOverEvent{};
-                gameOverEvent.type = games_types::CombatEventType::GameOver;
-                gameOverEvent.sessionId = session->getSessionId();
-                gameOverEvent.winnerPlayerId = resolution.winnerPlayerId;
-                pendingCombatEvents.push_back(gameOverEvent);
-            }
+            ++it;
         }
     }
 }
@@ -407,6 +320,14 @@ std::vector<games_types::CombatEvent> GameEngine::drainCombatEvents()
     std::lock_guard<std::mutex> lock(mtxCombatEvents);
     std::vector<games_types::CombatEvent> out;
     out.swap(pendingCombatEvents);
+    return out;
+}
+
+std::vector<GameEngine::AttackRequestResult> GameEngine::drainAttackResults()
+{
+    std::lock_guard<std::mutex> lock(mtxAttackResults);
+    std::vector<AttackRequestResult> out;
+    out.swap(pendingAttackResults);
     return out;
 }
 
@@ -581,4 +502,169 @@ void GameEngine::setNewRoute(const games_types::PlayerCommand& cmd)
     }
 
     session->setUnitsSnapshot(units);
+}
+
+void GameEngine::processAttackCommand(const games_types::PlayerCommand& cmd)
+{
+    AttackRequestResult result{};
+    result.playerId = cmd.playerId;
+    result.attackerId = cmd.attack.attackerId;
+    result.targetId = cmd.attack.targetId;
+    result.accepted = false;
+    result.reason = "rejected";
+
+    if (!session || !session->hasPlayer(cmd.playerId))
+    {
+        result.reason = "invalid_player";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    if (!isAttackerUnitOwnedByPlayer(cmd.playerId, cmd.attack.attackerId))
+    {
+        result.reason = "invalid_attacker_owner_or_type";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    int winnerPlayerId = 0;
+    if (session->isGameOver(winnerPlayerId))
+    {
+        result.reason = "game_over";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    games_types::UnitPosition attackerPos{};
+    games_types::UnitPosition targetPos{};
+    if (!session->getEntityPosition(cmd.attack.attackerId, attackerPos))
+    {
+        result.reason = "attacker_not_found";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    if (!session->getEntityPosition(cmd.attack.targetId, targetPos))
+    {
+        result.reason = "target_not_found";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    const int attackerOwner = ownerFromEntityId(cmd.attack.attackerId);
+    const int targetOwner = ownerFromEntityId(cmd.attack.targetId);
+    if (attackerOwner == 0 || targetOwner == 0)
+    {
+        result.reason = "invalid_owner";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    if (attackerOwner == targetOwner)
+    {
+        result.reason = "invalid_target_ally";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    int attackerCurrentHp = 0;
+    int attackerMaxHp = 0;
+    if (!session->getEntityHealth(cmd.attack.attackerId, attackerCurrentHp, attackerMaxHp) || attackerCurrentHp <= 0)
+    {
+        result.reason = "attacker_dead_or_missing";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    int targetCurrentHp = 0;
+    int targetMaxHp = 0;
+    if (!session->getEntityHealth(cmd.attack.targetId, targetCurrentHp, targetMaxHp) || targetCurrentHp <= 0)
+    {
+        result.reason = "target_dead_or_missing";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    const int remainingCooldown = attackerCooldownRemainingMs[cmd.attack.attackerId];
+    if (remainingCooldown > 0)
+    {
+        result.reason = "cooldown";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    const int attackerRange = session->getAttackerRange();
+    const float distSq = distanceSquared(attackerPos.x, attackerPos.y, targetPos.x, targetPos.y);
+    if (distSq > static_cast<float>(attackerRange * attackerRange))
+    {
+        result.reason = "out_of_range";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    games_types::DamageResolution resolution{};
+    const int damage = std::max(session->getMinDamage(), session->getAttackerDamage());
+    if (!session->applyDamageToEntity(attackerOwner, cmd.attack.targetId, damage, resolution) || !resolution.applied)
+    {
+        result.reason = "attack_not_applied";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    attackerCooldownRemainingMs[cmd.attack.attackerId] = session->getAttackerCooldownMs();
+
+    {
+        std::lock_guard<std::mutex> lock(mtxCombatEvents);
+
+        games_types::CombatEvent damagedEvent{};
+        damagedEvent.type = games_types::CombatEventType::UnitDamaged;
+        damagedEvent.sessionId = session->getSessionId();
+        damagedEvent.attackerPlayerId = attackerOwner;
+        damagedEvent.attackerEntityId = cmd.attack.attackerId;
+        damagedEvent.targetEntityId = resolution.entityId;
+        damagedEvent.targetPlayerId = resolution.ownerPlayerId;
+        damagedEvent.currentHp = resolution.currentHp;
+        damagedEvent.maxHp = resolution.maxHp;
+        pendingCombatEvents.push_back(damagedEvent);
+
+        if (resolution.destroyed)
+        {
+            games_types::CombatEvent destroyedEvent{};
+            destroyedEvent.type = games_types::CombatEventType::EntityDestroyed;
+            destroyedEvent.sessionId = session->getSessionId();
+            destroyedEvent.attackerPlayerId = attackerOwner;
+            destroyedEvent.targetEntityId = resolution.entityId;
+            destroyedEvent.targetPlayerId = resolution.ownerPlayerId;
+            destroyedEvent.attackerEntityId = cmd.attack.attackerId;
+            pendingCombatEvents.push_back(destroyedEvent);
+        }
+
+        if (resolution.gameOver)
+        {
+            games_types::CombatEvent gameOverEvent{};
+            gameOverEvent.type = games_types::CombatEventType::GameOver;
+            gameOverEvent.sessionId = session->getSessionId();
+            gameOverEvent.winnerPlayerId = resolution.winnerPlayerId;
+            pendingCombatEvents.push_back(gameOverEvent);
+        }
+    }
+
+    result.accepted = true;
+    result.reason = "ok";
+    result.targetCurrentHp = resolution.currentHp;
+
+    std::lock_guard<std::mutex> lock(mtxAttackResults);
+    pendingAttackResults.push_back(result);
 }

@@ -134,7 +134,7 @@ namespace
         assert(grid.placeEntity(1001, SpatialGrid::CellCoord{5, 6}));
 
         const auto moveResult = grid.tryReserveMove(1001, games_types::CellCoord{5, 5});
-        assert(moveResult.status == SpatialGrid::MoveStatus::Occupied);
+        assert(moveResult.status == games_types::MoveStatus::Occupied);
         assert(moveResult.blockerEntityId == 1000);
     }
 
@@ -148,7 +148,7 @@ namespace
         assert(first.accepted());
 
         const auto second = grid.tryReserveMove(2001, games_types::CellCoord{2, 2});
-        assert(second.status == SpatialGrid::MoveStatus::ReservedByOther);
+        assert(second.status == games_types::MoveStatus::ReservedByOther);
         assert(second.blockerEntityId == 2000);
     }
 }

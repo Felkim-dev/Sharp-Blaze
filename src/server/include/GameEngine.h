@@ -15,6 +15,16 @@ class PathFinder;
 class GameEngine
 {
 	public:
+		struct AttackRequestResult
+		{
+			int playerId = 0;
+			int attackerId = 0;
+			int targetId = 0;
+			bool accepted = false;
+			std::string reason;
+			int targetCurrentHp = -1;
+		};
+
 		struct PurchaseResult
 		{
 			bool success = false;
@@ -36,6 +46,7 @@ class GameEngine
 		void advanceCombat(int deltaMs);
 		std::vector<games_types::EconomyTransaction> drainEconomyTransactions();
 		std::vector<games_types::CombatEvent> drainCombatEvents();
+		std::vector<AttackRequestResult> drainAttackResults();
 		bool reconcileShopAuthorization(int playerId, games_types::ShopAuthorizationState& outState);
 		bool hasShopAuthorization(int playerId) const;
 		PurchaseResult processUnitPurchase(int playerId, games_types::EntityType unitType, int quantity);
@@ -43,12 +54,15 @@ class GameEngine
 	private:
 		bool propertyValidation(int playerId, int unitId) const;
 		void setNewRoute(const games_types::PlayerCommand& cmd);
+		void processAttackCommand(const games_types::PlayerCommand& cmd);
 
 		std::shared_ptr<GameSession> session;
 		std::shared_ptr<PathFinder> pathFinder;
 		std::queue<games_types::PlayerCommand> commandQueue;
 		std::unordered_map<int, int> attackerCooldownRemainingMs;
 		std::vector<games_types::CombatEvent> pendingCombatEvents;
+		std::vector<AttackRequestResult> pendingAttackResults;
 		mutable std::mutex mtxCommands;
 		mutable std::mutex mtxCombatEvents;
+		mutable std::mutex mtxAttackResults;
 };

@@ -35,6 +35,12 @@ namespace client_protocol
         int quantity = 1;
     };
 
+    struct AttackData
+    {
+        int attackerId = 0;
+        int targetId = 0;
+    };
+
     struct DepositResourceData
     {
         int collectorId = 0;
@@ -47,6 +53,7 @@ namespace client_protocol
         InitialConnect,
         PlayerReady,
         MoveUnit,
+        Attack,
         BuyUnit,
         DepositResource,
         Unsuported
@@ -58,6 +65,7 @@ namespace client_protocol
         InitialConnectData initialConnect;
         PlayerReadyData playerReady;
         MoveUnitData moveUnit;
+        AttackData attack;
         BuyUnitData buyUnit;
         DepositResourceData deposit;
     };
@@ -82,6 +90,12 @@ namespace client_protocol
         std::shared_ptr<GameSession> session);
     std::string BuildShopAuthorizationResponse(int playerId, const games_types::ShopAuthorizationState& state);
     std::string BuildResourcesResponse(int newBalance);
+    std::string BuildAttackResultResponse(
+        int attackerId,
+        int targetId,
+        bool accepted,
+        const std::string& reason,
+        int currentHp = -1);
     std::string BuildUnitDamagedResponse(
         int sessionId,
         int targetPlayerId,

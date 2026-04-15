@@ -17,6 +17,11 @@ namespace
         return type == games_types::EntityType::Collector ||
                type == games_types::EntityType::Attacker;
     }
+    bool isAttackerTroop(int entityId)
+    {
+        return games_types::id_ranges::p1Attackers.contains(entityId) ||
+               games_types::id_ranges::p2Attackers.contains(entityId);
+    }
 
     bool parseEntityType(const json& value, games_types::EntityType& outType)
     {
@@ -227,6 +232,33 @@ std::string client_protocol::BuildResourcesResponse(int newBalance)
         {"payload", {
             {"new_balance", newBalance}
         }}
+    };
+
+    return response.dump() + '\n';
+}
+
+std::string client_protocol::BuildAttackResultResponse(
+    int attackerId,
+    int targetId,
+    bool accepted,
+    const std::string& reason,
+    int currentHp)
+{
+    json payload = {
+        {"attacker_id", attackerId},
+        {"target_id", targetId},
+        {"reason", reason}
+    };
+
+    if (currentHp >= 0)
+    {
+        payload["current_hp"] = currentHp;
+    }
+
+    json response = {
+        {"type", "ATTACK_RESULT"},
+        {"status", accepted ? "accepted" : "rejected"},
+        {"payload", payload}
     };
 
     return response.dump() + '\n';
@@ -489,6 +521,54 @@ bool client_protocol::MessageProtocol(
         responseToSend = BuildOkResponse();
         std::cout << outMessage.moveUnit.unitId << "," << outMessage.moveUnit.destX << "," << outMessage.moveUnit.destY<< '\n';
         return true;
+    }
+    if (type == "ATTACK")
+    {
+        if (!data.contains("payload") || !data["payload"].is_object())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_payload");
+            return false;
+        }
+
+        const json& payload = data["payload"];
+        if (!payload.contains("attacker_id") || !payload["attacker_id"].is_number_integer())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_attacker_id");
+            return false;
+        }
+
+        if (!payload.contains("target_id") || !payload["target_id"].is_number_integer())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_target_id");
+            return false;
+        }
+
+        const int attackerId = payload["attacker_id"].get<int>();
+        const int targetId = payload["target_id"].get<int>();
+        if (attackerId <= 0)
+        {
+            responseToSend = BuildErrorResponse("invalid_attacker_id_value");
+            return false;
+        }
+
+        if (targetId < 0)
+        {
+            responseToSend = BuildErrorResponse("invalid_target_id_value");
+            return false;
+        }
+
+        if (!isAttackerTroop(attackerId))
+        {
+            responseToSend = BuildErrorResponse("attacker_id_not_attacker_unit");
+            return false;
+        }
+
+        outMessage.type = ParsedMessageType::Attack;
+        outMessage.attack.attackerId = attackerId;
+        outMessage.attack.targetId = targetId;
+        responseToSend = BuildOkResponse();
+        return true;
+
     }
 
     if (type == "BUY_UNIT")
