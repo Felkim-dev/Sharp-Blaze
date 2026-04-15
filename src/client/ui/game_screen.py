@@ -5,7 +5,7 @@ from engine.world import GameWorld
 from engine.camera import Camera
 from ui.minimap import Minimap
 from ui.telemetry import TelemetryPanel
-from ui.component import InfoBox
+from ui.component import InfoBox, TextBox, Button
 from ui.shop import Shop
 
 from utils.json import JSON_Manager
@@ -69,6 +69,12 @@ class GameScreen:
         self.drag_start_screen = None
         self.drag_current_screen = None
 
+        # GAME STATE
+        self.is_game_over = False
+        self.winner_player_id = None
+        self.winner_box = TextBox((240,180),(800,200),(0,159, 12),f"SHARP BLAZE\nVICTORY!",(255,255,255),72)
+        self.game_over_button = Button((465,420),(350,70),(112,112,112),"RETURN TO MENU", (255,255,255),36)
+
     def load_initial_state(self, gold, units, structures, player_ID):
 
         self.player_gold = gold
@@ -77,8 +83,19 @@ class GameScreen:
         # TODO:ADD UNIT UI
         self.world.build_initial_state(units,structures,player_ID)
 
+    def trigger_game_over(self, winner_name):
+        self.is_game_over = True
+        self.winner_player_id = winner_name
+
+        # ¡Aquí es donde inyectas el nombre real para que se actualice en pantalla!
+        nuevo_texto = f"SHARP BLAZE\n{self.winner_player_id} VICTORY!"
+        self.winner_box.update_text(nuevo_texto)
+
     def handle_events(self, events, keys):
         """Processes one-time events like mouse clicks."""
+        if self.is_game_over:
+            return
+
         for event in events:
             # Detect Mouse Button Press
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -171,6 +188,9 @@ class GameScreen:
             print(f"[WORLD] Structure {entity_id} destroyed and removed.")
 
     def update(self):
+
+        if self.is_game_over:
+            return
 
         if not Config.OFFLINE_DEBUG_MODE:
             data = self.screen_manager.network.receive_json()
