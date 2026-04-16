@@ -503,23 +503,34 @@ bool client_protocol::MessageProtocol(
             responseToSend = BuildErrorResponse("missing_or_invalid_unit_id");
             return false;
         }
-        if (!payload.contains("target_x") || !payload["target_x"].is_number())
+        if (!payload.contains("target_x") || !payload["target_x"].is_number_integer())
         {
             responseToSend = BuildErrorResponse("missing_or_invalid_target_x");
             return false;
         }
-        if (!payload.contains("target_y") || !payload["target_y"].is_number())
+        if (!payload.contains("target_y") || !payload["target_y"].is_number_integer())
         {
             responseToSend = BuildErrorResponse("missing_or_invalid_target_y");
             return false;
         }
 
+        const int targetX = payload["target_x"].get<int>();
+        const int targetY = payload["target_y"].get<int>();
+        if (targetX < 0 || targetX > 99)
+        {
+            responseToSend = BuildErrorResponse("target_x_out_of_range");
+            return false;
+        }
+        if (targetY < 0 || targetY > 99)
+        {
+            responseToSend = BuildErrorResponse("target_y_out_of_range");
+            return false;
+        }
+
         outMessage.type = ParsedMessageType::MoveUnit;
         outMessage.moveUnit.unitId = payload["unit_id"].get<int>();
-        outMessage.moveUnit.destX = payload["target_x"].get<float>();
-        outMessage.moveUnit.destY = payload["target_y"].get<float>();
+        outMessage.moveUnit.destination = games_types::CellCoord{targetX, targetY};
         responseToSend = BuildOkResponse();
-        std::cout << outMessage.moveUnit.unitId << "," << outMessage.moveUnit.destX << "," << outMessage.moveUnit.destY<< '\n';
         return true;
     }
     if (type == "ATTACK")

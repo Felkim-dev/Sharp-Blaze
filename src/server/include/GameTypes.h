@@ -305,8 +305,7 @@ namespace games_types
         CommandType type = CommandType::MoveUnit;
         int playerId     = 0;
         int unitId       = 0;
-        float destX      = 0.0f;
-        float destY      = 0.0f;
+        CellCoord destCell{};
 
         BuyUnitPayload buyUnit;
         DepositResourcePayload deposit;

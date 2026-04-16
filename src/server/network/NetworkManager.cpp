@@ -429,8 +429,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                     games_types::PlayerCommand cmd{};
                     cmd.playerId = internalPlayerId;
                     cmd.unitId = parsed.moveUnit.unitId;
-                    cmd.destX = parsed.moveUnit.destX;
-                    cmd.destY = parsed.moveUnit.destY;
+                    cmd.destCell = parsed.moveUnit.destination;
 
                     engine->tcpCommandEnqueue(cmd);
 

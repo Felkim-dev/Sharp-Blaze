@@ -44,6 +44,7 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
         if (engine)
         {
             engine->commandQueueProcess();
+            engine->advanceMovement(kTickMs);
             engine->advanceCollectors(kTickMs);
             engine->advanceCombat(kTickMs);
 

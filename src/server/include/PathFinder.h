@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "GameTypes.h"
+#include "spatialGrid.h"
 
 class PathFinder
 {
@@ -10,8 +11,8 @@ class PathFinder
         PathFinder() = default;
         ~PathFinder() = default;
 
-        std::vector<games_types::UnitPosition> buildRoute(
-            const games_types::UnitPosition& start,
-            float destX,
-            float destY) const;
+        std::vector<games_types::CellCoord> buildRoute(
+            const games_types::CellCoord& start,
+            const games_types::CellCoord& destination,
+            const SpatialGrid& grid) const;
 };

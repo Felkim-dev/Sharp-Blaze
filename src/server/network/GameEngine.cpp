@@ -1,6 +1,7 @@
 #include "GameEngine.h"
 
 #include <algorithm>
+#include <deque>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -8,9 +9,14 @@
 
 #include "GameSession.h"
 #include "PathFinder.h"
+#include "spatialGrid.h"
 
 namespace
 {
+    constexpr int kGridCols = 100;
+    constexpr int kGridRows = 100;
+    constexpr float kCellSize = 50.0f;
+
     constexpr float kCollectorCollisionRadius = 15.0f;
     constexpr float kBaseCollisionRadius = 215.0f;
 
@@ -116,6 +122,57 @@ namespace
         }
 
         return false;
+    }
+
+    int clampToRange(int value, int minValue, int maxValue)
+    {
+        return std::max(minValue, std::min(value, maxValue));
+    }
+
+    games_types::CellCoord worldToCell(float x, float y)
+    {
+        const int cellX = clampToRange(static_cast<int>(x / kCellSize), 0, kGridCols - 1);
+        const int cellY = clampToRange(static_cast<int>(y / kCellSize), 0, kGridRows - 1);
+        return games_types::CellCoord{cellX, cellY};
+    }
+
+    std::pair<float, float> cellCenterToWorld(const games_types::CellCoord& cell)
+    {
+        const float worldX = (static_cast<float>(cell.x) + 0.5f) * kCellSize;
+        const float worldY = (static_cast<float>(cell.y) + 0.5f) * kCellSize;
+        return {worldX, worldY};
+    }
+
+    void blockCellForEntity(SpatialGrid& grid, int entityId, float x, float y)
+    {
+        (void)entityId;
+        grid.setStaticBlocked(worldToCell(x, y), true);
+    }
+
+    void populateStaticPathGrid(SpatialGrid& grid,
+                                const std::vector<games_types::UnitPosition>& structures,
+                                const std::vector<games_types::ResourceNode>& resources,
+                                const std::vector<games_types::ShopUnit>& shops,
+                                int skippedEntityId)
+    {
+        for (const auto& structure : structures)
+        {
+            if (structure.entity_id == skippedEntityId)
+            {
+                continue;
+            }
+            blockCellForEntity(grid, structure.entity_id, structure.x, structure.y);
+        }
+
+        for (const auto& resource : resources)
+        {
+            blockCellForEntity(grid, resource.entityId, resource.x, resource.y);
+        }
+
+        for (const auto& shop : shops)
+        {
+            blockCellForEntity(grid, shop.entityId, shop.x, shop.y);
+        }
     }
 }
 
@@ -282,6 +339,89 @@ void GameEngine::advanceCollectors(int deltaMs)
     }
 
     session->setCollectorsSnapshot(collectors);
+}
+
+void GameEngine::advanceMovement(int deltaMs)
+{
+    if (!session || deltaMs <= 0)
+    {
+        return;
+    }
+
+    std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
+    if (units.empty())
+    {
+        return;
+    }
+
+    const std::vector<games_types::UnitPosition> structures = session->getStructuresSnapshot();
+    const std::vector<games_types::ResourceNode> resources = session->getResourcesSnapshot();
+    const std::vector<games_types::ShopUnit> shops = session->getShopsSnapshot();
+
+    SpatialGrid movementGrid(kGridCols, kGridRows);
+    populateStaticPathGrid(movementGrid, structures, resources, shops, -1);
+
+    std::sort(units.begin(), units.end(), [](const games_types::UnitPosition& lhs, const games_types::UnitPosition& rhs) {
+        return lhs.entity_id < rhs.entity_id;
+    });
+
+    for (const auto& unit : units)
+    {
+        movementGrid.placeEntity(unit.entity_id, worldToCell(unit.x, unit.y));
+    }
+
+    for (const auto& unit : units)
+    {
+        auto routeIt = movementRoutes.find(unit.entity_id);
+        if (routeIt == movementRoutes.end())
+        {
+            continue;
+        }
+
+        auto& route = routeIt->second;
+        const games_types::CellCoord currentCell = worldToCell(unit.x, unit.y);
+        while (!route.empty() && route.front() == currentCell)
+        {
+            route.pop_front();
+        }
+
+        if (route.empty())
+        {
+            movementRoutes.erase(routeIt);
+            continue;
+        }
+
+        movementGrid.tryReserveMove(unit.entity_id, route.front());
+    }
+
+    const auto committedMoves = movementGrid.commitReservedMoves();
+    if (committedMoves.empty())
+    {
+        return;
+    }
+
+    for (const auto& move : committedMoves)
+    {
+        const auto [worldX, worldY] = cellCenterToWorld(move.to);
+        session->upsertUnitPosition(move.entityId, worldX, worldY);
+
+        auto routeIt = movementRoutes.find(move.entityId);
+        if (routeIt == movementRoutes.end())
+        {
+            continue;
+        }
+
+        auto& route = routeIt->second;
+        if (!route.empty() && route.front() == move.to)
+        {
+            route.pop_front();
+        }
+
+        if (route.empty())
+        {
+            movementRoutes.erase(routeIt);
+        }
+    }
 }
 
 std::vector<games_types::EconomyTransaction> GameEngine::drainEconomyTransactions()
@@ -486,22 +626,36 @@ void GameEngine::setNewRoute(const games_types::PlayerCommand& cmd)
         return;
     }
 
-    const std::vector<games_types::UnitPosition> route = pathFinder->buildRoute(
-        *unitIt,
-        cmd.destX,
-        cmd.destY);
+    SpatialGrid pathGrid(kGridCols, kGridRows);
 
-    if (route.empty())
+    const auto structures = session->getStructuresSnapshot();
+    const auto resources = session->getResourcesSnapshot();
+    const auto shops = session->getShopsSnapshot();
+    populateStaticPathGrid(pathGrid, structures, resources, shops, unitIt->entity_id);
+
+    const games_types::CellCoord startCell = worldToCell(unitIt->x, unitIt->y);
+    const games_types::CellCoord destinationCell = cmd.destCell;
+
+    pathGrid.setStaticBlocked(startCell, false);
+
+    const std::vector<games_types::CellCoord> routeCells = pathFinder->buildRoute(
+        startCell,
+        destinationCell,
+        pathGrid);
+
+    auto& routeState = movementRoutes[unitIt->entity_id];
+    routeState.clear();
+
+    if (routeCells.empty())
     {
-        unitIt->x = cmd.destX;
-        unitIt->y = cmd.destY;
-    }
-    else
-    {
-        *unitIt = route.back();
+        if (startCell == destinationCell)
+        {
+            movementRoutes.erase(unitIt->entity_id);
+        }
+        return;
     }
 
-    session->setUnitsSnapshot(units);
+    routeState = std::deque<games_types::CellCoord>(routeCells.begin(), routeCells.end());
 }
 
 void GameEngine::processAttackCommand(const games_types::PlayerCommand& cmd)

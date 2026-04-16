@@ -268,6 +268,26 @@ std::vector<games_types::CellCoord> SpatialGrid::neighbors4(const games_types::C
 	return out;
 }
 
+std::vector<games_types::CellCoord> SpatialGrid::neighbors8(const games_types::CellCoord& cell) const
+{
+	static constexpr int kDx[8] = {1, -1, 0, 0, 1, 1, -1, -1};
+	static constexpr int kDy[8] = {0, 0, 1, -1, 1, -1, 1, -1};
+
+	std::vector<games_types::CellCoord> out;
+	out.reserve(8);
+
+	for (int i = 0; i < 8; ++i)
+	{
+		const games_types::CellCoord next{cell.x + kDx[i], cell.y + kDy[i]};
+		if (inBounds(next))
+		{
+			out.push_back(next);
+		}
+	}
+
+	return out;
+}
+
 int SpatialGrid::toIndex(const games_types::CellCoord& cell) const
 {
 	return (cell.y * cols) + cell.x;

@@ -1,9 +1,12 @@
 #include <cassert>
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <memory>
 
 #include "GameEngine.h"
 #include "GameSession.h"
+#include "PathFinder.h"
 #include "spatialGrid.h"
 
 namespace
@@ -130,8 +133,8 @@ namespace
     void testSpatialGridRejectsOccupiedCell()
     {
         SpatialGrid grid(100, 100);
-        assert(grid.placeEntity(1000, SpatialGrid::CellCoord{5, 5}));
-        assert(grid.placeEntity(1001, SpatialGrid::CellCoord{5, 6}));
+        assert(grid.placeEntity(1000, games_types::CellCoord{5, 5}));
+        assert(grid.placeEntity(1001, games_types::CellCoord{5, 6}));
 
         const auto moveResult = grid.tryReserveMove(1001, games_types::CellCoord{5, 5});
         assert(moveResult.status == games_types::MoveStatus::Occupied);
@@ -151,6 +154,122 @@ namespace
         assert(second.status == games_types::MoveStatus::ReservedByOther);
         assert(second.blockerEntityId == 2000);
     }
+
+    void testAStarFindsShortestPathWithDiagonalMoves()
+    {
+        SpatialGrid grid(10, 10);
+        PathFinder pathFinder;
+
+        const games_types::CellCoord start{1, 1};
+        const games_types::CellCoord destination{4, 3};
+        const auto route = pathFinder.buildRoute(start, destination, grid);
+
+        // With 8-direction moves, shortest path from (1,1) to (4,3) is 3 steps.
+        assert(route.size() == 3);
+        assert(!route.empty());
+        assert(route.back() == destination);
+    }
+
+    void testAStarAvoidsStaticBlockedCells()
+    {
+        SpatialGrid grid(8, 8);
+        PathFinder pathFinder;
+
+        // Vertical wall at x=2 except a gap at y=4.
+        for (int y = 0; y < 8; ++y)
+        {
+            if (y == 4)
+            {
+                continue;
+            }
+            grid.setStaticBlocked(games_types::CellCoord{2, y}, true);
+        }
+
+        const games_types::CellCoord start{0, 3};
+        const games_types::CellCoord destination{5, 3};
+        const auto route = pathFinder.buildRoute(start, destination, grid);
+
+        assert(!route.empty());
+        assert(route.back() == destination);
+
+        for (const auto& step : route)
+        {
+            assert(!grid.isStaticBlocked(step));
+        }
+    }
+
+    void testMoveOrderQueuesCellRoute()
+    {
+        auto session = std::make_shared<GameSession>(1, 2, 7);
+        GameEngine engine(session);
+
+        session->upsertUnitPosition(1000, 2500.0f, 2500.0f);
+        session->registerSpawnedUnit(1000, 1, games_types::EntityType::Attacker);
+
+        games_types::PlayerCommand cmd{};
+        cmd.type = games_types::CommandType::MoveUnit;
+        cmd.playerId = 1;
+        cmd.unitId = 1000;
+        cmd.destCell = games_types::CellCoord{52, 50};
+
+        engine.tcpCommandEnqueue(cmd);
+        engine.commandQueueProcess();
+        engine.advanceMovement(16);
+
+        const auto units = session->getUnitsSnapshot();
+        const auto unitIt = std::find_if(
+            units.begin(),
+            units.end(),
+            [](const games_types::UnitPosition& unit) {
+                return unit.entity_id == 1000;
+            });
+
+        assert(unitIt != units.end());
+        assert(std::fabs(unitIt->x - 2575.0f) < 0.01f);
+        assert(std::fabs(unitIt->y - 2525.0f) < 0.01f);
+    }
+
+    void testMoveOrderAdvancesOneCellPerTick()
+    {
+        auto session = std::make_shared<GameSession>(1, 2, 8);
+        GameEngine engine(session);
+
+        session->upsertUnitPosition(1000, 2500.0f, 2500.0f);
+        session->registerSpawnedUnit(1000, 1, games_types::EntityType::Attacker);
+
+        games_types::PlayerCommand cmd{};
+        cmd.type = games_types::CommandType::MoveUnit;
+        cmd.playerId = 1;
+        cmd.unitId = 1000;
+        cmd.destCell = games_types::CellCoord{53, 50};
+
+        engine.tcpCommandEnqueue(cmd);
+        engine.commandQueueProcess();
+
+        engine.advanceMovement(16);
+        auto units = session->getUnitsSnapshot();
+        auto unitIt = std::find_if(
+            units.begin(),
+            units.end(),
+            [](const games_types::UnitPosition& unit) {
+                return unit.entity_id == 1000;
+            });
+        assert(unitIt != units.end());
+        assert(std::fabs(unitIt->x - 2575.0f) < 0.01f);
+        assert(std::fabs(unitIt->y - 2525.0f) < 0.01f);
+
+        engine.advanceMovement(16);
+        units = session->getUnitsSnapshot();
+        unitIt = std::find_if(
+            units.begin(),
+            units.end(),
+            [](const games_types::UnitPosition& unit) {
+                return unit.entity_id == 1000;
+            });
+        assert(unitIt != units.end());
+        assert(std::fabs(unitIt->x - 2625.0f) < 0.01f);
+        assert(std::fabs(unitIt->y - 2525.0f) < 0.01f);
+    }
 }
 
 int main()
@@ -164,6 +283,10 @@ int main()
     testSpatialGridPlaceAndMove();
     testSpatialGridRejectsOccupiedCell();
     testSpatialGridReservationConflict();
+    testAStarFindsShortestPathWithDiagonalMoves();
+    testAStarAvoidsStaticBlockedCells();
+    testMoveOrderQueuesCellRoute();
+    testMoveOrderAdvancesOneCellPerTick();
 
     std::cout << "server_logic_tests: all checks passed\n";
     return 0;

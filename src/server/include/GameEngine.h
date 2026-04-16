@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <mutex>
+#include <deque>
 #include <queue>
 #include <string>
 #include <unordered_map>
@@ -42,6 +43,7 @@ class GameEngine
 
 		void tcpCommandEnqueue(const games_types::PlayerCommand& cmd);
 		void commandQueueProcess();
+		void advanceMovement(int deltaMs);
 		void advanceCollectors(int deltaMs);
 		void advanceCombat(int deltaMs);
 		std::vector<games_types::EconomyTransaction> drainEconomyTransactions();
@@ -59,6 +61,7 @@ class GameEngine
 		std::shared_ptr<GameSession> session;
 		std::shared_ptr<PathFinder> pathFinder;
 		std::queue<games_types::PlayerCommand> commandQueue;
+		std::unordered_map<int, std::deque<games_types::CellCoord>> movementRoutes;
 		std::unordered_map<int, int> attackerCooldownRemainingMs;
 		std::vector<games_types::CombatEvent> pendingCombatEvents;
 		std::vector<AttackRequestResult> pendingAttackResults;

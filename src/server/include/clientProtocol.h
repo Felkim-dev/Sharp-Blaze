@@ -25,8 +25,7 @@ namespace client_protocol
     struct MoveUnitData
     {
         int unitId = 0;
-        float destX = 0.0f;
-        float destY = 0.0f;
+        games_types::CellCoord destination{};
     };
 
     struct BuyUnitData

@@ -32,6 +32,7 @@ public:
     void clearReservations();
 
     std::vector<games_types::CellCoord> neighbors4(const games_types::CellCoord& cell) const;
+    std::vector<games_types::CellCoord> neighbors8(const games_types::CellCoord& cell) const;
 
 private:
     int cols;
