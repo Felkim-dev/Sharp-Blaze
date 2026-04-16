@@ -76,13 +76,13 @@ class GameScreen:
         self.winner_box = TextBox((240,180),(800,200),(0,159, 12),f"SHARP BLAZE\nVICTORY!",(255,255,255),72)
         self.game_over_button = Button((465,420),(350,70),(112,112,112),"RETURN TO MENU", (255,255,255),36)
 
-    def load_initial_state(self, gold, units, structures, player_ID):
+    def load_initial_state(self, gold, units, structures, player_ID, obstacles):
 
         self.player_gold = gold
         self.infobox_gold.update_text(str(self.player_gold)) 
 
         # TODO:ADD UNIT UI
-        self.world.build_initial_state(units,structures,player_ID)
+        self.world.build_initial_state(units,structures,player_ID,obstacles)
 
     def trigger_game_over(self, winner_name):
         self.is_game_over = True

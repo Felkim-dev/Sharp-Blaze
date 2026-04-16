@@ -23,6 +23,10 @@ class GameWorld:
 
         self.projectiles = []
 
+        self.obstacles = []
+        self.WHITE = (255, 255, 255)
+        self.BORDER = (100, 100, 100)
+
     def world_to_grid(self, world_x, world_y):
         """Convert the pixels to grid indexes."""
         grid_x = int(world_x // self.cell_size)
@@ -103,7 +107,7 @@ class GameWorld:
 
         return -1  # Fallback for invalid IDs        
 
-    def build_initial_state(self,units, structures,local_player_ID):
+    def build_initial_state(self,units, structures,local_player_ID,obstacles):
 
         self.local_player_id = local_player_ID
 
@@ -128,6 +132,17 @@ class GameWorld:
             # Unity Recolorize
             if 0 <= entity_id2 <= 999 or 5000 <= entity_id2 <= 5999:
                 self.entity_team_changer(entity_id2)
+
+        for grid_x, grid_y in obstacles:
+            # Calculamos la esquina superior izquierda (Top-Left) para Pygame
+            top_left_x = grid_x * self.cell_size  # ej: 5 * 50 = 250
+            top_left_y = grid_y * self.cell_size  # ej: 10 * 50 = 500
+
+            # Creamos un rectángulo exacto de 50x50
+            obstacle_rect = pygame.Rect(
+                top_left_x, top_left_y, self.cell_size, self.cell_size
+            )
+            self.obstacles.append(obstacle_rect)
 
     def handle_box_selection(self, start_x, start_y, end_x, end_y):
         """
@@ -256,6 +271,14 @@ class GameWorld:
             self.entity_team_changer(ID)
 
     def draw(self,screen,camera):
+        
+        for obs_rect in self.obstacles:
+            
+            screen_rect = obs_rect.move(-camera.x, -camera.y)
+
+            pygame.draw.rect(screen, self.WHITE, screen_rect)
+
+            pygame.draw.rect(screen, self.BORDER, screen_rect, 1)
 
         for unit in self.units.values():
             unit.draw(screen,camera.x,camera.y)
