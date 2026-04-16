@@ -157,12 +157,6 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
             {
                 runningFlag->store(false);
             }
-            
-            // Clear recently destroyed units at end of tick to allow UDP to sync
-            if (engine && engine->getSession())
-            {
-                engine->getSession()->clearRecentlyDestroyedUnits();
-            }
         }
 
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(

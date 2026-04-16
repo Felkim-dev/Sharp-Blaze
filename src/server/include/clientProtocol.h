@@ -108,7 +108,7 @@ namespace client_protocol
         int entityId,
         int ownerPlayerId,
         int attackerPlayerId);
-    std::string BuildGameOverResponse(int sessionId, int winnerPlayerId);
+    std::string BuildGameOverResponse(int sessionId, int playerId);
     bool MessageFramer(
     std::string&              carryBuffer, 
     const char*               chunk, 
