@@ -270,6 +270,60 @@ namespace
         assert(std::fabs(unitIt->x - 2625.0f) < 0.01f);
         assert(std::fabs(unitIt->y - 2525.0f) < 0.01f);
     }
+
+    void testFormationSpreadAroundSharedTarget()
+    {
+        auto session = std::make_shared<GameSession>(1, 2, 9);
+        GameEngine engine(session);
+
+        session->upsertUnitPosition(1000, 2000.0f, 2500.0f);
+        session->upsertUnitPosition(1001, 3000.0f, 2500.0f);
+        session->registerSpawnedUnit(1000, 1, games_types::EntityType::Attacker);
+        session->registerSpawnedUnit(1001, 1, games_types::EntityType::Attacker);
+
+        games_types::PlayerCommand first{};
+        first.type = games_types::CommandType::MoveUnit;
+        first.playerId = 1;
+        first.unitId = 1000;
+        first.destCell = games_types::CellCoord{50, 50};
+
+        games_types::PlayerCommand second{};
+        second.type = games_types::CommandType::MoveUnit;
+        second.playerId = 1;
+        second.unitId = 1001;
+        second.destCell = games_types::CellCoord{50, 50};
+
+        engine.tcpCommandEnqueue(first);
+        engine.tcpCommandEnqueue(second);
+        engine.commandQueueProcess();
+
+        for (int i = 0; i < 80; ++i)
+        {
+            engine.advanceMovement(16);
+        }
+
+        games_types::UnitPosition firstPos{};
+        games_types::UnitPosition secondPos{};
+        assert(session->getEntityPosition(1000, firstPos));
+        assert(session->getEntityPosition(1001, secondPos));
+
+        const games_types::CellCoord firstCell{
+            static_cast<int>(firstPos.x / 50.0f),
+            static_cast<int>(firstPos.y / 50.0f)};
+        const games_types::CellCoord secondCell{
+            static_cast<int>(secondPos.x / 50.0f),
+            static_cast<int>(secondPos.y / 50.0f)};
+
+        assert(!(firstCell == secondCell));
+
+        const int firstDistFromTarget =
+            std::max(std::abs(firstCell.x - 50), std::abs(firstCell.y - 50));
+        const int secondDistFromTarget =
+            std::max(std::abs(secondCell.x - 50), std::abs(secondCell.y - 50));
+
+        assert(firstDistFromTarget >= 1 && firstDistFromTarget <= 2);
+        assert(secondDistFromTarget >= 1 && secondDistFromTarget <= 2);
+    }
 }
 
 int main()
@@ -287,6 +341,7 @@ int main()
     testAStarAvoidsStaticBlockedCells();
     testMoveOrderQueuesCellRoute();
     testMoveOrderAdvancesOneCellPerTick();
+    testFormationSpreadAroundSharedTarget();
 
     std::cout << "server_logic_tests: all checks passed\n";
     return 0;

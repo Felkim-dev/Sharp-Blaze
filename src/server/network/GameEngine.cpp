@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <deque>
 #include <cmath>
+#include <map>
 #include <limits>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -174,6 +176,45 @@ namespace
             blockCellForEntity(grid, shop.entityId, shop.x, shop.y);
         }
     }
+
+    std::vector<games_types::CellCoord> buildRingCells(const games_types::CellCoord& center, int radius)
+    {
+        std::vector<games_types::CellCoord> ring;
+        if (radius <= 0)
+        {
+            return ring;
+        }
+
+        for (int x = center.x - radius; x <= center.x + radius; ++x)
+        {
+            ring.push_back(games_types::CellCoord{x, center.y - radius});
+            ring.push_back(games_types::CellCoord{x, center.y + radius});
+        }
+
+        for (int y = center.y - radius + 1; y <= center.y + radius - 1; ++y)
+        {
+            ring.push_back(games_types::CellCoord{center.x - radius, y});
+            ring.push_back(games_types::CellCoord{center.x + radius, y});
+        }
+
+        return ring;
+    }
+
+    bool cellLess(const games_types::CellCoord& lhs, const games_types::CellCoord& rhs)
+    {
+        if (lhs.x != rhs.x)
+        {
+            return lhs.x < rhs.x;
+        }
+        return lhs.y < rhs.y;
+    }
+
+    std::int64_t makeFormationGroupKey(int playerId, const games_types::CellCoord& destination)
+    {
+        return (static_cast<std::int64_t>(playerId) << 20) |
+               (static_cast<std::int64_t>(destination.x) << 10) |
+               static_cast<std::int64_t>(destination.y);
+    }
 }
 
 GameEngine::GameEngine(std::shared_ptr<GameSession> sessionRef,
@@ -201,6 +242,8 @@ void GameEngine::commandQueueProcess()
         std::swap(pendingCommands, commandQueue);
     }
 
+    std::vector<games_types::PlayerCommand> pendingMoveCommands;
+
     while (!pendingCommands.empty())
     {
         const games_types::PlayerCommand cmd = pendingCommands.front();
@@ -212,8 +255,7 @@ void GameEngine::commandQueueProcess()
             {
                 continue;
             }
-
-            setNewRoute(cmd);
+            pendingMoveCommands.push_back(cmd);
             continue;
         }
 
@@ -221,6 +263,148 @@ void GameEngine::commandQueueProcess()
         {
             processAttackCommand(cmd);
             continue;
+        }
+    }
+
+    processMoveCommandsWithFormation(pendingMoveCommands);
+}
+
+void GameEngine::processMoveCommandsWithFormation(const std::vector<games_types::PlayerCommand>& moveCommands)
+{
+    if (!session || moveCommands.empty())
+    {
+        return;
+    }
+
+    std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
+    std::vector<games_types::UnitPosition> structures = session->getStructuresSnapshot();
+    std::vector<games_types::ResourceNode> resources = session->getResourcesSnapshot();
+    std::vector<games_types::ShopUnit> shops = session->getShopsSnapshot();
+
+    std::unordered_map<int, games_types::CellCoord> currentCellByUnit;
+    currentCellByUnit.reserve(units.size());
+    for (const auto& unit : units)
+    {
+        currentCellByUnit[unit.entity_id] = worldToCell(unit.x, unit.y);
+    }
+
+    std::map<std::int64_t, std::vector<games_types::PlayerCommand>> groups;
+    for (const auto& cmd : moveCommands)
+    {
+        groups[makeFormationGroupKey(cmd.playerId, cmd.destCell)].push_back(cmd);
+    }
+
+    for (auto& groupEntry : groups)
+    {
+        auto& groupCommands = groupEntry.second;
+        if (groupCommands.empty())
+        {
+            continue;
+        }
+
+        std::sort(groupCommands.begin(), groupCommands.end(), [](const games_types::PlayerCommand& lhs,
+                                                                 const games_types::PlayerCommand& rhs) {
+            return lhs.unitId < rhs.unitId;
+        });
+
+        if (groupCommands.size() == 1)
+        {
+            formationByUnit.erase(groupCommands.front().unitId);
+            setNewRoute(groupCommands.front());
+            continue;
+        }
+
+        const games_types::CellCoord groupTarget = groupCommands.front().destCell;
+        SpatialGrid slotGrid(kGridCols, kGridRows);
+        populateStaticPathGrid(slotGrid, structures, resources, shops, -1);
+
+        std::vector<games_types::CellCoord> slotCandidates;
+        slotCandidates.reserve(groupCommands.size() * 2);
+
+        for (int radius = 1; radius <= kGridCols && slotCandidates.size() < groupCommands.size(); ++radius)
+        {
+            std::vector<games_types::CellCoord> ring = buildRingCells(groupTarget, radius);
+            std::sort(ring.begin(), ring.end(), cellLess);
+            ring.erase(std::unique(ring.begin(), ring.end(), [](const games_types::CellCoord& lhs,
+                                                               const games_types::CellCoord& rhs) {
+                          return lhs.x == rhs.x && lhs.y == rhs.y;
+                      }),
+                      ring.end());
+
+            for (const auto& candidate : ring)
+            {
+                if (!slotGrid.inBounds(candidate) || slotGrid.isStaticBlocked(candidate))
+                {
+                    continue;
+                }
+                slotCandidates.push_back(candidate);
+                if (slotCandidates.size() >= groupCommands.size())
+                {
+                    break;
+                }
+            }
+        }
+
+        if (slotCandidates.empty())
+        {
+            for (const auto& cmd : groupCommands)
+            {
+                formationByUnit.erase(cmd.unitId);
+                setNewRoute(cmd);
+            }
+            continue;
+        }
+
+        std::set<std::size_t> takenSlots;
+        ++formationEpoch;
+        for (std::size_t i = 0; i < groupCommands.size(); ++i)
+        {
+            const auto& cmd = groupCommands[i];
+            const auto unitCellIt = currentCellByUnit.find(cmd.unitId);
+            if (unitCellIt == currentCellByUnit.end())
+            {
+                continue;
+            }
+
+            const games_types::CellCoord unitCell = unitCellIt->second;
+            int bestScore = std::numeric_limits<int>::max();
+            std::size_t bestSlotIndex = 0;
+            bool foundSlot = false;
+
+            for (std::size_t slotIdx = 0; slotIdx < slotCandidates.size(); ++slotIdx)
+            {
+                if (takenSlots.count(slotIdx) > 0)
+                {
+                    continue;
+                }
+
+                const auto& slot = slotCandidates[slotIdx];
+                const int manhattan = std::abs(slot.x - unitCell.x) + std::abs(slot.y - unitCell.y);
+                if (manhattan < bestScore)
+                {
+                    bestScore = manhattan;
+                    bestSlotIndex = slotIdx;
+                    foundSlot = true;
+                }
+            }
+
+            games_types::CellCoord assignedSlot = groupTarget;
+            int assignedSlotIndex = -1;
+            if (foundSlot)
+            {
+                assignedSlot = slotCandidates[bestSlotIndex];
+                assignedSlotIndex = static_cast<int>(bestSlotIndex);
+                takenSlots.insert(bestSlotIndex);
+            }
+
+            formationByUnit[cmd.unitId] = FormationAssignment{
+                groupTarget,
+                assignedSlot,
+                static_cast<int>(groupCommands.size()),
+                assignedSlotIndex,
+                formationEpoch};
+
+            setNewRouteToCell(cmd, assignedSlot);
         }
     }
 }
@@ -609,6 +793,11 @@ bool GameEngine::propertyValidation(int playerId, int unitId) const
 
 void GameEngine::setNewRoute(const games_types::PlayerCommand& cmd)
 {
+    setNewRouteToCell(cmd, cmd.destCell);
+}
+
+void GameEngine::setNewRouteToCell(const games_types::PlayerCommand& cmd, const games_types::CellCoord& destinationCell)
+{
     if (!session)
     {
         return;
@@ -634,7 +823,6 @@ void GameEngine::setNewRoute(const games_types::PlayerCommand& cmd)
     populateStaticPathGrid(pathGrid, structures, resources, shops, unitIt->entity_id);
 
     const games_types::CellCoord startCell = worldToCell(unitIt->x, unitIt->y);
-    const games_types::CellCoord destinationCell = cmd.destCell;
 
     pathGrid.setStaticBlocked(startCell, false);
 

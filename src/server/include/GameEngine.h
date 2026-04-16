@@ -54,14 +54,27 @@ class GameEngine
 		PurchaseResult processUnitPurchase(int playerId, games_types::EntityType unitType, int quantity);
 
 	private:
+		struct FormationAssignment
+		{
+			games_types::CellCoord groupTarget{};
+			games_types::CellCoord slotTarget{};
+			int groupSize = 0;
+			int slotIndex = -1;
+			std::uint64_t epoch = 0;
+		};
+
 		bool propertyValidation(int playerId, int unitId) const;
 		void setNewRoute(const games_types::PlayerCommand& cmd);
+		void setNewRouteToCell(const games_types::PlayerCommand& cmd, const games_types::CellCoord& destinationCell);
+		void processMoveCommandsWithFormation(const std::vector<games_types::PlayerCommand>& moveCommands);
 		void processAttackCommand(const games_types::PlayerCommand& cmd);
 
 		std::shared_ptr<GameSession> session;
 		std::shared_ptr<PathFinder> pathFinder;
 		std::queue<games_types::PlayerCommand> commandQueue;
 		std::unordered_map<int, std::deque<games_types::CellCoord>> movementRoutes;
+		std::unordered_map<int, FormationAssignment> formationByUnit;
+		std::uint64_t formationEpoch = 0;
 		std::unordered_map<int, int> attackerCooldownRemainingMs;
 		std::vector<games_types::CombatEvent> pendingCombatEvents;
 		std::vector<AttackRequestResult> pendingAttackResults;
