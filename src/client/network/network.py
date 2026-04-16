@@ -97,16 +97,15 @@ class NetworkManager:
 
     def get_latest_positions(self):
         """Pygame llama a esto para recuperar las colas y vaciar el buzón."""
-        # 1. Hacemos una copia rápida del buzón actual
-        buzon_actual = self.latest_positions.copy()
-
-        # 2. Vaciamos el buzón del NetworkManager.
-        # Es VITAL vaciarlo, de lo contrario en el siguiente frame Pygame
-        # volverá a leer los mismos puntos y las unidades nunca se detendrán.
-        self.latest_positions.clear()
-
-        # 3. Devolvemos la copia a Pygame
+        buzon_actual = self.latest_positions
+        self.latest_positions = {}
         return buzon_actual
+
+    def clear_entity_buffer(self, entity_id):
+        """Elimina paquetes UDP retrasados de una ruta cancelada."""
+        if entity_id in self.latest_positions:
+            # Vaciamos la lista de puntos de esa unidad
+            self.latest_positions[entity_id] = []
 
     # ------------------------------- TCP methods ------------------------------------------------------
     def connect(self, datos_iniciales):
