@@ -21,6 +21,12 @@ class GameWorld:
         self.grid_cols = 100
         self.grid_rows = 100
 
+        self.projectiles = []
+
+        self.obstacles = []
+        self.WHITE = (255, 255, 255)
+        self.BORDER = (100, 100, 100)
+
     def world_to_grid(self, world_x, world_y):
         """Convert the pixels to grid indexes."""
         grid_x = int(world_x // self.cell_size)
@@ -101,7 +107,7 @@ class GameWorld:
 
         return -1  # Fallback for invalid IDs        
 
-    def build_initial_state(self,units, structures,local_player_ID):
+    def build_initial_state(self,units, structures,local_player_ID,obstacles):
 
         self.local_player_id = local_player_ID
 
@@ -126,6 +132,17 @@ class GameWorld:
             # Unity Recolorize
             if 0 <= entity_id2 <= 999 or 5000 <= entity_id2 <= 5999:
                 self.entity_team_changer(entity_id2)
+
+        for grid_x, grid_y in obstacles:
+            # Calculamos la esquina superior izquierda (Top-Left) para Pygame
+            top_left_x = grid_x * self.cell_size  # ej: 5 * 50 = 250
+            top_left_y = grid_y * self.cell_size  # ej: 10 * 50 = 500
+
+            # Creamos un rectángulo exacto de 50x50
+            obstacle_rect = pygame.Rect(
+                top_left_x, top_left_y, self.cell_size, self.cell_size
+            )
+            self.obstacles.append(obstacle_rect)
 
     def handle_box_selection(self, start_x, start_y, end_x, end_y):
         """
@@ -205,17 +222,25 @@ class GameWorld:
             clicked_enemy_entity.is_targeted = True
 
             for unit_id in selected_unit_ids:
-                command_payload = JSON_Manager.attack(int(clicked_enemy_id),unit_id)
-                self.network.send_json(command_payload)
+                unit = self.units.get(unit_id)
+                if unit:
+                    unit.path_queue.clear()
+
+            command_payload = JSON_Manager.attack(int(clicked_enemy_id),unit_id)
+            self.network.send_json(command_payload)
 
         else:
             # We clicked empty ground (or our own unit/neutral structure).
             # Treat it as a standard move command.
 
             target_grid_x, target_grid_y = self.world_to_grid(target_world_x, target_world_y)
-            
+
             for unit_id in selected_unit_ids:
 
+                unit = self.units.get(unit_id)
+                if unit:
+                    unit.path_queue.clear()
+                    
                 command_payload = JSON_Manager.get_moveorder(int(unit_id), int(target_grid_x), int(target_grid_y))
                 self.network.send_json(command_payload)
 
@@ -223,22 +248,36 @@ class GameWorld:
 
         network_data = self.network.get_latest_positions()
 
-        for entity_id,(net_x, net_y) in network_data.items():
+        for entity_id,point_list in network_data.items():
 
             entity_id2 = int(entity_id)
 
             if entity_id2 in self.units:
-                self.units[entity_id2].update_target(net_x,net_y)
+                for net_x, net_y in point_list:
+                    # Agregamos cada punto a la cola de Waypoints de la unidad
+                    self.units[entity_id2].add_target_position(net_x, net_y)
 
         for unit in self.units.values():
             unit.update_physics()
 
+        for bullet in self.projectiles[:]:
+            bullet.update()
+
+            if bullet.is_dead:
+                self.projectiles.remove(bullet)
+
+    def get_entity(self,id):
+        if 0 <= id <= 999 or 5000 <= id <= 5999:
+            return self.structures[id]
+        elif 1000 <= id <= 4999 or 6000 <= id <= 9999:
+            return self.units[id]
+
     def detect_death_units(self):
         for unit in self.units.values():
-            if unit.hp < 0:
+            if unit.hp <= 0:
                 print(f"BORRAR UNIDAD {unit.id}")
                 return unit.id
-            
+
     def spawn_unit(self, ID, x, y):
         if ID not in self.units:
             self.units[ID] = self.return_entities_object(ID, x, y)
@@ -246,11 +285,22 @@ class GameWorld:
 
     def draw(self,screen,camera):
 
+        for obs_rect in self.obstacles:
+
+            screen_rect = obs_rect.move(-camera.x, -camera.y)
+
+            pygame.draw.rect(screen, self.WHITE, screen_rect)
+
+            pygame.draw.rect(screen, self.BORDER, screen_rect, 1)
+
         for unit in self.units.values():
             unit.draw(screen,camera.x,camera.y)
 
         for structure in self.structures.values():
             structure.draw(screen, camera.x, camera.y)
+
+        for bullet in self.projectiles:
+            bullet.draw(screen, camera)
 
     def handle_left_click(self, world_x, world_y):
         """Processes a left click in world coordinates to select units."""

@@ -205,6 +205,9 @@ class TextBox:
         # Rectangle
         self.textbox_rectangle = pygame.Rect(Position, (RectangleDimension))
 
+    def update_text(self,text):
+        self.text = text
+        
     def draw(self, screen):
 
         # Text render

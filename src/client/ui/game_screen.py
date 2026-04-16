@@ -6,6 +6,7 @@ from engine.camera import Camera
 from ui.minimap import Minimap
 from ui.telemetry import TelemetryPanel
 from ui.component import InfoBox, TextBox, Button
+from entities.projectile import RectangularProjectile
 from ui.shop import Shop
 
 from utils.json import JSON_Manager
@@ -75,20 +76,24 @@ class GameScreen:
         self.winner_box = TextBox((240,180),(800,200),(0,159, 12),f"SHARP BLAZE\nVICTORY!",(255,255,255),72)
         self.game_over_button = Button((465,420),(350,70),(112,112,112),"RETURN TO MENU", (255,255,255),36)
 
-    def load_initial_state(self, gold, units, structures, player_ID):
+    def load_initial_state(self, gold, units, structures, player_ID, obstacles, local_ID, enemy_ID):
 
         self.player_gold = gold
         self.infobox_gold.update_text(str(self.player_gold)) 
 
+        self.local_ID = local_ID
+        self.enemy_ID = enemy_ID
+        self.player_Id = player_ID
+        
         # TODO:ADD UNIT UI
-        self.world.build_initial_state(units,structures,player_ID)
+        self.world.build_initial_state(units,structures,player_ID,obstacles)
 
     def trigger_game_over(self, winner_name):
         self.is_game_over = True
         self.winner_player_id = winner_name
 
         # ¡Aquí es donde inyectas el nombre real para que se actualice en pantalla!
-        nuevo_texto = f"SHARP BLAZE\n{self.winner_player_id} VICTORY!"
+        nuevo_texto = f"SHARP BLAZE {self.winner_player_id} VICTORY!"
         self.winner_box.update_text(nuevo_texto)
 
     def handle_events(self, events, keys):
@@ -103,6 +108,9 @@ class GameScreen:
                     # Tu lógica exacta de detección:
                     if self.game_over_button.button_rectangle.collidepoint(mouse_pos):
                         print("[GAME SCREEN] Return to Menu clicked!")
+                        self.screen_manager.network.disconnect()
+                        self.is_game_over = False
+                        self.winner_player_id = None
                         self.screen_manager.change_screen("MAIN")
                 continue
 
@@ -245,19 +253,48 @@ class GameScreen:
 
                     # INFORMACION SOBRE EL OBJETIVO
                     self.target_entity_id = data["payload"]["target_entity_id"]
+                    self.attacker_entity_id = data["payload"]["attacker_entity_id"]
                     self.target_current_hp = data["payload"]["current_hp"]
 
                     # Informacion sobre el ATACANTE
                     self.attacker_entity_id = data["payload"]["attacker_entity_id"]
 
-                    self.world.units[self.target_entity_id].reduce_health(self.target_current_hp)
+                    attacker = self.world.get_entity(self.attacker_entity_id)
+                    target = self.world.get_entity(self.target_entity_id)
+
+                    new_bullet = RectangularProjectile(
+                        start_x=attacker.x,
+                        start_y=attacker.y,
+                        target_entity=target,
+                        hp=self.target_current_hp, 
+                    )
+
+                    self.world.projectiles.append(new_bullet)
+
+                    if 1000 <= self.target_entity_id <= 4999 or 6000 <= self.target_entity_id <= 9999:
+                        self.world.units[self.target_entity_id].reduce_health(self.target_current_hp)
+
+                    elif 0 <= self.target_entity_id <= 999 or 5000 <= self.target_entity_id <= 5999:
+                        self.world.structures[self.target_entity_id].reduce_health(self.target_current_hp)
 
                 elif data.get("type") == "GAME_OVER":
                     self.winner_player_id = data["payload"]["winner_player_id"]
-                    self.trigger_game_over(self.winner_player_id)
-                
-                elif data.get("type") == "ENTITY_DESTROY":
-                    self.handle_entity_death(self.world.detect_death_units())
+                    
+                    text = ""
+                    
+                    if self.player_Id == self.winner_player_id:
+                        text = self.local_ID
+                    else:
+                        text = self.enemy_ID
+                        
+                    self.trigger_game_over(text)
+
+                elif data.get("type") == "ENTITY_DESTROYED":
+
+                    id = self.world.detect_death_units()
+
+                    self.handle_entity_death(id)
+                    self.screen_manager.network.latest_positions.pop(id,None)
 
         else:
             # DEBUG MODE
@@ -352,3 +389,7 @@ class GameScreen:
             alpha_surface = pygame.Surface((width, height), pygame.SRCALPHA)
             alpha_surface.fill((50, 220, 50, 40))  # Green with low opacity
             self.screen.blit(alpha_surface, (left, top))
+
+        if self.is_game_over:
+            self.winner_box.draw(self.screen)
+            self.game_over_button.draw(self.screen)

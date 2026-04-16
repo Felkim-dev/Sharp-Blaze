@@ -25,19 +25,41 @@ class Unit:
         self.is_targeted = False
         self.hitbox_radius = 20  # How forgiving the click detection is
 
-    def update_target(self, new_x, new_y):
-        '''Update where the unit will be move'''
-        self.target_x = new_x
-        self.target_y = new_y
+        # LERP
+        self.path_queue = []
+        self.lerp_factor = 0.2
 
     def change_color(self,color):
         self.color = color
 
     def update_physics(self):
-        """LERP"""
-        lerp_factor = 0.2
-        self.x += (self.target_x - self.x) * lerp_factor
-        self.y += (self.target_y - self.y) * lerp_factor
+        """LERP con Cola de Waypoints para evitar atravesar paredes"""
+
+        # Si tenemos lugares a donde ir en la cola...
+        if len(self.path_queue) > 0:
+
+            # 1. Miramos el destino más inmediato (el índice 0)
+            current_target_x, current_target_y = self.path_queue[0]
+
+            # 2. Calculamos a qué distancia estamos de ese punto
+            distance = math.hypot(current_target_x - self.x, current_target_y - self.y)
+
+            # 3. Si estamos a menos de 5 píxeles, consideramos que ya llegamos a esa esquina
+            if distance < 5:
+                self.path_queue.pop(0)  # Lo borramos de la lista
+            else:
+                # 4. Si aún estamos lejos, aplicamos el LERP suave de 0.2 hacia ESE punto
+                self.x += (current_target_x - self.x) * self.lerp_factor
+                self.y += (current_target_y - self.y) * self.lerp_factor
+
+    def add_target_position(self, new_x, new_y):
+        # Evitar agregar el mismo punto exacto dos veces seguidas
+        if len(self.path_queue) > 0:
+            last_x, last_y = self.path_queue[-1]
+            if last_x == new_x and last_y == new_y:
+                return  # Ignoramos el punto duplicado
+
+        self.path_queue.append((new_x, new_y))
 
     def check_click(self, world_click_x, world_click_y):
         """Returns True if the world coordinates fall inside this unit's hitbox."""
@@ -61,9 +83,10 @@ class Unit:
 
             # Draw a green circle with 2px thickness (outline only)
             pygame.draw.circle(screen, (220, 50, 50), (screen_x, screen_y), self.hitbox_radius + 2, 2)
-    
-    def reduce_health(self,current_health):
-        self.hp = current_health
+
+    def reduce_health(self, current_health):
+
+        self.hp = min(self.hp, current_health)
 
 
 class Attacker(Unit):
