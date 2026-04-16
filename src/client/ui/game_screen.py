@@ -93,10 +93,20 @@ class GameScreen:
 
     def handle_events(self, events, keys):
         """Processes one-time events like mouse clicks."""
-        if self.is_game_over:
-            return
-
         for event in events:
+            
+            if self.is_game_over:
+                # Si el juego terminó, SOLO escuchamos clics izquierdos para el botón
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    mouse_pos = event.pos
+
+                    # Tu lógica exacta de detección:
+                    if self.game_over_button.button_rectangle.collidepoint(mouse_pos):
+                        print("[GAME SCREEN] Return to Menu clicked!")
+                        self.screen_manager.change_screen("MAIN")
+                continue
+
+        
             # Detect Mouse Button Press
             if event.type == pygame.MOUSEBUTTONDOWN:
 
@@ -241,6 +251,10 @@ class GameScreen:
                     self.attacker_entity_id = data["payload"]["attacker_entity_id"]
 
                     self.world.units[self.target_entity_id].reduce_health(self.target_entity_id)
+
+                elif data.get("type") == "GAME_OVER":
+                    self.winner_player_id = data["payload"]["winner_player_id"]
+                    self.trigger_game_over(self.winner_player_id)
 
         else:
             # DEBUG MODE
