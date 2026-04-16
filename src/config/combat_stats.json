@@ -1,0 +1,42 @@
+{
+    "version": 1,
+    "combat_rules":{
+        "damage_model": "flat",
+        "min_damage"  : 1
+    },
+    "grid":{
+        "cell_size"       : 50,
+        "obstacle_padding": 2
+    },
+    "units":{
+        "attacker":{
+            "hp"      : 100,
+            "atack"  : 20,
+            "defense" : 0,
+            "range"   : 1000,
+            "speed"   : 120,
+            "cooldown_ms": 500
+        },
+        "collector":{
+            "hp"      : 100,
+            "attack"  : 0,
+            "defense" : 0,
+            "range"   : 0,
+            "speed"   : 100
+        },
+        "base":{
+            "hp"     : 1500,
+            "attack" : 0,
+            "defense": 5,
+            "range"  : 0
+        }
+    },
+    "players":{
+        "1": {
+            "faction": "p1"
+        },
+        "2":{
+            "faction": "p2"
+        }
+    }
+}

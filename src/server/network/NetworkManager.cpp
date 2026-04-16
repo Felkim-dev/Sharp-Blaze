@@ -228,6 +228,17 @@ NetworkManager::NetworkManager(int p):port(p){
             const std::string goldMessage = client_protocol::BuildResourcesResponse(newBalance);
             sendText(socket, goldMessage);
         });
+
+    sessionOrchestrator.setMatchEventCallback(
+        [this](SOCKET socket, const std::string& message)
+        {
+            if (!isRunning)
+            {
+                return;
+            }
+
+            sendText(socket, message);
+        });
 };
 
 NetworkManager::~NetworkManager(){
@@ -418,11 +429,9 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                     games_types::PlayerCommand cmd{};
                     cmd.playerId = internalPlayerId;
                     cmd.unitId = parsed.moveUnit.unitId;
-                    cmd.destX = parsed.moveUnit.destX;
-                    cmd.destY = parsed.moveUnit.destY;
+                    cmd.destCell = parsed.moveUnit.destination;
 
                     engine->tcpCommandEnqueue(cmd);
-                    engine->commandQueueProcess();
 
                     games_types::ShopAuthorizationState shopState{};
                     if (engine->reconcileShopAuthorization(internalPlayerId, shopState))
@@ -432,6 +441,41 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                             shopState);
                         sendText(clientSocket, authMsg);
                     }
+                }
+                else if (parsed.type == client_protocol::ParsedMessageType::Attack)
+                {
+                    int sessionId;
+                    int internalPlayerId = 0;
+                    {
+                        std::lock_guard<std::mutex> lock(g_matchMutex);
+                        if (!g_players.count(clientSocket))
+                        {
+                            continue;
+                        }
+
+                        const PlayerState& me = g_players[clientSocket];
+                        if (me.sessionId == 0)
+                        {
+                            continue;
+                        }
+
+                        sessionId = me.sessionId;
+                        internalPlayerId = me.internalPlayerId;
+                    }
+
+                    auto engine = sessionOrchestrator.getEngine(sessionId);
+                    if (!engine)
+                    {
+                        continue;
+                    }
+
+                    games_types::PlayerCommand cmd{};
+                    cmd.type = games_types::CommandType::AttackUnit;
+                    cmd.playerId = internalPlayerId;
+                    cmd.attack.attackerId = parsed.attack.attackerId;
+                    cmd.attack.targetId = parsed.attack.targetId;
+
+                    engine->tcpCommandEnqueue(cmd);
                 }
                 else if (parsed.type == client_protocol::ParsedMessageType::BuyUnit)
                 {

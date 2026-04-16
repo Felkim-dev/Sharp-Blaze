@@ -27,6 +27,7 @@ public:
     bool markReady(SOCKET clientSocket, const int& sessionId);
     void closeByClient(SOCKET clientSocket);
     void setResourceBalanceCallback(std::function<void(SOCKET, int)> callback);
+    void setMatchEventCallback(std::function<void(SOCKET, const std::string&)> callback);
 
     std::shared_ptr<GameSession> getSession(const int& sessionId) const;
     std::shared_ptr<GameEngine> getEngine(const int& sessionId) const;
@@ -57,7 +58,8 @@ private:
                                int p1InternalPlayerId,
                                SOCKET p2Socket,
                                int p2InternalPlayerId,
-                               std::function<void(SOCKET, int)> resourceBalanceCallback);
+                               std::function<void(SOCKET, int)> resourceBalanceCallback,
+                               std::function<void(SOCKET, const std::string&)> matchEventCallback);
 
     mutable std::mutex mtx;
     std::atomic<int> sessionCounter{1};
@@ -65,4 +67,5 @@ private:
     std::unordered_map<int, SessionRecord> sessionsById;
     std::unordered_map<SOCKET, int> sessionIdByClient;
     std::function<void(SOCKET, int)> resourceBalanceCallback;
+    std::function<void(SOCKET, const std::string&)> matchEventCallback;
 };

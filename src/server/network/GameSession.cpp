@@ -1,6 +1,27 @@
 #include "GameSession.h"
 
+#include <filesystem>
+#include <fstream>
 #include <limits>
+
+#include "third_party/json.hpp"
+
+using json = nlohmann::json;
+
+namespace
+{
+int readIntField(const json& node, const std::initializer_list<const char*>& keys, int fallback)
+{
+	for (const char* key : keys)
+	{
+		if (node.contains(key) && node[key].is_number_integer())
+		{
+			return node[key].get<int>();
+		}
+	}
+	return fallback;
+}
+}
 
 GameSession::GameSession(int player1, int player2, int sessionId)
 	: player1(player1), player2(player2), sessionId(sessionId)
@@ -16,6 +37,101 @@ int GameSession::getSessionId() const
 bool GameSession::hasPlayer(int playerId) const
 {
 	return playerId == player1 || playerId == player2;
+}
+
+int GameSession::ownerFromEntityId(int entityId) const
+{
+	if (games_types::id_ranges::p1Structures.contains(entityId) ||
+		games_types::id_ranges::p1Attackers.contains(entityId) ||
+		games_types::id_ranges::p1Collectors.contains(entityId))
+	{
+		return 1;
+	}
+
+	if (games_types::id_ranges::p2Structures.contains(entityId) ||
+		games_types::id_ranges::p2Attackers.contains(entityId) ||
+		games_types::id_ranges::p2Collectors.contains(entityId))
+	{
+		return 2;
+	}
+
+	return 0;
+}
+
+void GameSession::loadCombatConfigNoLock()
+{
+	attackerHp = 100;
+	attackerDamage = 20;
+	attackerRange = 1000;
+	attackerCooldownMs = 500;
+	collectorHp = 100;
+	baseHp = 1500;
+	minDamage = 1;
+    
+	const std::vector<std::filesystem::path> candidates = {
+		std::filesystem::path("src/config/combat_stats.json"),
+		std::filesystem::path("../src/config/combat_stats.json"),
+		std::filesystem::path("../../src/config/combat_stats.json"),
+		std::filesystem::path("../../../src/config/combat_stats.json")
+	};
+
+	std::filesystem::path selectedPath;
+	for (const auto& p : candidates)
+	{
+		if (std::filesystem::exists(p))
+		{
+			selectedPath = p;
+			break;
+		}
+	}
+
+	if (selectedPath.empty())
+	{
+		return;
+	}
+
+	std::ifstream file(selectedPath);
+	if (!file.is_open())
+	{
+		return;
+	}
+
+	json root = json::parse(file, nullptr, false);
+	if (root.is_discarded() || !root.is_object())
+	{
+		return;
+	}
+
+	if (root.contains("combat_rules") && root["combat_rules"].is_object())
+	{
+		const json& rules = root["combat_rules"];
+		minDamage = std::max(1, readIntField(rules, {"min_damage"}, minDamage));
+	}
+
+	if (root.contains("units") && root["units"].is_object())
+	{
+		const json& unitsCfg = root["units"];
+		if (unitsCfg.contains("attacker") && unitsCfg["attacker"].is_object())
+		{
+			const json& attackerCfg = unitsCfg["attacker"];
+			attackerHp = std::max(1, readIntField(attackerCfg, {"hp"}, attackerHp));
+			attackerDamage = std::max(1, readIntField(attackerCfg, {"attack", "atack"}, attackerDamage));
+			attackerRange = std::max(1, readIntField(attackerCfg, {"range"}, attackerRange));
+			attackerCooldownMs = std::max(1, readIntField(attackerCfg, {"cooldown_ms", "cooldown"}, attackerCooldownMs));
+		}
+
+		if (unitsCfg.contains("collector") && unitsCfg["collector"].is_object())
+		{
+			const json& collectorCfg = unitsCfg["collector"];
+			collectorHp = std::max(1, readIntField(collectorCfg, {"hp"}, collectorHp));
+		}
+
+		if (unitsCfg.contains("base") && unitsCfg["base"].is_object())
+		{
+			const json& baseCfg = unitsCfg["base"];
+			baseHp = std::max(1, readIntField(baseCfg, {"hp"}, baseHp));
+		}
+	}
 }
 
 int GameSession::getPlayerGold(int playerId) const
@@ -364,7 +480,11 @@ std::vector<UnitPosition> GameSession::getUnitsSnapshot() const
 
 	for (const auto& entry : units)
 	{
-		snapshot.push_back(entry.second);
+		// Filter out recently destroyed units to prevent UDP/TCP desynchronization
+		if (recentlyDestroyedUnitIds.find(entry.first) == recentlyDestroyedUnitIds.end())
+		{
+			snapshot.push_back(entry.second);
+		}
 	}
 	return snapshot;
 }
@@ -377,6 +497,12 @@ void GameSession::setUnitsSnapshot(const std::vector<UnitPosition>& newUnits)
 	{
 		units[unit.entity_id] = unit;
 	}
+}
+
+void GameSession::clearRecentlyDestroyedUnits()
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	recentlyDestroyedUnitIds.clear();
 }
 
 std::vector<CollectorUnit> GameSession::getCollectorsSnapshot() const
@@ -433,6 +559,8 @@ bool GameSession::upsertCollector(const CollectorUnit& collector)
 
 	std::lock_guard<std::mutex> lock(sessionMutex);
 	collectors[collector.entityId] = collector;
+	entityMaxHp[collector.entityId] = std::max(1, collector.maxHp > 0 ? collector.maxHp : collectorHp);
+	entityCurrentHp[collector.entityId] = std::max(0, collector.currentHp > 0 ? collector.currentHp : entityMaxHp[collector.entityId]);
 	return true;
 }
 
@@ -470,6 +598,20 @@ std::vector<ShopUnit> GameSession::getShopsSnapshot() const
 	snapshot.reserve(shops.size());
 
 	for (const auto& entry : shops)
+	{
+		snapshot.push_back(entry.second);
+	}
+
+	return snapshot;
+}
+
+std::vector<games_types::StaticObstacle> GameSession::getStaticObstaclesSnapshot() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	std::vector<games_types::StaticObstacle> snapshot;
+	snapshot.reserve(staticObstacles.size());
+
+	for (const auto& entry : staticObstacles)
 	{
 		snapshot.push_back(entry.second);
 	}
@@ -540,9 +682,198 @@ int GameSession::extractResource(int resourceId, int requestedAmount)
 	return extracted;
 }
 
+bool GameSession::registerSpawnedUnit(int unitId, int ownerPlayerId, games_types::EntityType unitType)
+{
+	if (unitId <= 0 || !hasPlayer(ownerPlayerId))
+	{
+		return false;
+	}
+
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	int hp = 0;
+	if (unitType == games_types::EntityType::Collector)
+	{
+		hp = collectorHp;
+	}
+	else if (unitType == games_types::EntityType::Attacker)
+	{
+		hp = attackerHp;
+	}
+	else
+	{
+		return false;
+	}
+
+	entityMaxHp[unitId] = hp;
+	entityCurrentHp[unitId] = hp;
+	return true;
+}
+
+bool GameSession::getEntityPosition(int entityId, UnitPosition& outPosition) const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	auto unitIt = units.find(entityId);
+	if (unitIt != units.end())
+	{
+		outPosition = unitIt->second;
+		return true;
+	}
+
+	auto structureIt = structures.find(entityId);
+	if (structureIt != structures.end())
+	{
+		outPosition = structureIt->second;
+		return true;
+	}
+
+	return false;
+}
+
+bool GameSession::getEntityHealth(int entityId, int& outCurrentHp, int& outMaxHp) const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	auto curIt = entityCurrentHp.find(entityId);
+	auto maxIt = entityMaxHp.find(entityId);
+	if (curIt == entityCurrentHp.end() || maxIt == entityMaxHp.end())
+	{
+		return false;
+	}
+
+	outCurrentHp = curIt->second;
+	outMaxHp = maxIt->second;
+	return true;
+}
+
+bool GameSession::applyDamageToEntity(int attackerPlayerId,
+	                                 int entityId,
+	                                 int rawDamage,
+	                                 games_types::DamageResolution& outResolution)
+{
+	outResolution = games_types::DamageResolution{};
+	if (rawDamage <= 0)
+	{
+		return false;
+	}
+
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	if (gameOver)
+	{
+		return false;
+	}
+
+	auto curIt = entityCurrentHp.find(entityId);
+	auto maxIt = entityMaxHp.find(entityId);
+	if (curIt == entityCurrentHp.end() || maxIt == entityMaxHp.end())
+	{
+		return false;
+	}
+
+	const int ownerPlayerId = ownerFromEntityId(entityId);
+	if (ownerPlayerId == 0 || ownerPlayerId == attackerPlayerId)
+	{
+		return false;
+	}
+
+	const int damage = std::max(minDamage, rawDamage);
+	curIt->second = std::max(0, curIt->second - damage);
+
+	outResolution.applied = true;
+	outResolution.entityId = entityId;
+	outResolution.ownerPlayerId = ownerPlayerId;
+	outResolution.currentHp = curIt->second;
+	outResolution.maxHp = maxIt->second;
+	outResolution.destroyed = curIt->second == 0;
+
+	if (outResolution.destroyed)
+	{
+		units.erase(entityId);
+		collectors.erase(entityId);
+		recentlyDestroyedUnitIds.insert(entityId);
+		if (!games_types::id_ranges::p1Structures.contains(entityId) &&
+			!games_types::id_ranges::p2Structures.contains(entityId))
+		{
+			entityCurrentHp.erase(entityId);
+			entityMaxHp.erase(entityId);
+		}
+
+		if (games_types::id_ranges::p1Structures.contains(entityId) ||
+			games_types::id_ranges::p2Structures.contains(entityId))
+		{
+			gameOver = true;
+			winnerPlayerId = ownerPlayerId == 1 ? 2 : 1;
+			outResolution.gameOver = true;
+			outResolution.winnerPlayerId = winnerPlayerId;
+		}
+	}
+
+	return true;
+}
+
+int GameSession::getBaseEntityId(int playerId) const
+{
+	if (playerId == 1)
+	{
+		return games_types::id_ranges::p1Structures.minId;
+	}
+	if (playerId == 2)
+	{
+		return games_types::id_ranges::p2Structures.minId;
+	}
+	return -1;
+}
+
+int GameSession::getBaseHealth(int playerId) const
+{
+	const int baseId = getBaseEntityId(playerId);
+	if (baseId < 0)
+	{
+		return 0;
+	}
+
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	auto it = entityCurrentHp.find(baseId);
+	if (it == entityCurrentHp.end())
+	{
+		return 0;
+	}
+	return it->second;
+}
+
+bool GameSession::isGameOver(int& outWinnerPlayerId) const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	outWinnerPlayerId = winnerPlayerId;
+	return gameOver;
+}
+
+int GameSession::getAttackerDamage() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return attackerDamage;
+}
+
+int GameSession::getAttackerRange() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return attackerRange;
+}
+
+int GameSession::getAttackerCooldownMs() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return attackerCooldownMs;
+}
+
+int GameSession::getMinDamage() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return minDamage;
+}
+
 void GameSession::initializeGameState()
 {
 	std::lock_guard<std::mutex> lock(sessionMutex);
+	loadCombatConfigNoLock();
 
 	unitGoldCostByType.clear();
 	unitGoldCostByType[games_types::EntityType::Attacker] = 200;
@@ -554,15 +885,27 @@ void GameSession::initializeGameState()
 	playerGoldSpent[player2] = 0;
 	pendingEconomyTransactions.clear();
 	shopAuthorizationByPlayer.clear();
+	entityCurrentHp.clear();
+	entityMaxHp.clear();
+	gameOver = false;
+	winnerPlayerId = 0;
 
 	//bases de los jugadores
 	structures[0] = UnitPosition{0, 300.0f, 4700.0f};
 	structures[5000] = UnitPosition{5000, 4700.0f, 300.0f};
+	entityCurrentHp[0] = baseHp;
+	entityCurrentHp[5000] = baseHp;
+	entityMaxHp[0] = baseHp;
+	entityMaxHp[5000] = baseHp;
 
 	//un recolector por cada jugador en estado idle
 	collectors.clear();
-	collectors[3000] = CollectorUnit{3000, player1, games_types::CollectorState::Idle, 380.0f, 4550.0f, -1, 0, 200, 1000, 500, 0};
-	collectors[8000] = CollectorUnit{8000, player2, games_types::CollectorState::Idle, 4620.0f, 450.0f, -1, 0, 200, 1000, 500, 0};
+	collectors[3000] = CollectorUnit{3000, player1, games_types::CollectorState::Idle, 380.0f, 4550.0f, -1, 0, 200, 1000, 500, 0, collectorHp, collectorHp};
+	collectors[8000] = CollectorUnit{8000, player2, games_types::CollectorState::Idle, 4620.0f, 450.0f, -1, 0, 200, 1000, 500, 0, collectorHp, collectorHp};
+	entityCurrentHp[3000] = collectorHp;
+	entityCurrentHp[8000] = collectorHp;
+	entityMaxHp[3000] = collectorHp;
+	entityMaxHp[8000] = collectorHp;
 
 	//3 minas en el mapa
 	resources.clear();
@@ -575,6 +918,12 @@ void GameSession::initializeGameState()
 	units[1000] = UnitPosition{1000, 400.0f, 4600.0f};
 	units[1001] = UnitPosition{1001, 500.0f, 4500.0f};
 	units[1002] = UnitPosition{1002, 600.0f, 4400.0f};
+	entityCurrentHp[1000] = attackerHp;
+	entityCurrentHp[1001] = attackerHp;
+	entityCurrentHp[1002] = attackerHp;
+	entityMaxHp[1000] = attackerHp;
+	entityMaxHp[1001] = attackerHp;
+	entityMaxHp[1002] = attackerHp;
 	//recolector inicial jugador 1
 	units[3000] = UnitPosition{3000, 380.0f, 4550.0f};
 	
@@ -582,12 +931,28 @@ void GameSession::initializeGameState()
 	units[6000] = UnitPosition{6000, 4600.0f, 400.0f};
 	units[6001] = UnitPosition{6001, 4500.0f, 500.0f};
 	units[6002] = UnitPosition{6002, 4400.0f, 600.0f};
+	entityCurrentHp[6000] = attackerHp;
+	entityCurrentHp[6001] = attackerHp;
+	entityCurrentHp[6002] = attackerHp;
+	entityMaxHp[6000] = attackerHp;
+	entityMaxHp[6001] = attackerHp;
+	entityMaxHp[6002] = attackerHp;
 	
 	//recolector inicial jugador 2
 	units[8000] = UnitPosition{8000, 4620.0f, 450.0f};
 
 	//por ahora una unica tienda estatica en el mapa
 	shops[11000] = ShopUnit{11000, 2500.0f, 2500.0f, 120.0f};
+
+	// obstaculo inicial para pruebas de A*: linea horizontal de 25 celdas
+	staticObstacles.clear();
+	games_types::StaticObstacle obstacleLine{};
+	obstacleLine.id = 12000;
+	for (int x = 40; x <= 64; ++x)
+	{
+		obstacleLine.cells.push_back(games_types::CellCoord{x, 25});
+	}
+	staticObstacles[obstacleLine.id] = obstacleLine;
 	
 	// para saber que id asignar a las tropas que compren
 	nextP1AttackerId = 1003;

@@ -1,16 +1,26 @@
 #include "GameEngine.h"
 
 #include <algorithm>
+#include <deque>
 #include <cmath>
+#include <map>
 #include <limits>
+#include <set>
 #include <utility>
 #include <vector>
 
 #include "GameSession.h"
 #include "PathFinder.h"
+#include "spatialGrid.h"
 
 namespace
 {
+    constexpr int kGridCols = 100;
+    constexpr int kGridRows = 100;
+    constexpr float kCellSize = 50.0f;
+    constexpr int kBaseFootprintSize = 6;
+    constexpr int kSmallStructureFootprintSize = 3;
+
     constexpr float kCollectorCollisionRadius = 15.0f;
     constexpr float kBaseCollisionRadius = 215.0f;
 
@@ -84,6 +94,188 @@ namespace
 
         return false;
     }
+
+    int ownerFromEntityId(int entityId)
+    {
+        if (games_types::id_ranges::p1Structures.contains(entityId) ||
+            games_types::id_ranges::p1Attackers.contains(entityId) ||
+            games_types::id_ranges::p1Collectors.contains(entityId))
+        {
+            return 1;
+        }
+
+        if (games_types::id_ranges::p2Structures.contains(entityId) ||
+            games_types::id_ranges::p2Attackers.contains(entityId) ||
+            games_types::id_ranges::p2Collectors.contains(entityId))
+        {
+            return 2;
+        }
+
+        return 0;
+    }
+
+    bool isAttackerUnitOwnedByPlayer(int playerId, int entityId)
+    {
+        if (playerId == 1)
+        {
+            return games_types::id_ranges::p1Attackers.contains(entityId);
+        }
+        if (playerId == 2)
+        {
+            return games_types::id_ranges::p2Attackers.contains(entityId);
+        }
+
+        return false;
+    }
+
+    int clampToRange(int value, int minValue, int maxValue)
+    {
+        return std::max(minValue, std::min(value, maxValue));
+    }
+
+    games_types::CellCoord worldToCell(float x, float y)
+    {
+        const int cellX = clampToRange(static_cast<int>(x / kCellSize), 0, kGridCols - 1);
+        const int cellY = clampToRange(static_cast<int>(y / kCellSize), 0, kGridRows - 1);
+        return games_types::CellCoord{cellX, cellY};
+    }
+
+    std::pair<float, float> cellCenterToWorld(const games_types::CellCoord& cell)
+    {
+        const float worldX = (static_cast<float>(cell.x) + 0.5f) * kCellSize;
+        const float worldY = (static_cast<float>(cell.y) + 0.5f) * kCellSize;
+        return {worldX, worldY};
+    }
+
+    bool isBaseStructureId(int entityId)
+    {
+        return games_types::id_ranges::p1Structures.contains(entityId) ||
+               games_types::id_ranges::p2Structures.contains(entityId);
+    }
+
+    games_types::CellCoord footprintTopLeftFromCenter(const games_types::CellCoord& center,
+                                                      int footprintSize)
+    {
+        // For even sizes (like 6x6), keep a stable anchor around the center cell.
+        const int offset = (footprintSize - 1) / 2;
+        return games_types::CellCoord{center.x - offset, center.y - offset};
+    }
+
+    void blockFootprintFromWorldCenter(SpatialGrid& grid,
+                                       float worldX,
+                                       float worldY,
+                                       int footprintSize)
+    {
+        const games_types::CellCoord center = worldToCell(worldX, worldY);
+        const games_types::CellCoord topLeft = footprintTopLeftFromCenter(center, footprintSize);
+
+        for (int dy = 0; dy < footprintSize; ++dy)
+        {
+            for (int dx = 0; dx < footprintSize; ++dx)
+            {
+                const games_types::CellCoord cell{topLeft.x + dx, topLeft.y + dy};
+                if (grid.inBounds(cell))
+                {
+                    grid.setStaticBlocked(cell, true);
+                }
+            }
+        }
+    }
+
+    void blockStaticObstacleCells(SpatialGrid& grid,
+                                  const std::vector<games_types::StaticObstacle>& obstacles)
+    {
+        for (const auto& obstacle : obstacles)
+        {
+            for (const auto& cell : obstacle.cells)
+            {
+                if (grid.inBounds(cell))
+                {
+                    grid.setStaticBlocked(cell, true);
+                }
+            }
+        }
+    }
+
+    void populateStaticPathGrid(SpatialGrid& grid,
+                                const std::vector<games_types::UnitPosition>& structures,
+                                const std::vector<games_types::ResourceNode>& resources,
+                                const std::vector<games_types::ShopUnit>& shops,
+                                const std::vector<games_types::StaticObstacle>& obstacles,
+                                int skippedEntityId)
+    {
+        for (const auto& structure : structures)
+        {
+            if (structure.entity_id == skippedEntityId)
+            {
+                continue;
+            }
+
+            const int footprint = isBaseStructureId(structure.entity_id)
+                                      ? kBaseFootprintSize
+                                      : kSmallStructureFootprintSize;
+            blockFootprintFromWorldCenter(grid, structure.x, structure.y, footprint);
+        }
+
+        for (const auto& resource : resources)
+        {
+            blockFootprintFromWorldCenter(
+                grid,
+                resource.x,
+                resource.y,
+                kSmallStructureFootprintSize);
+        }
+
+        for (const auto& shop : shops)
+        {
+            blockFootprintFromWorldCenter(
+                grid,
+                shop.x,
+                shop.y,
+                kSmallStructureFootprintSize);
+        }
+
+        blockStaticObstacleCells(grid, obstacles);
+    }
+
+    std::vector<games_types::CellCoord> buildRingCells(const games_types::CellCoord& center, int radius)
+    {
+        std::vector<games_types::CellCoord> ring;
+        if (radius <= 0)
+        {
+            return ring;
+        }
+
+        for (int x = center.x - radius; x <= center.x + radius; ++x)
+        {
+            ring.push_back(games_types::CellCoord{x, center.y - radius});
+            ring.push_back(games_types::CellCoord{x, center.y + radius});
+        }
+
+        for (int y = center.y - radius + 1; y <= center.y + radius - 1; ++y)
+        {
+            ring.push_back(games_types::CellCoord{center.x - radius, y});
+            ring.push_back(games_types::CellCoord{center.x + radius, y});
+        }
+
+        return ring;
+    }
+
+    bool cellLess(const games_types::CellCoord& lhs, const games_types::CellCoord& rhs)
+    {
+        if (lhs.x != rhs.x)
+        {
+            return lhs.x < rhs.x;
+        }
+        return lhs.y < rhs.y;
+    }
+
+    std::int64_t makeFormationGroupKey(int playerId, const games_types::CellCoord& destination)
+    {
+        return (static_cast<std::int64_t>(playerId) << 20) |
+               (static_cast<std::int64_t>(destination.x) << 10) |
+               static_cast<std::int64_t>(destination.y);
+    }
 }
 
 GameEngine::GameEngine(std::shared_ptr<GameSession> sessionRef,
@@ -111,17 +303,171 @@ void GameEngine::commandQueueProcess()
         std::swap(pendingCommands, commandQueue);
     }
 
+    std::vector<games_types::PlayerCommand> pendingMoveCommands;
+
     while (!pendingCommands.empty())
     {
         const games_types::PlayerCommand cmd = pendingCommands.front();
         pendingCommands.pop();
 
-        if (!propertyValidation(cmd.playerId, cmd.unitId))
+        if (cmd.type == games_types::CommandType::MoveUnit)
+        {
+            if (!propertyValidation(cmd.playerId, cmd.unitId))
+            {
+                continue;
+            }
+            pendingMoveCommands.push_back(cmd);
+            continue;
+        }
+
+        if (cmd.type == games_types::CommandType::AttackUnit)
+        {
+            processAttackCommand(cmd);
+            continue;
+        }
+    }
+
+    processMoveCommandsWithFormation(pendingMoveCommands);
+}
+
+void GameEngine::processMoveCommandsWithFormation(const std::vector<games_types::PlayerCommand>& moveCommands)
+{
+    if (!session || moveCommands.empty())
+    {
+        return;
+    }
+
+    std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
+    std::vector<games_types::UnitPosition> structures = session->getStructuresSnapshot();
+    std::vector<games_types::ResourceNode> resources = session->getResourcesSnapshot();
+    std::vector<games_types::ShopUnit> shops = session->getShopsSnapshot();
+    std::vector<games_types::StaticObstacle> obstacles = session->getStaticObstaclesSnapshot();
+
+    std::unordered_map<int, games_types::CellCoord> currentCellByUnit;
+    currentCellByUnit.reserve(units.size());
+    for (const auto& unit : units)
+    {
+        currentCellByUnit[unit.entity_id] = worldToCell(unit.x, unit.y);
+    }
+
+    std::map<std::int64_t, std::vector<games_types::PlayerCommand>> groups;
+    for (const auto& cmd : moveCommands)
+    {
+        groups[makeFormationGroupKey(cmd.playerId, cmd.destCell)].push_back(cmd);
+    }
+
+    for (auto& groupEntry : groups)
+    {
+        auto& groupCommands = groupEntry.second;
+        if (groupCommands.empty())
         {
             continue;
         }
 
-        setNewRoute(cmd);
+        std::sort(groupCommands.begin(), groupCommands.end(), [](const games_types::PlayerCommand& lhs,
+                                                                 const games_types::PlayerCommand& rhs) {
+            return lhs.unitId < rhs.unitId;
+        });
+
+        if (groupCommands.size() == 1)
+        {
+            formationByUnit.erase(groupCommands.front().unitId);
+            setNewRoute(groupCommands.front());
+            continue;
+        }
+
+        const games_types::CellCoord groupTarget = groupCommands.front().destCell;
+        SpatialGrid slotGrid(kGridCols, kGridRows);
+        populateStaticPathGrid(slotGrid, structures, resources, shops, obstacles, -1);
+
+        std::vector<games_types::CellCoord> slotCandidates;
+        slotCandidates.reserve(groupCommands.size() * 2);
+
+        for (int radius = 1; radius <= kGridCols && slotCandidates.size() < groupCommands.size(); ++radius)
+        {
+            std::vector<games_types::CellCoord> ring = buildRingCells(groupTarget, radius);
+            std::sort(ring.begin(), ring.end(), cellLess);
+            ring.erase(std::unique(ring.begin(), ring.end(), [](const games_types::CellCoord& lhs,
+                                                               const games_types::CellCoord& rhs) {
+                          return lhs.x == rhs.x && lhs.y == rhs.y;
+                      }),
+                      ring.end());
+
+            for (const auto& candidate : ring)
+            {
+                if (!slotGrid.inBounds(candidate) || slotGrid.isStaticBlocked(candidate))
+                {
+                    continue;
+                }
+                slotCandidates.push_back(candidate);
+                if (slotCandidates.size() >= groupCommands.size())
+                {
+                    break;
+                }
+            }
+        }
+
+        if (slotCandidates.empty())
+        {
+            for (const auto& cmd : groupCommands)
+            {
+                formationByUnit.erase(cmd.unitId);
+                setNewRoute(cmd);
+            }
+            continue;
+        }
+
+        std::set<std::size_t> takenSlots;
+        ++formationEpoch;
+        for (std::size_t i = 0; i < groupCommands.size(); ++i)
+        {
+            const auto& cmd = groupCommands[i];
+            const auto unitCellIt = currentCellByUnit.find(cmd.unitId);
+            if (unitCellIt == currentCellByUnit.end())
+            {
+                continue;
+            }
+
+            const games_types::CellCoord unitCell = unitCellIt->second;
+            int bestScore = std::numeric_limits<int>::max();
+            std::size_t bestSlotIndex = 0;
+            bool foundSlot = false;
+
+            for (std::size_t slotIdx = 0; slotIdx < slotCandidates.size(); ++slotIdx)
+            {
+                if (takenSlots.count(slotIdx) > 0)
+                {
+                    continue;
+                }
+
+                const auto& slot = slotCandidates[slotIdx];
+                const int manhattan = std::abs(slot.x - unitCell.x) + std::abs(slot.y - unitCell.y);
+                if (manhattan < bestScore)
+                {
+                    bestScore = manhattan;
+                    bestSlotIndex = slotIdx;
+                    foundSlot = true;
+                }
+            }
+
+            games_types::CellCoord assignedSlot = groupTarget;
+            int assignedSlotIndex = -1;
+            if (foundSlot)
+            {
+                assignedSlot = slotCandidates[bestSlotIndex];
+                assignedSlotIndex = static_cast<int>(bestSlotIndex);
+                takenSlots.insert(bestSlotIndex);
+            }
+
+            formationByUnit[cmd.unitId] = FormationAssignment{
+                groupTarget,
+                assignedSlot,
+                static_cast<int>(groupCommands.size()),
+                assignedSlotIndex,
+                formationEpoch};
+
+            setNewRouteToCell(cmd, assignedSlot);
+        }
     }
 }
 
@@ -241,6 +587,90 @@ void GameEngine::advanceCollectors(int deltaMs)
     session->setCollectorsSnapshot(collectors);
 }
 
+void GameEngine::advanceMovement(int deltaMs)
+{
+    if (!session || deltaMs <= 0)
+    {
+        return;
+    }
+
+    std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
+    if (units.empty())
+    {
+        return;
+    }
+
+    const std::vector<games_types::UnitPosition> structures = session->getStructuresSnapshot();
+    const std::vector<games_types::ResourceNode> resources = session->getResourcesSnapshot();
+    const std::vector<games_types::ShopUnit> shops = session->getShopsSnapshot();
+    const std::vector<games_types::StaticObstacle> obstacles = session->getStaticObstaclesSnapshot();
+
+    SpatialGrid movementGrid(kGridCols, kGridRows);
+    populateStaticPathGrid(movementGrid, structures, resources, shops, obstacles, -1);
+
+    std::sort(units.begin(), units.end(), [](const games_types::UnitPosition& lhs, const games_types::UnitPosition& rhs) {
+        return lhs.entity_id < rhs.entity_id;
+    });
+
+    for (const auto& unit : units)
+    {
+        movementGrid.placeEntity(unit.entity_id, worldToCell(unit.x, unit.y));
+    }
+
+    for (const auto& unit : units)
+    {
+        auto routeIt = movementRoutes.find(unit.entity_id);
+        if (routeIt == movementRoutes.end())
+        {
+            continue;
+        }
+
+        auto& route = routeIt->second;
+        const games_types::CellCoord currentCell = worldToCell(unit.x, unit.y);
+        while (!route.empty() && route.front() == currentCell)
+        {
+            route.pop_front();
+        }
+
+        if (route.empty())
+        {
+            movementRoutes.erase(routeIt);
+            continue;
+        }
+
+        movementGrid.tryReserveMove(unit.entity_id, route.front());
+    }
+
+    const auto committedMoves = movementGrid.commitReservedMoves();
+    if (committedMoves.empty())
+    {
+        return;
+    }
+
+    for (const auto& move : committedMoves)
+    {
+        const auto [worldX, worldY] = cellCenterToWorld(move.to);
+        session->upsertUnitPosition(move.entityId, worldX, worldY);
+
+        auto routeIt = movementRoutes.find(move.entityId);
+        if (routeIt == movementRoutes.end())
+        {
+            continue;
+        }
+
+        auto& route = routeIt->second;
+        if (!route.empty() && route.front() == move.to)
+        {
+            route.pop_front();
+        }
+
+        if (route.empty())
+        {
+            movementRoutes.erase(routeIt);
+        }
+    }
+}
+
 std::vector<games_types::EconomyTransaction> GameEngine::drainEconomyTransactions()
 {
     if (!session)
@@ -249,6 +679,43 @@ std::vector<games_types::EconomyTransaction> GameEngine::drainEconomyTransaction
     }
 
     return session->drainEconomyTransactions();
+}
+
+void GameEngine::advanceCombat(int deltaMs)
+{
+    if (deltaMs <= 0)
+    {
+        return;
+    }
+
+    for (auto it = attackerCooldownRemainingMs.begin(); it != attackerCooldownRemainingMs.end();)
+    {
+        it->second = std::max(0, it->second - deltaMs);
+        if (it->second == 0)
+        {
+            it = attackerCooldownRemainingMs.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+std::vector<games_types::CombatEvent> GameEngine::drainCombatEvents()
+{
+    std::lock_guard<std::mutex> lock(mtxCombatEvents);
+    std::vector<games_types::CombatEvent> out;
+    out.swap(pendingCombatEvents);
+    return out;
+}
+
+std::vector<GameEngine::AttackRequestResult> GameEngine::drainAttackResults()
+{
+    std::lock_guard<std::mutex> lock(mtxAttackResults);
+    std::vector<AttackRequestResult> out;
+    out.swap(pendingAttackResults);
+    return out;
 }
 
 bool GameEngine::reconcileShopAuthorization(int playerId, games_types::ShopAuthorizationState& outState)
@@ -337,15 +804,16 @@ GameEngine::PurchaseResult GameEngine::processUnitPurchase(
         return result;
     }
 
-    const float angleStep = 0.55f;
-    const float radius = 45.0f;
-    const float angle = static_cast<float>(unitId % 11) * angleStep;
+    //       const float angleStep = 0.55f;
+    //const float radius = 45.0f;
+    //const float angle = static_cast<float>(unitId % 11) * angleStep;
     //const float spawnX = basePos.x + radius * std::cos(angle);
-    const float spawnX = 2500.0;
+    const float spawnX = 25.0;
     //const float spawnY = basePos.y + radius * std::sin(angle);
-    const float spawnY = 2000.0;
+    const float spawnY = 25.0;
 
     session->upsertUnitPosition(unitId, spawnX, spawnY);
+    session->registerSpawnedUnit(unitId, playerId, unitType);
     if (unitType == games_types::EntityType::Collector)
     {
         games_types::CollectorUnit collector{};
@@ -388,6 +856,11 @@ bool GameEngine::propertyValidation(int playerId, int unitId) const
 
 void GameEngine::setNewRoute(const games_types::PlayerCommand& cmd)
 {
+    setNewRouteToCell(cmd, cmd.destCell);
+}
+
+void GameEngine::setNewRouteToCell(const games_types::PlayerCommand& cmd, const games_types::CellCoord& destinationCell)
+{
     if (!session)
     {
         return;
@@ -405,20 +878,228 @@ void GameEngine::setNewRoute(const games_types::PlayerCommand& cmd)
         return;
     }
 
-    const std::vector<games_types::UnitPosition> route = pathFinder->buildRoute(
-        *unitIt,
-        cmd.destX,
-        cmd.destY);
+    SpatialGrid pathGrid(kGridCols, kGridRows);
 
-    if (route.empty())
+    const auto structures = session->getStructuresSnapshot();
+    const auto resources = session->getResourcesSnapshot();
+    const auto shops = session->getShopsSnapshot();
+    const auto obstacles = session->getStaticObstaclesSnapshot();
+    populateStaticPathGrid(pathGrid, structures, resources, shops, obstacles, unitIt->entity_id);
+
+    const games_types::CellCoord startCell = worldToCell(unitIt->x, unitIt->y);
+
+    pathGrid.setStaticBlocked(startCell, false);
+
+    games_types::CellCoord effectiveDestination = destinationCell;
+    if (pathGrid.isStaticBlocked(effectiveDestination))
     {
-        unitIt->x = cmd.destX;
-        unitIt->y = cmd.destY;
-    }
-    else
-    {
-        *unitIt = route.back();
+        bool found = false;
+        for (int radius = 1; radius <= kGridCols && !found; ++radius)
+        {
+            std::vector<games_types::CellCoord> ring = buildRingCells(effectiveDestination, radius);
+            std::sort(ring.begin(), ring.end(), cellLess);
+            ring.erase(std::unique(ring.begin(),
+                                   ring.end(),
+                                   [](const games_types::CellCoord& lhs,
+                                      const games_types::CellCoord& rhs) {
+                                       return lhs.x == rhs.x && lhs.y == rhs.y;
+                                   }),
+                       ring.end());
+
+            for (const auto& candidate : ring)
+            {
+                if (!pathGrid.inBounds(candidate) || pathGrid.isStaticBlocked(candidate))
+                {
+                    continue;
+                }
+                effectiveDestination = candidate;
+                found = true;
+                break;
+            }
+        }
     }
 
-    session->setUnitsSnapshot(units);
+    const std::vector<games_types::CellCoord> routeCells = pathFinder->buildRoute(
+        startCell,
+        effectiveDestination,
+        pathGrid);
+
+    auto& routeState = movementRoutes[unitIt->entity_id];
+    routeState.clear();
+
+    if (routeCells.empty())
+    {
+        if (startCell == destinationCell)
+        {
+            movementRoutes.erase(unitIt->entity_id);
+        }
+        return;
+    }
+
+    routeState = std::deque<games_types::CellCoord>(routeCells.begin(), routeCells.end());
+}
+
+void GameEngine::processAttackCommand(const games_types::PlayerCommand& cmd)
+{
+    AttackRequestResult result{};
+    result.playerId = cmd.playerId;
+    result.attackerId = cmd.attack.attackerId;
+    result.targetId = cmd.attack.targetId;
+    result.accepted = false;
+    result.reason = "rejected";
+
+    if (!session || !session->hasPlayer(cmd.playerId))
+    {
+        result.reason = "invalid_player";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    if (!isAttackerUnitOwnedByPlayer(cmd.playerId, cmd.attack.attackerId))
+    {
+        result.reason = "invalid_attacker_owner_or_type";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    int winnerPlayerId = 0;
+    if (session->isGameOver(winnerPlayerId))
+    {
+        result.reason = "game_over";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    games_types::UnitPosition attackerPos{};
+    games_types::UnitPosition targetPos{};
+    if (!session->getEntityPosition(cmd.attack.attackerId, attackerPos))
+    {
+        result.reason = "attacker_not_found";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    if (!session->getEntityPosition(cmd.attack.targetId, targetPos))
+    {
+        result.reason = "target_not_found";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    const int attackerOwner = ownerFromEntityId(cmd.attack.attackerId);
+    const int targetOwner = ownerFromEntityId(cmd.attack.targetId);
+    if (attackerOwner == 0 || targetOwner == 0)
+    {
+        result.reason = "invalid_owner";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    if (attackerOwner == targetOwner)
+    {
+        result.reason = "invalid_target_ally";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    int attackerCurrentHp = 0;
+    int attackerMaxHp = 0;
+    if (!session->getEntityHealth(cmd.attack.attackerId, attackerCurrentHp, attackerMaxHp) || attackerCurrentHp <= 0)
+    {
+        result.reason = "attacker_dead_or_missing";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    int targetCurrentHp = 0;
+    int targetMaxHp = 0;
+    if (!session->getEntityHealth(cmd.attack.targetId, targetCurrentHp, targetMaxHp) || targetCurrentHp <= 0)
+    {
+        result.reason = "target_dead_or_missing";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    const int remainingCooldown = attackerCooldownRemainingMs[cmd.attack.attackerId];
+    if (remainingCooldown > 0)
+    {
+        result.reason = "cooldown";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    const int attackerRange = session->getAttackerRange();
+    const float distSq = distanceSquared(attackerPos.x, attackerPos.y, targetPos.x, targetPos.y);
+    if (distSq > static_cast<float>(attackerRange * attackerRange))
+    {
+        result.reason = "out_of_range";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    games_types::DamageResolution resolution{};
+    const int damage = std::max(session->getMinDamage(), session->getAttackerDamage());
+    if (!session->applyDamageToEntity(attackerOwner, cmd.attack.targetId, damage, resolution) || !resolution.applied)
+    {
+        result.reason = "attack_not_applied";
+        std::lock_guard<std::mutex> lock(mtxAttackResults);
+        pendingAttackResults.push_back(result);
+        return;
+    }
+
+    attackerCooldownRemainingMs[cmd.attack.attackerId] = session->getAttackerCooldownMs();
+
+    {
+        std::lock_guard<std::mutex> lock(mtxCombatEvents);
+
+        games_types::CombatEvent damagedEvent{};
+        damagedEvent.type = games_types::CombatEventType::UnitDamaged;
+        damagedEvent.sessionId = session->getSessionId();
+        damagedEvent.attackerPlayerId = attackerOwner;
+        damagedEvent.attackerEntityId = cmd.attack.attackerId;
+        damagedEvent.targetEntityId = resolution.entityId;
+        damagedEvent.targetPlayerId = resolution.ownerPlayerId;
+        damagedEvent.currentHp = resolution.currentHp;
+        damagedEvent.maxHp = resolution.maxHp;
+        pendingCombatEvents.push_back(damagedEvent);
+
+        if (resolution.destroyed)
+        {
+            games_types::CombatEvent destroyedEvent{};
+            destroyedEvent.type = games_types::CombatEventType::EntityDestroyed;
+            destroyedEvent.sessionId = session->getSessionId();
+            destroyedEvent.attackerPlayerId = attackerOwner;
+            destroyedEvent.targetEntityId = resolution.entityId;
+            destroyedEvent.targetPlayerId = resolution.ownerPlayerId;
+            destroyedEvent.attackerEntityId = cmd.attack.attackerId;
+            pendingCombatEvents.push_back(destroyedEvent);
+        }
+
+        if (resolution.gameOver)
+        {
+            games_types::CombatEvent gameOverEvent{};
+            gameOverEvent.type = games_types::CombatEventType::GameOver;
+            gameOverEvent.sessionId = session->getSessionId();
+            gameOverEvent.winnerPlayerId = resolution.winnerPlayerId;
+            pendingCombatEvents.push_back(gameOverEvent);
+        }
+    }
+
+    result.accepted = true;
+    result.reason = "ok";
+    result.targetCurrentHp = resolution.currentHp;
+
+    std::lock_guard<std::mutex> lock(mtxAttackResults);
+    pendingAttackResults.push_back(result);
 }
