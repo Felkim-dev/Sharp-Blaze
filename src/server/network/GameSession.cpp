@@ -62,7 +62,7 @@ void GameSession::loadCombatConfigNoLock()
 {
 	attackerHp = 100;
 	attackerDamage = 20;
-	attackerRange = 540;
+	attackerRange = 1000;
 	attackerCooldownMs = 500;
 	collectorHp = 100;
 	baseHp = 1500;
@@ -480,7 +480,11 @@ std::vector<UnitPosition> GameSession::getUnitsSnapshot() const
 
 	for (const auto& entry : units)
 	{
-		snapshot.push_back(entry.second);
+		// Filter out recently destroyed units to prevent UDP/TCP desynchronization
+		if (recentlyDestroyedUnitIds.find(entry.first) == recentlyDestroyedUnitIds.end())
+		{
+			snapshot.push_back(entry.second);
+		}
 	}
 	return snapshot;
 }
@@ -493,6 +497,12 @@ void GameSession::setUnitsSnapshot(const std::vector<UnitPosition>& newUnits)
 	{
 		units[unit.entity_id] = unit;
 	}
+}
+
+void GameSession::clearRecentlyDestroyedUnits()
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	recentlyDestroyedUnitIds.clear();
 }
 
 std::vector<CollectorUnit> GameSession::getCollectorsSnapshot() const
@@ -764,6 +774,7 @@ bool GameSession::applyDamageToEntity(int attackerPlayerId,
 	{
 		units.erase(entityId);
 		collectors.erase(entityId);
+		recentlyDestroyedUnitIds.insert(entityId);
 		if (!games_types::id_ranges::p1Structures.contains(entityId) &&
 			!games_types::id_ranges::p2Structures.contains(entityId))
 		{

@@ -305,13 +305,35 @@ void GlobalUDPDispatcher::loopEmision() {
                 continue;
             }
 
+            // Lambda to convert world coordinates to grid coordinates
+            constexpr float kCellSize = 50.0f;
+            constexpr int kGridMaxIndex = 99;
+            
+            auto worldToGrid = [](float value) -> int {
+                int cell = static_cast<int>(value / kCellSize);
+                if (cell < 0)
+                {
+                    return 0;
+                }
+                if (cell > kGridMaxIndex)
+                {
+                    return kGridMaxIndex;
+                }
+                return cell;
+            };
+
             for (const auto& unit : units)
             {
+                // Convert world coordinates to grid before sending
+                games_types::UnitPosition gridUnit = unit;
+                gridUnit.x = static_cast<float>(worldToGrid(unit.x));
+                gridUnit.y = static_cast<float>(worldToGrid(unit.y));
+
                 for (const auto& endpoint : batch.endpoints)
                 {
                     const int sentBytes = sendto(
                         udpSocket,
-                        reinterpret_cast<const char*>(&unit),
+                        reinterpret_cast<const char*>(&gridUnit),
                         static_cast<int>(sizeof(games_types::UnitPosition)),
                         0,
                         reinterpret_cast<const sockaddr*>(&endpoint.addr),

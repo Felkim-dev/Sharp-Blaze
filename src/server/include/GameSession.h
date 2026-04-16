@@ -3,6 +3,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "GameTypes.h"
@@ -35,7 +36,7 @@ class GameSession
         std::unordered_map<int, games_types::ShopAuthorizationState> shopAuthorizationByPlayer;
         int attackerHp = 100;
         int attackerDamage = 20;
-        int attackerRange = 540;
+        int attackerRange = 1000;
         int attackerCooldownMs = 500;
         int collectorHp = 100;
         int baseHp = 1500;
@@ -47,6 +48,7 @@ class GameSession
         int nextP2AttackerId = games_types::id_ranges::p2Attackers.minId;
         int nextP2CollectorId = games_types::id_ranges::p2Collectors.minId;
         std::unordered_map<std::string, RegisteredClient> udpClients;
+        std::unordered_set<int> recentlyDestroyedUnitIds;
         mutable std::mutex sessionMutex;
 
         int ownerFromEntityId(int entityId) const;
@@ -113,5 +115,6 @@ class GameSession
         int getAttackerCooldownMs() const;
         int getMinDamage() const;
 
+        void clearRecentlyDestroyedUnits();
         void initializeGameState();
 };

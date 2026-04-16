@@ -52,6 +52,7 @@ class GameEngine
 		bool reconcileShopAuthorization(int playerId, games_types::ShopAuthorizationState& outState);
 		bool hasShopAuthorization(int playerId) const;
 		PurchaseResult processUnitPurchase(int playerId, games_types::EntityType unitType, int quantity);
+		std::shared_ptr<GameSession> getSession() const { return session; }
 
 	private:
 		struct FormationAssignment
