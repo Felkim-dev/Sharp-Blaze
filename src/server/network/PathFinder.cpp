@@ -106,6 +106,19 @@ std::vector<games_types::CellCoord> PathFinder::buildRoute(
                 continue;
             }
 
+            const int dx = neighbor.x - currentNode.cell.x;
+            const int dy = neighbor.y - currentNode.cell.y;
+            const bool isDiagonalStep = std::abs(dx) == 1 && std::abs(dy) == 1;
+            if (isDiagonalStep)
+            {
+                const games_types::CellCoord sideA{currentNode.cell.x + dx, currentNode.cell.y};
+                const games_types::CellCoord sideB{currentNode.cell.x, currentNode.cell.y + dy};
+                if (grid.isStaticBlocked(sideA) || grid.isStaticBlocked(sideB))
+                {
+                    continue;
+                }
+            }
+
             const int neighborIdx = cellToIndex(neighbor, cols);
             if (closed[neighborIdx])
             {

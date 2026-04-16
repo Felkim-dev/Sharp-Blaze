@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <vector>
 #include "platform_socket.h"
 
 namespace games_types
@@ -227,6 +228,12 @@ namespace games_types
         float x      = 0.0f;
         float y      = 0.0f;
         float radius = 50.0f;
+    };
+
+    struct StaticObstacle
+    {
+        int id = 0;
+        std::vector<CellCoord> cells;
     };
 
     struct ShopAuthorizationState

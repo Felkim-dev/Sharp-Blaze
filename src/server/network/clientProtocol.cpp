@@ -180,6 +180,7 @@ std::string client_protocol::BuildMatchStartResponse(
 
     json structures = json::object();
     json units = json::object();
+    json obstacles = json::array();
 
     if (session)
     {
@@ -218,6 +219,15 @@ std::string client_protocol::BuildMatchStartResponse(
                 worldToGrid(resource.y)
             });
         }
+
+        auto obstaclesSnapshot = session->getStaticObstaclesSnapshot();
+        for (const auto& obstacle : obstaclesSnapshot)
+        {
+            for (const auto& cell : obstacle.cells)
+            {
+                obstacles.push_back(json::array({cell.x, cell.y}));
+            }
+        }
     }
 
     json response = {
@@ -230,6 +240,7 @@ std::string client_protocol::BuildMatchStartResponse(
             {"start", true},
             {"structures", structures},
             {"units", units},
+            {"obstacles", obstacles},
             {"gold",500}
         }}
     };

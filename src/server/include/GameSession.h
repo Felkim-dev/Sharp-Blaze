@@ -27,6 +27,7 @@ class GameSession
         std::unordered_map<int, CollectorUnit> collectors;
         std::unordered_map<int, ResourceNode> resources;
         std::unordered_map<int, ShopUnit> shops;
+        std::unordered_map<int, games_types::StaticObstacle> staticObstacles;
         std::unordered_map<int, int> playerGold;
         std::unordered_map<int, int> playerGoldSpent;
         std::vector<games_types::EconomyTransaction> pendingEconomyTransactions;
@@ -75,6 +76,7 @@ class GameSession
         std::vector<UnitPosition> getStructuresSnapshot() const;
         std::vector<ResourceNode> getResourcesSnapshot() const;
         std::vector<ShopUnit> getShopsSnapshot() const;
+        std::vector<games_types::StaticObstacle> getStaticObstaclesSnapshot() const;
         bool getShopAuthorizationState(int playerId, games_types::ShopAuthorizationState& outState) const;
         void setShopAuthorizationState(int playerId, const games_types::ShopAuthorizationState& state);
         void clearShopAuthorizationState(int playerId);

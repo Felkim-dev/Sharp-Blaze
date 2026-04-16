@@ -18,6 +18,8 @@ namespace
     constexpr int kGridCols = 100;
     constexpr int kGridRows = 100;
     constexpr float kCellSize = 50.0f;
+    constexpr int kBaseFootprintSize = 6;
+    constexpr int kSmallStructureFootprintSize = 3;
 
     constexpr float kCollectorCollisionRadius = 15.0f;
     constexpr float kBaseCollisionRadius = 215.0f;
@@ -145,16 +147,61 @@ namespace
         return {worldX, worldY};
     }
 
-    void blockCellForEntity(SpatialGrid& grid, int entityId, float x, float y)
+    bool isBaseStructureId(int entityId)
     {
-        (void)entityId;
-        grid.setStaticBlocked(worldToCell(x, y), true);
+        return games_types::id_ranges::p1Structures.contains(entityId) ||
+               games_types::id_ranges::p2Structures.contains(entityId);
+    }
+
+    games_types::CellCoord footprintTopLeftFromCenter(const games_types::CellCoord& center,
+                                                      int footprintSize)
+    {
+        // For even sizes (like 6x6), keep a stable anchor around the center cell.
+        const int offset = (footprintSize - 1) / 2;
+        return games_types::CellCoord{center.x - offset, center.y - offset};
+    }
+
+    void blockFootprintFromWorldCenter(SpatialGrid& grid,
+                                       float worldX,
+                                       float worldY,
+                                       int footprintSize)
+    {
+        const games_types::CellCoord center = worldToCell(worldX, worldY);
+        const games_types::CellCoord topLeft = footprintTopLeftFromCenter(center, footprintSize);
+
+        for (int dy = 0; dy < footprintSize; ++dy)
+        {
+            for (int dx = 0; dx < footprintSize; ++dx)
+            {
+                const games_types::CellCoord cell{topLeft.x + dx, topLeft.y + dy};
+                if (grid.inBounds(cell))
+                {
+                    grid.setStaticBlocked(cell, true);
+                }
+            }
+        }
+    }
+
+    void blockStaticObstacleCells(SpatialGrid& grid,
+                                  const std::vector<games_types::StaticObstacle>& obstacles)
+    {
+        for (const auto& obstacle : obstacles)
+        {
+            for (const auto& cell : obstacle.cells)
+            {
+                if (grid.inBounds(cell))
+                {
+                    grid.setStaticBlocked(cell, true);
+                }
+            }
+        }
     }
 
     void populateStaticPathGrid(SpatialGrid& grid,
                                 const std::vector<games_types::UnitPosition>& structures,
                                 const std::vector<games_types::ResourceNode>& resources,
                                 const std::vector<games_types::ShopUnit>& shops,
+                                const std::vector<games_types::StaticObstacle>& obstacles,
                                 int skippedEntityId)
     {
         for (const auto& structure : structures)
@@ -163,18 +210,32 @@ namespace
             {
                 continue;
             }
-            blockCellForEntity(grid, structure.entity_id, structure.x, structure.y);
+
+            const int footprint = isBaseStructureId(structure.entity_id)
+                                      ? kBaseFootprintSize
+                                      : kSmallStructureFootprintSize;
+            blockFootprintFromWorldCenter(grid, structure.x, structure.y, footprint);
         }
 
         for (const auto& resource : resources)
         {
-            blockCellForEntity(grid, resource.entityId, resource.x, resource.y);
+            blockFootprintFromWorldCenter(
+                grid,
+                resource.x,
+                resource.y,
+                kSmallStructureFootprintSize);
         }
 
         for (const auto& shop : shops)
         {
-            blockCellForEntity(grid, shop.entityId, shop.x, shop.y);
+            blockFootprintFromWorldCenter(
+                grid,
+                shop.x,
+                shop.y,
+                kSmallStructureFootprintSize);
         }
+
+        blockStaticObstacleCells(grid, obstacles);
     }
 
     std::vector<games_types::CellCoord> buildRingCells(const games_types::CellCoord& center, int radius)
@@ -280,6 +341,7 @@ void GameEngine::processMoveCommandsWithFormation(const std::vector<games_types:
     std::vector<games_types::UnitPosition> structures = session->getStructuresSnapshot();
     std::vector<games_types::ResourceNode> resources = session->getResourcesSnapshot();
     std::vector<games_types::ShopUnit> shops = session->getShopsSnapshot();
+    std::vector<games_types::StaticObstacle> obstacles = session->getStaticObstaclesSnapshot();
 
     std::unordered_map<int, games_types::CellCoord> currentCellByUnit;
     currentCellByUnit.reserve(units.size());
@@ -316,7 +378,7 @@ void GameEngine::processMoveCommandsWithFormation(const std::vector<games_types:
 
         const games_types::CellCoord groupTarget = groupCommands.front().destCell;
         SpatialGrid slotGrid(kGridCols, kGridRows);
-        populateStaticPathGrid(slotGrid, structures, resources, shops, -1);
+        populateStaticPathGrid(slotGrid, structures, resources, shops, obstacles, -1);
 
         std::vector<games_types::CellCoord> slotCandidates;
         slotCandidates.reserve(groupCommands.size() * 2);
@@ -541,9 +603,10 @@ void GameEngine::advanceMovement(int deltaMs)
     const std::vector<games_types::UnitPosition> structures = session->getStructuresSnapshot();
     const std::vector<games_types::ResourceNode> resources = session->getResourcesSnapshot();
     const std::vector<games_types::ShopUnit> shops = session->getShopsSnapshot();
+    const std::vector<games_types::StaticObstacle> obstacles = session->getStaticObstaclesSnapshot();
 
     SpatialGrid movementGrid(kGridCols, kGridRows);
-    populateStaticPathGrid(movementGrid, structures, resources, shops, -1);
+    populateStaticPathGrid(movementGrid, structures, resources, shops, obstacles, -1);
 
     std::sort(units.begin(), units.end(), [](const games_types::UnitPosition& lhs, const games_types::UnitPosition& rhs) {
         return lhs.entity_id < rhs.entity_id;
@@ -820,15 +883,45 @@ void GameEngine::setNewRouteToCell(const games_types::PlayerCommand& cmd, const 
     const auto structures = session->getStructuresSnapshot();
     const auto resources = session->getResourcesSnapshot();
     const auto shops = session->getShopsSnapshot();
-    populateStaticPathGrid(pathGrid, structures, resources, shops, unitIt->entity_id);
+    const auto obstacles = session->getStaticObstaclesSnapshot();
+    populateStaticPathGrid(pathGrid, structures, resources, shops, obstacles, unitIt->entity_id);
 
     const games_types::CellCoord startCell = worldToCell(unitIt->x, unitIt->y);
 
     pathGrid.setStaticBlocked(startCell, false);
 
+    games_types::CellCoord effectiveDestination = destinationCell;
+    if (pathGrid.isStaticBlocked(effectiveDestination))
+    {
+        bool found = false;
+        for (int radius = 1; radius <= kGridCols && !found; ++radius)
+        {
+            std::vector<games_types::CellCoord> ring = buildRingCells(effectiveDestination, radius);
+            std::sort(ring.begin(), ring.end(), cellLess);
+            ring.erase(std::unique(ring.begin(),
+                                   ring.end(),
+                                   [](const games_types::CellCoord& lhs,
+                                      const games_types::CellCoord& rhs) {
+                                       return lhs.x == rhs.x && lhs.y == rhs.y;
+                                   }),
+                       ring.end());
+
+            for (const auto& candidate : ring)
+            {
+                if (!pathGrid.inBounds(candidate) || pathGrid.isStaticBlocked(candidate))
+                {
+                    continue;
+                }
+                effectiveDestination = candidate;
+                found = true;
+                break;
+            }
+        }
+    }
+
     const std::vector<games_types::CellCoord> routeCells = pathFinder->buildRoute(
         startCell,
-        destinationCell,
+        effectiveDestination,
         pathGrid);
 
     auto& routeState = movementRoutes[unitIt->entity_id];

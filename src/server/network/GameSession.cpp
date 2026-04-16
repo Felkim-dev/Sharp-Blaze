@@ -605,6 +605,20 @@ std::vector<ShopUnit> GameSession::getShopsSnapshot() const
 	return snapshot;
 }
 
+std::vector<games_types::StaticObstacle> GameSession::getStaticObstaclesSnapshot() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	std::vector<games_types::StaticObstacle> snapshot;
+	snapshot.reserve(staticObstacles.size());
+
+	for (const auto& entry : staticObstacles)
+	{
+		snapshot.push_back(entry.second);
+	}
+
+	return snapshot;
+}
+
 bool GameSession::getShopAuthorizationState(int playerId, games_types::ShopAuthorizationState& outState) const
 {
 	std::lock_guard<std::mutex> lock(sessionMutex);
@@ -929,6 +943,16 @@ void GameSession::initializeGameState()
 
 	//por ahora una unica tienda estatica en el mapa
 	shops[11000] = ShopUnit{11000, 2500.0f, 2500.0f, 120.0f};
+
+	// obstaculo inicial para pruebas de A*: linea horizontal de 25 celdas
+	staticObstacles.clear();
+	games_types::StaticObstacle obstacleLine{};
+	obstacleLine.id = 12000;
+	for (int x = 40; x <= 64; ++x)
+	{
+		obstacleLine.cells.push_back(games_types::CellCoord{x, 25});
+	}
+	staticObstacles[obstacleLine.id] = obstacleLine;
 	
 	// para saber que id asignar a las tropas que compren
 	nextP1AttackerId = 1003;
