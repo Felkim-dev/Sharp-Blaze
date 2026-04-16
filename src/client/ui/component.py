@@ -541,7 +541,7 @@ class Health_Indicator():
         screen_y = int(entity_y - camera[1]) - 30
 
         # INSTANTIATE RECTANGLES DYNAMICALLY
-        # Background Rect (Full width, Red)
+        # Background Rect (Full width, Black)
         bg_rect = pygame.Rect(screen_x, screen_y, self.max_width, self.height)
         # Foreground Rect (Percentage width, Green)
         health_rect = pygame.Rect(screen_x, screen_y, current_health_width, self.height)
