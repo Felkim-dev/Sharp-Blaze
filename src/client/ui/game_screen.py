@@ -94,7 +94,7 @@ class GameScreen:
     def handle_events(self, events, keys):
         """Processes one-time events like mouse clicks."""
         for event in events:
-            
+
             if self.is_game_over:
                 # Si el juego terminó, SOLO escuchamos clics izquierdos para el botón
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -106,7 +106,6 @@ class GameScreen:
                         self.screen_manager.change_screen("MAIN")
                 continue
 
-        
             # Detect Mouse Button Press
             if event.type == pygame.MOUSEBUTTONDOWN:
 
@@ -227,7 +226,7 @@ class GameScreen:
                 elif data.get("type") == "UNIT_SPAWNED":
                     self.new_unit_id = data["payload"]["unit_id"]
 
-                    #TODO: Implementar la parte de Hardocding
+                    # TODO: Implementar la parte de Hardcoding
                     if 5000<=self.new_unit_id <= 9999: 
                         self.world.units[self.new_unit_id] = self.world.return_entities_object(self.new_unit_id,4700, 300)
                     elif 0 <= self.new_unit_id <= 4999:
@@ -251,11 +250,14 @@ class GameScreen:
                     # Informacion sobre el ATACANTE
                     self.attacker_entity_id = data["payload"]["attacker_entity_id"]
 
-                    self.world.units[self.target_entity_id].reduce_health(self.target_entity_id)
+                    self.world.units[self.target_entity_id].reduce_health(self.target_current_hp)
 
                 elif data.get("type") == "GAME_OVER":
                     self.winner_player_id = data["payload"]["winner_player_id"]
                     self.trigger_game_over(self.winner_player_id)
+                
+                elif data.get("type") == "ENTITY_DESTROY":
+                    self.handle_entity_death(self.world.detect_death_units())
 
         else:
             # DEBUG MODE

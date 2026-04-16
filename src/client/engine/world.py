@@ -233,6 +233,12 @@ class GameWorld:
         for unit in self.units.values():
             unit.update_physics()
 
+    def detect_death_units(self):
+        for unit in self.units.values():
+            if unit.hp < 0:
+                print(f"BORRAR UNIDAD {unit.id}")
+                return unit.id
+            
     def spawn_unit(self, ID, x, y):
         if ID not in self.units:
             self.units[ID] = self.return_entities_object(ID, x, y)
