@@ -155,7 +155,7 @@ class LobbyScreen:
 
                     gold = data["payload"]["gold"]
 
-                    obstacles = data["payload"]["gold"]
+                    obstacles = data["payload"]["obstacles"]
 
                     game_screen = self.screen_manager.screens["GAME"]
 
