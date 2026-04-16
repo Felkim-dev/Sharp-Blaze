@@ -54,6 +54,35 @@ class Minimap:
         # A. Draw the black background of the minimap directly to the main screen
         pygame.draw.rect(screen, self.bg_color, self.rect)
 
+        # A. Draw the black background of the minimap directly to the main screen
+        pygame.draw.rect(screen, self.bg_color, self.rect)
+
+        # -------------------------------------------------------------
+        # A.5. DRAW STATIC OBSTACLES (The grid walls)
+        # -------------------------------------------------------------
+        obstacle_color = (
+            200,
+            200,
+            200,
+        )  # Un gris claro para que contraste con el blanco puro del borde
+
+        # Verificamos si la lista existe (por seguridad durante el inicio)
+        if hasattr(world, "obstacles"):
+            for obs_rect in world.obstacles:
+                # Traducir la coordenada X, Y del mundo a la posición del minimapa
+                mini_x = self.x + (obs_rect.x * self.scale_x)
+                mini_y = self.y + (obs_rect.y * self.scale_y)
+
+                # Escalar el ancho y alto (usamos max(1, ...) para que no desaparezcan si la escala es muy pequeña)
+                mini_w = max(1, int(obs_rect.width * self.scale_x))
+                mini_h = max(1, int(obs_rect.height * self.scale_y))
+
+                # Dibujar el obstáculo
+                mini_obs_rect = pygame.Rect(mini_x, mini_y, mini_w, mini_h)
+                pygame.draw.rect(screen, obstacle_color, mini_obs_rect)
+
+        # -------------------------------------------------------------
+        
         # B. Iterate through BOTH dictionaries (units and structures)
         # This prevents code duplication and keeps rendering efficient
         for entity_dictionary in (world.units, world.structures):

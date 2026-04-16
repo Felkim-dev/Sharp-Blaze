@@ -222,8 +222,12 @@ class GameWorld:
             clicked_enemy_entity.is_targeted = True
 
             for unit_id in selected_unit_ids:
-                command_payload = JSON_Manager.attack(int(clicked_enemy_id),unit_id)
-                self.network.send_json(command_payload)
+                unit = self.units.get(unit_id)
+                if unit:
+                    unit.path_queue.clear()
+
+            command_payload = JSON_Manager.attack(int(clicked_enemy_id),unit_id)
+            self.network.send_json(command_payload)
 
         else:
             # We clicked empty ground (or our own unit/neutral structure).
@@ -233,6 +237,10 @@ class GameWorld:
 
             for unit_id in selected_unit_ids:
 
+                unit = self.units.get(unit_id)
+                if unit:
+                    unit.path_queue.clear()
+                    
                 command_payload = JSON_Manager.get_moveorder(int(unit_id), int(target_grid_x), int(target_grid_y))
                 self.network.send_json(command_payload)
 
@@ -240,12 +248,14 @@ class GameWorld:
 
         network_data = self.network.get_latest_positions()
 
-        for entity_id,(net_x, net_y) in network_data.items():
+        for entity_id,point_list in network_data.items():
 
             entity_id2 = int(entity_id)
 
             if entity_id2 in self.units:
-                self.units[entity_id2].update_target(net_x,net_y)
+                for net_x, net_y in point_list:
+                    # Agregamos cada punto a la cola de Waypoints de la unidad
+                    self.units[entity_id2].add_target_position(net_x, net_y)
 
         for unit in self.units.values():
             unit.update_physics()
@@ -257,7 +267,10 @@ class GameWorld:
                 self.projectiles.remove(bullet)
 
     def get_entity(self,id):
-        return self.units[id]
+        if 0 <= id <= 999 or 5000 <= id <= 5999:
+            return self.structures[id]
+        elif 1000 <= id <= 4999 or 6000 <= id <= 9999:
+            return self.units[id]
 
     def detect_death_units(self):
         for unit in self.units.values():
@@ -271,9 +284,9 @@ class GameWorld:
             self.entity_team_changer(ID)
 
     def draw(self,screen,camera):
-        
+
         for obs_rect in self.obstacles:
-            
+
             screen_rect = obs_rect.move(-camera.x, -camera.y)
 
             pygame.draw.rect(screen, self.WHITE, screen_rect)

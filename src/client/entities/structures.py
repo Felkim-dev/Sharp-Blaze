@@ -13,7 +13,7 @@ class Structures:
         self.y = final_y
 
         # Extra attributes
-        self.hp = 1000
+        self.hp = 1500
         self.color = (255, 255, 255)
         self.attackable = True
 
@@ -35,7 +35,7 @@ class Structures:
 
             # Draw a green circle with 2px thickness (outline only)
             pygame.draw.circle(screen, (0, 255, 0), (screen_x, screen_y), self.hitbox_radius + 2, 2)
-            
+
         if self.is_targeted:
             screen_x = int(self.x - camera_x)
             screen_y = int(self.y - camera_y)
@@ -47,7 +47,9 @@ class Structures:
         self.color = color
 
     def reduce_health(self, current_health):
-        self.hp = current_health
+
+        self.hp = min(self.hp, current_health)
+        
 
 class Base(Structures):
     def __init__(self, structure_id, final_x, final_y):

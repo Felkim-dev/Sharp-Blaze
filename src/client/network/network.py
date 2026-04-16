@@ -77,7 +77,11 @@ class NetworkManager:
 
                     x,y =self.grid_to_world(indx_x,indx_y)
 
-                    self.latest_positions[entity_id] = (x, y)
+                    if entity_id not in self.latest_positions:
+                        self.latest_positions[entity_id] = []
+
+                    # Agregamos la nueva coordenada al final de su lista
+                    self.latest_positions[entity_id].append((x, y))
 
             except OSError:
                 # Ocurre si cerramos el socket al desconectar
@@ -92,8 +96,17 @@ class NetworkManager:
         return world_x, world_y
 
     def get_latest_positions(self):
-        """Pygame calls this method to retrieve te lastest positions"""
-        return self.latest_positions
+        """Pygame llama a esto para recuperar las colas y vaciar el buzón."""
+        # 1. Hacemos una copia rápida del buzón actual
+        buzon_actual = self.latest_positions.copy()
+
+        # 2. Vaciamos el buzón del NetworkManager.
+        # Es VITAL vaciarlo, de lo contrario en el siguiente frame Pygame
+        # volverá a leer los mismos puntos y las unidades nunca se detendrán.
+        self.latest_positions.clear()
+
+        # 3. Devolvemos la copia a Pygame
+        return buzon_actual
 
     # ------------------------------- TCP methods ------------------------------------------------------
     def connect(self, datos_iniciales):
@@ -184,17 +197,22 @@ class NetworkManager:
         return None
 
     def disconnect(self):
+        self.is_udp_listening = False
+
+        if self.client_udp is not None:
+            try:
+                self.client_udp.close()
+            except Exception as e:
+                print(f"Error cerrando el socket UDP: {e}")
+
+        self.client_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            self.client_udp.bind(("0.0.0.0", Config.UDP_PORT_CLIENT))
+        except Exception as e:
+            print(f"Advertencia al re-bindear UDP: {e}")
+
         if self.client_tcp is not None:
 
-            # SERVER DOES NOT RECEIVE this message
-            # try:
-            #     if self.connected:
-            #         message = json.dumps({"type": "LEAVE"}) + "\n"
-            #         self.client.send(message.encode("utf-8"))
-            # except Exception as e:
-            #     print(f"The farewell message could not be sent: {e}")
-
-            # finally:
             try:
                 self.client_tcp.close()
             except Exception as e:
@@ -204,10 +222,14 @@ class NetworkManager:
             self.client_tcp = None
             self.connected = False
             self.connection_status = "IDLE"
-
-            # CLEAN BUFFER
             self.receive_buffer = ""
-            self.pending_messages = []
+            self.pending_messages.clear()
+
+            # Estados UDP
+            self.server_ip = None
+            self.udp_port_server = None
+            self.latest_positions.clear()
+            self.current_rtt = 0
             print("Disconnection complete and network restarted.")
 
     def calculate_rtt(self, sent_timestamp):
