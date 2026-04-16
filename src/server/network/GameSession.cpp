@@ -62,12 +62,12 @@ void GameSession::loadCombatConfigNoLock()
 {
 	attackerHp = 100;
 	attackerDamage = 20;
-	attackerRange = 180;
+	attackerRange = 540;
 	attackerCooldownMs = 500;
 	collectorHp = 100;
 	baseHp = 1500;
 	minDamage = 1;
-
+    
 	const std::vector<std::filesystem::path> candidates = {
 		std::filesystem::path("src/config/combat_stats.json"),
 		std::filesystem::path("../src/config/combat_stats.json"),

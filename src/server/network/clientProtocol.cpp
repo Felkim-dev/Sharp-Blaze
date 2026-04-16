@@ -162,6 +162,22 @@ std::string client_protocol::BuildMatchStartResponse(
     std::uint16_t udpPort,
     std::shared_ptr<GameSession> session)
 {
+    constexpr float kCellSize = 50.0f;
+    constexpr int kGridMaxIndex = 99;
+
+    auto worldToGrid = [](float value) -> int {
+        int cell = static_cast<int>(value / kCellSize);
+        if (cell < 0)
+        {
+            return 0;
+        }
+        if (cell > kGridMaxIndex)
+        {
+            return kGridMaxIndex;
+        }
+        return cell;
+    };
+
     json structures = json::object();
     json units = json::object();
 
@@ -170,25 +186,37 @@ std::string client_protocol::BuildMatchStartResponse(
         auto structuresSnapshot = session->getStructuresSnapshot();
         for (const auto& structure : structuresSnapshot)
         {
-            structures[std::to_string(structure.entity_id)] = json::array({structure.x, structure.y});
+            structures[std::to_string(structure.entity_id)] = json::array({
+                worldToGrid(structure.x),
+                worldToGrid(structure.y)
+            });
         }
 
         auto unitsSnapshot = session->getUnitsSnapshot();
         for (const auto& unit : unitsSnapshot)
         {
-            units[std::to_string(unit.entity_id)] = json::array({unit.x, unit.y});
+            units[std::to_string(unit.entity_id)] = json::array({
+                worldToGrid(unit.x),
+                worldToGrid(unit.y)
+            });
         }
         
         auto shopSnapShot = session->getShopsSnapshot();
         for (const auto& shop : shopSnapShot)
         {
-            structures[std::to_string(shop.entityId)] = json::array({shop.x,shop.y});
+            structures[std::to_string(shop.entityId)] = json::array({
+                worldToGrid(shop.x),
+                worldToGrid(shop.y)
+            });
         }
 
         auto resourcesSnapShot = session->getResourcesSnapshot();
         for (const auto &resource : resourcesSnapShot)
         {
-            structures[std::to_string(resource.entityId)] = json::array({resource.x, resource.y});
+            structures[std::to_string(resource.entityId)] = json::array({
+                worldToGrid(resource.x),
+                worldToGrid(resource.y)
+            });
         }
     }
 

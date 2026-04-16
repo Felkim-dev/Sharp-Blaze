@@ -35,7 +35,7 @@ class GameSession
         std::unordered_map<int, games_types::ShopAuthorizationState> shopAuthorizationByPlayer;
         int attackerHp = 100;
         int attackerDamage = 20;
-        int attackerRange = 180;
+        int attackerRange = 540;
         int attackerCooldownMs = 500;
         int collectorHp = 100;
         int baseHp = 1500;
