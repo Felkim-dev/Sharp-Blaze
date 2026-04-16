@@ -22,7 +22,7 @@ class GameWorld:
         self.grid_rows = 100
 
     def world_to_grid(self, world_x, world_y):
-        """Convierte Píxeles de Pygame a Índices de la Grilla para enviarle a Steve."""
+        """Convert the pixels to grid indexes."""
         grid_x = int(world_x // self.cell_size)
         grid_y = int(world_y // self.cell_size)
 
@@ -32,7 +32,7 @@ class GameWorld:
         return grid_x, grid_y
 
     def grid_to_world(self, grid_x, grid_y):
-        """Convierte Índices de Steve al centro del Píxel para dibujar en Pygame."""
+        """Convert the indexes the grid to world."""
         world_x = (grid_x * self.cell_size) + (self.cell_size // 2)
         world_y = (grid_y * self.cell_size) + (self.cell_size // 2)
         return world_x, world_y
@@ -105,20 +105,23 @@ class GameWorld:
 
         self.local_player_id = local_player_ID
 
-        for entity_id,(net_x, net_y) in units.items(): 
+        for entity_id,(indexes_x, indexes_y) in units.items(): 
             entity_id2 =int(entity_id)
 
+            pixel_x,pixel_y = self.grid_to_world(indexes_x,indexes_y)
+
             # Entity Instation
-            self.units[entity_id2] = self.return_entities_object(entity_id2,net_x,net_y)
+            self.units[entity_id2] = self.return_entities_object(entity_id2,pixel_x,pixel_y)
 
             # Unity Recolorize
             self.entity_team_changer(entity_id2)
 
-        for entity_id,(net_x, net_y) in structures.items():
+        for entity_id,(indexes_x, indexes_y) in structures.items():
             entity_id2 = int(entity_id)
 
+            pixel_x, pixel_y = self.grid_to_world(indexes_x, indexes_y)
             # Entity Instation
-            self.structures[entity_id2] = self.return_entities_object(entity_id2,net_x,net_y)
+            self.structures[entity_id2] = self.return_entities_object(entity_id2,pixel_x,pixel_y)
 
             # Unity Recolorize
             if 0 <= entity_id2 <= 999 or 5000 <= entity_id2 <= 5999:
