@@ -21,6 +21,8 @@ class GameWorld:
         self.grid_cols = 100
         self.grid_rows = 100
 
+        self.projectiles = []
+
     def world_to_grid(self, world_x, world_y):
         """Convert the pixels to grid indexes."""
         grid_x = int(world_x // self.cell_size)
@@ -213,7 +215,7 @@ class GameWorld:
             # Treat it as a standard move command.
 
             target_grid_x, target_grid_y = self.world_to_grid(target_world_x, target_world_y)
-            
+
             for unit_id in selected_unit_ids:
 
                 command_payload = JSON_Manager.get_moveorder(int(unit_id), int(target_grid_x), int(target_grid_y))
@@ -233,12 +235,21 @@ class GameWorld:
         for unit in self.units.values():
             unit.update_physics()
 
+        for bullet in self.projectiles[:]:
+            bullet.update()
+
+            if bullet.is_dead:
+                self.projectiles.remove(bullet)
+
+    def get_entity(self,id):
+        return self.units[id]
+
     def detect_death_units(self):
         for unit in self.units.values():
-            if unit.hp < 0:
+            if unit.hp <= 0:
                 print(f"BORRAR UNIDAD {unit.id}")
                 return unit.id
-            
+
     def spawn_unit(self, ID, x, y):
         if ID not in self.units:
             self.units[ID] = self.return_entities_object(ID, x, y)
@@ -251,6 +262,9 @@ class GameWorld:
 
         for structure in self.structures.values():
             structure.draw(screen, camera.x, camera.y)
+
+        for bullet in self.projectiles:
+            bullet.draw(screen, camera)
 
     def handle_left_click(self, world_x, world_y):
         """Processes a left click in world coordinates to select units."""

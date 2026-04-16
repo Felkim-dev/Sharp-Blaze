@@ -6,6 +6,7 @@ from engine.camera import Camera
 from ui.minimap import Minimap
 from ui.telemetry import TelemetryPanel
 from ui.component import InfoBox, TextBox, Button
+from entities.projectile import RectangularProjectile
 from ui.shop import Shop
 
 from utils.json import JSON_Manager
@@ -245,19 +246,35 @@ class GameScreen:
 
                     # INFORMACION SOBRE EL OBJETIVO
                     self.target_entity_id = data["payload"]["target_entity_id"]
+                    self.attacker_entity_id = data["payload"]["attacker_entity_id"]
                     self.target_current_hp = data["payload"]["current_hp"]
 
                     # Informacion sobre el ATACANTE
                     self.attacker_entity_id = data["payload"]["attacker_entity_id"]
 
+                    attacker = self.world.get_entity(self.attacker_entity_id)
+                    target = self.world.get_entity(self.target_entity_id)
+
+                    new_bullet = RectangularProjectile(
+                        start_x=attacker.x,
+                        start_y=attacker.y,
+                        target_entity=target,
+                        hp=self.target_current_hp, 
+                    )
+
+                    self.world.projectile.append(new_bullet)
                     self.world.units[self.target_entity_id].reduce_health(self.target_current_hp)
 
                 elif data.get("type") == "GAME_OVER":
                     self.winner_player_id = data["payload"]["winner_player_id"]
                     self.trigger_game_over(self.winner_player_id)
-                
-                elif data.get("type") == "ENTITY_DESTROY":
-                    self.handle_entity_death(self.world.detect_death_units())
+
+                elif data.get("type") == "ENTITY_DESTROYED":
+
+                    id = self.world.detect_death_units()
+
+                    self.handle_entity_death(id)
+                    self.screen_manager.network.latest_positions.pop(id,None)
 
         else:
             # DEBUG MODE

@@ -13,7 +13,7 @@ class NetworkManager:
         """INITIAL STATES"""
 
         self.current_rtt = 0
-
+        self.cell_size = 50
         # -------------------- TCP INTIAL STATES -------------------
         self.client_tcp = None
         self.connected = False
@@ -72,8 +72,11 @@ class NetworkManager:
 
                 # Asumiendo tu paquete de 12 bytes (<iff)
                 if len(raw_data) == 12:
-                    entity_id, x, y = struct.unpack("<iff", raw_data)
+                    entity_id, indx_x, indx_y = struct.unpack("<iff", raw_data)
                     # Guardamos las coordenadas limpias en el buzón
+
+                    x,y =self.grid_to_world(indx_x,indx_y)
+
                     self.latest_positions[entity_id] = (x, y)
 
             except OSError:
@@ -81,6 +84,12 @@ class NetworkManager:
                 break
             except Exception as e:
                 print(f"[ERROR UDP Thread] {e}")
+
+    def grid_to_world(self, grid_x, grid_y):
+        """Convert the indexes the grid to world."""
+        world_x = (grid_x * self.cell_size) + (self.cell_size // 2)
+        world_y = (grid_y * self.cell_size) + (self.cell_size // 2)
+        return world_x, world_y
 
     def get_latest_positions(self):
         """Pygame calls this method to retrieve te lastest positions"""
