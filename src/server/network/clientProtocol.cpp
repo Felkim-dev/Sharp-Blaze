@@ -348,13 +348,13 @@ std::string client_protocol::BuildEntityDestroyedResponse(
     return response.dump() + '\n';
 }
 
-std::string client_protocol::BuildGameOverResponse(int sessionId, int winnerPlayerId)
+std::string client_protocol::BuildGameOverResponse(int sessionId, int playerId)
 {
     json response = {
         {"type", "GAME_OVER"},
         {"payload", {
             {"session_id", sessionId},
-            {"winner_player_id", winnerPlayerId},
+            {"winner_player_id", playerId},
             {"reason", "base_destroyed"}
         }}
     };
