@@ -1,6 +1,7 @@
 import pygame
 import math
 
+from ui.component import Health_Indicator
 
 class Structures:
     def __init__(self,structure_id,final_x,final_y):
@@ -12,16 +13,14 @@ class Structures:
         self.y = final_y
 
         # Extra attributes
-        self.hp = 1000
+        self.hp = 1500
         self.color = (255, 255, 255)
         self.attackable = True
 
         # SELECTION
         self.is_selected = False
-        self.hitbox_radius = 60  # How forgiving the click detection is
-
-    def change_color(self,color):
-        self.color = color
+        self.is_targeted = False
+        self.hitbox_radius = 215  # How forgiving the click detection is
 
     def check_click(self, world_click_x, world_click_y):
         """Returns True if the world coordinates fall inside this unit's hitbox."""
@@ -35,9 +34,22 @@ class Structures:
             screen_y = int(self.y - camera_y)
 
             # Draw a green circle with 2px thickness (outline only)
-            pygame.draw.circle(
-                screen, (0, 255, 0), (screen_x, screen_y), self.hitbox_radius + 2, 2
-            )
+            pygame.draw.circle(screen, (0, 255, 0), (screen_x, screen_y), self.hitbox_radius + 2, 2)
+
+        if self.is_targeted:
+            screen_x = int(self.x - camera_x)
+            screen_y = int(self.y - camera_y)
+
+            # Draw a red circle with 2px thickness (outline only)
+            pygame.draw.circle(screen, (220, 50, 50), (screen_x, screen_y), self.hitbox_radius + 2, 2)
+
+    def change_color(self,color):
+        self.color = color
+
+    def reduce_health(self, current_health):
+
+        self.hp = min(self.hp, current_health)
+        
 
 class Base(Structures):
     def __init__(self, structure_id, final_x, final_y):
@@ -45,20 +57,29 @@ class Base(Structures):
 
         self.width = 300
         self.height = 300
-        
+
+        self.health_bar = Health_Indicator(self.hp, self.width)
+
+        # SELECTION
+        self.hitbox_radius = 215  # How forgiving the click detection is
+
     def draw(self,screen,camera_x,camera_y):
 
-        #CAMERA MOVEMENTE
+        # CAMERA MOVEMENTE
         screen_x = int(self.x - camera_x)
         screen_y = int(self.y - camera_y)
-        
+
         if (-self.width < screen_x < screen.get_width()+self.width) and (-self.height < screen_y < screen.get_height()+self.height):
-            
+
+            self.draw_selection_ring(screen,camera_x,camera_y)
+
             rect_x = screen_x - (self.width//2)
             rect_y = screen_y - (self.height//2)
-            
+
             self.rectangle = pygame.Rect((rect_x,rect_y), (self.width,self.height))
             pygame.draw.rect(screen,self.color,self.rectangle)
+
+            self.health_bar.draw(screen, self.hp, self.x, self.y-150 , (camera_x, camera_y))
 
 class GoldMine(Structures):
     def __init__(self, structure_id, final_x, final_y):
@@ -66,17 +87,17 @@ class GoldMine(Structures):
         self.color = (233, 246, 14) #YELLOW
         self.inner_radius = 25
         self.outer_radius = 50
+        self.hitbox_radius = 50
         self.points = 5 
 
     def draw(self,screen,camera_x,camera_y):
         """Draw a star"""
-        
+
         screen_x = int(self.x-camera_x)
         screen_y = int(self.y-camera_y)
 
-
         if (-self.outer_radius < screen_x < screen.get_width()+self.outer_radius) and (-self.outer_radius < screen_y < screen.get_height()+self.outer_radius):
-            
+
             star_points = []
             angle = math.pi / 2 * 3 
             angle_increment = math.pi / self.points
@@ -87,11 +108,11 @@ class GoldMine(Structures):
                 py = int(self.y + math.sin(angle) * radius - camera_y)
 
                 # CAMERA MOVEMENT
-                
+
                 star_points.append((px, py))
                 angle += angle_increment
 
-            
+            # self.draw_selection_ring(screen, camera_x, camera_y)
 
             pygame.draw.polygon(screen, self.color, star_points)
 
@@ -102,6 +123,7 @@ class Shop(Structures):
 
         self.size = 50
         self.color = (227, 0, 255) #PINK
+        self.hitbox_radius = 50
 
     def draw(self,screen,camera_x, camera_y):
 
@@ -116,5 +138,6 @@ class Shop(Structures):
                 (screen_x - self.size, screen_y),  # Izquierda
             ]
 
-            pygame.draw.polygon(screen, self.color, diamond_points)
             self.draw_selection_ring(screen, camera_x, camera_y)
+
+            pygame.draw.polygon(screen, self.color, diamond_points)

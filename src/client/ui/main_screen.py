@@ -3,6 +3,7 @@ import sys
 import os
 
 from ui.component import Button, Text
+from ui.floating_shapes import FloatingShape
 
 class MainScreen:
     def __init__(self, screen_manager,screen):
@@ -28,11 +29,10 @@ class MainScreen:
         separation_y = 60
 
         # Buttons declarations
-        self.btn_host = Button((center_x, init_y + separation_y * 0), BUTTON_WH, self.LIGHT_BLUE,"Host Game", self.BLACK, TEXT_SIZE)
-        self.btn_join = Button((center_x, init_y + separation_y * 1), BUTTON_WH, self.LIGHT_BLUE, "Join Game", self.BLACK, TEXT_SIZE)
-        self.btn_bot = Button((center_x, init_y + separation_y * 2), BUTTON_WH, self.LIGHT_BLUE, "Bot Match", self.BLACK, TEXT_SIZE)
-        self.btn_options = Button((center_x, init_y + separation_y * 3), BUTTON_WH, self.LIGHT_BLUE, "Options", self.BLACK, TEXT_SIZE)
-        self.btn_exit = Button((center_x, init_y + separation_y * 4), BUTTON_WH, self.RED, "Exit", self.BLACK, TEXT_SIZE)
+        self.btn_join = Button((center_x, init_y + separation_y * 0), BUTTON_WH, self.LIGHT_BLUE, "Join Game", self.BLACK, TEXT_SIZE)
+        self.btn_bot = Button((center_x, init_y + separation_y * 1), BUTTON_WH, self.LIGHT_BLUE, "Bot Match", self.BLACK, TEXT_SIZE)
+        self.btn_options = Button((center_x, init_y + separation_y * 2), BUTTON_WH, self.LIGHT_BLUE, "Options", self.BLACK, TEXT_SIZE)
+        self.btn_exit = Button((center_x, init_y + separation_y * 3), BUTTON_WH, self.RED, "Exit", self.BLACK, TEXT_SIZE)
 
         # FONT
         CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -40,6 +40,15 @@ class MainScreen:
 
         # TEXT
         self.text_title = Text((self.screen.get_rect().centerx, self.screen.get_rect().centery//2),"SHARP BLAZE", 100,self.WHITE,TITLE_FONT)
+
+        # Create a list of background shapes (e.g., 25 floating shapes)
+        self.screen_width = screen.get_width()
+        self.screen_height = screen.get_height()
+
+        self.background_shapes = []
+        for _ in range(25):
+            shape = FloatingShape(self.screen_width, self.screen_height)
+            self.background_shapes.append(shape)
 
     def handle_events(self, events,keys):
 
@@ -50,10 +59,8 @@ class MainScreen:
                     mouse_pos = event.pos
 
                 # COLISSION WITH EACH BUTTON
-                if self.btn_host.button_rectangle.collidepoint(mouse_pos):
-                    self.screen_manager.change_screen("HOST")
 
-                elif self.btn_join.button_rectangle.collidepoint(mouse_pos):
+                if self.btn_join.button_rectangle.collidepoint(mouse_pos):
                     self.screen_manager.change_screen("JOIN")
 
                 elif self.btn_bot.button_rectangle.collidepoint(mouse_pos):
@@ -71,21 +78,24 @@ class MainScreen:
                 # MOUSE ON BUTTON DETECTION
                 mouse_pos = event.pos
 
-                self.btn_host.check_hover(mouse_pos)
                 self.btn_join.check_hover(mouse_pos)
                 self.btn_bot.check_hover(mouse_pos)
                 self.btn_options.check_hover(mouse_pos)
                 self.btn_exit.check_hover(mouse_pos)
 
     def update(self):
-        pass
+        for shape in self.background_shapes:
+            shape.update(self.screen_width, self.screen_height)
 
     def draw(self):
         # SCREEN DRAW
         self.screen.fill((self.MAINDARK))  # Fondo oscuro
 
+        # Figures
+        for shape in self.background_shapes:
+            shape.draw(self.screen)
+
         # BUTTONS DRAW
-        self.btn_host.draw(self.screen)
         self.btn_join.draw(self.screen)
         self.btn_bot.draw(self.screen)
         self.btn_options.draw(self.screen)

@@ -13,7 +13,7 @@ class NetworkManager:
         """INITIAL STATES"""
 
         self.current_rtt = 0
-
+        self.cell_size = 50
         # -------------------- TCP INTIAL STATES -------------------
         self.client_tcp = None
         self.connected = False
@@ -23,7 +23,7 @@ class NetworkManager:
 
         # ------------------- UDP INITIAL STATES -------------------
         self.client_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.client_udp.bind(("0.0.0.0",Config.UDP_PORT))
+        self.client_udp.bind(("0.0.0.0",Config.UDP_PORT_CLIENT))
         self.udp_port_server = None
         self.server_ip = None
 
@@ -31,12 +31,22 @@ class NetworkManager:
         self.is_udp_listening = False
 
     # --------------------------- UDP Methods -------------------------------------
-    def init_udp_connection(self):
+    def init_udp_connection(self,session_id,player_id):
         """It is called when the Lobby Start button is clicked"""
         self.server_ip = Config.SERVER_IP
         self.udp_port_server = 5556
 
-        welcome_message = b"HELLO_UDP"
+        local_session_id = int(session_id)
+        local_player_id = int(player_id)
+
+        header = struct.pack("!ii", session_id,player_id)
+        checksum = 0
+        for b in header:
+            checksum ^= b
+
+        welcome_message = header + struct.pack("!I", checksum)
+
+        print(f"Session_id {local_session_id}, player_id {local_player_id}, checksum {checksum}")
 
         try:
             self.client_udp.sendto(welcome_message,(self.server_ip,self.udp_port_server))
@@ -62,9 +72,16 @@ class NetworkManager:
 
                 # Asumiendo tu paquete de 12 bytes (<iff)
                 if len(raw_data) == 12:
-                    entity_id, x, y = struct.unpack("<iff", raw_data)
+                    entity_id, indx_x, indx_y = struct.unpack("<iff", raw_data)
                     # Guardamos las coordenadas limpias en el buzón
-                    self.latest_positions[entity_id] = (x, y)
+
+                    x,y =self.grid_to_world(indx_x,indx_y)
+
+                    if entity_id not in self.latest_positions:
+                        self.latest_positions[entity_id] = []
+
+                    # Agregamos la nueva coordenada al final de su lista
+                    self.latest_positions[entity_id].append((x, y))
 
             except OSError:
                 # Ocurre si cerramos el socket al desconectar
@@ -72,15 +89,30 @@ class NetworkManager:
             except Exception as e:
                 print(f"[ERROR UDP Thread] {e}")
 
+    def grid_to_world(self, grid_x, grid_y):
+        """Convert the indexes the grid to world."""
+        world_x = (grid_x * self.cell_size) + (self.cell_size // 2)
+        world_y = (grid_y * self.cell_size) + (self.cell_size // 2)
+        return world_x, world_y
+
     def get_latest_positions(self):
-        """Pygame calls this method to retrieve te lastest positions"""
-        return self.latest_positions
+        """Pygame llama a esto para recuperar las colas y vaciar el buzón."""
+        # 1. Hacemos una copia rápida del buzón actual
+        buzon_actual = self.latest_positions.copy()
+
+        # 2. Vaciamos el buzón del NetworkManager.
+        # Es VITAL vaciarlo, de lo contrario en el siguiente frame Pygame
+        # volverá a leer los mismos puntos y las unidades nunca se detendrán.
+        self.latest_positions.clear()
+
+        # 3. Devolvemos la copia a Pygame
+        return buzon_actual
 
     # ------------------------------- TCP methods ------------------------------------------------------
     def connect(self, datos_iniciales):
 
         self.server_ip = Config.SERVER_IP
-        self.tcp_port_server = Config.TCP_PORT
+        self.tcp_port_server = Config.TCP_PORT_SERVER
 
         if self.connection_status == "CONNECTING":
             return
@@ -165,17 +197,22 @@ class NetworkManager:
         return None
 
     def disconnect(self):
+        self.is_udp_listening = False
+
+        if self.client_udp is not None:
+            try:
+                self.client_udp.close()
+            except Exception as e:
+                print(f"Error cerrando el socket UDP: {e}")
+
+        self.client_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            self.client_udp.bind(("0.0.0.0", Config.UDP_PORT_CLIENT))
+        except Exception as e:
+            print(f"Advertencia al re-bindear UDP: {e}")
+
         if self.client_tcp is not None:
 
-            # SERVER DOES NOT RECEIVE this message
-            # try:
-            #     if self.connected:
-            #         message = json.dumps({"type": "LEAVE"}) + "\n"
-            #         self.client.send(message.encode("utf-8"))
-            # except Exception as e:
-            #     print(f"The farewell message could not be sent: {e}")
-
-            # finally:
             try:
                 self.client_tcp.close()
             except Exception as e:
@@ -185,10 +222,14 @@ class NetworkManager:
             self.client_tcp = None
             self.connected = False
             self.connection_status = "IDLE"
-
-            # CLEAN BUFFER
             self.receive_buffer = ""
-            self.pending_messages = []
+            self.pending_messages.clear()
+
+            # Estados UDP
+            self.server_ip = None
+            self.udp_port_server = None
+            self.latest_positions.clear()
+            self.current_rtt = 0
             print("Disconnection complete and network restarted.")
 
     def calculate_rtt(self, sent_timestamp):
