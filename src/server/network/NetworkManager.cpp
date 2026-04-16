@@ -504,6 +504,15 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         continue;
                     }
 
+                    games_types::ShopAuthorizationState shopState{};
+                    if (engine->reconcileShopAuthorization(internalPlayerId, shopState))
+                    {
+                        const std::string authMsg = client_protocol::BuildShopAuthorizationResponse(
+                            internalPlayerId,
+                            shopState);
+                        sendText(clientSocket, authMsg);
+                    }
+
                     const auto purchase = engine->processUnitPurchase(
                         internalPlayerId,
                         parsed.buyUnit.unitType,

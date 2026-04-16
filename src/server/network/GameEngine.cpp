@@ -19,10 +19,10 @@ namespace
     constexpr int kGridRows = 100;
     constexpr float kCellSize = 50.0f;
     constexpr int kBaseFootprintSize = 6;
-    constexpr int kSmallStructureFootprintSize = 3;
+    constexpr int kSmallStructureFootprintSize = 2;
 
-    constexpr float kCollectorCollisionRadius = 15.0f;
-    constexpr float kBaseCollisionRadius = 215.0f;
+    constexpr float kCollectorCollisionRadius = 150.0f;
+    constexpr float kBaseCollisionRadius = 1000.0f;
 
     float distanceSquared(float x1, float y1, float x2, float y2)
     {
@@ -82,7 +82,7 @@ namespace
 
             for (const auto& shop : shops)
             {
-                if (circlesIntersect(unit.x, unit.y, 0.0f, shop.x, shop.y, shop.radius))
+                if (circlesIntersect(unit.x, unit.y, 100.0f, shop.x, shop.y, shop.radius))
                 {
                     outState.authorized = true;
                     outState.shopId = shop.entityId;

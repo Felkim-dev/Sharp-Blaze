@@ -201,7 +201,7 @@ namespace games_types
         ResourceType resourceType = ResourceType::Gold;
         float x               = 0.0f;
         float y               = 0.0f;
-        float radius          = 200.0f;
+        float radius          = 400.0f;
         int remainingCapacity = 0;
         int extractionPerTick = 0;
     };
@@ -227,7 +227,7 @@ namespace games_types
         int entityId = 0;
         float x      = 0.0f;
         float y      = 0.0f;
-        float radius = 200.0f;
+        float radius = 400.0f;
     };
 
     struct StaticObstacle
