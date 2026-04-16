@@ -17,6 +17,26 @@ class GameWorld:
         self.units = {}
         self.structures = {}
 
+        self.cell_size = 50
+        self.grid_cols = 100
+        self.grid_rows = 100
+
+    def world_to_grid(self, world_x, world_y):
+        """Convierte Píxeles de Pygame a Índices de la Grilla para enviarle a Steve."""
+        grid_x = int(world_x // self.cell_size)
+        grid_y = int(world_y // self.cell_size)
+
+        # Evitar que los clics fuera del mapa rompan el servidor
+        grid_x = max(0, min(grid_x, self.grid_cols - 1))
+        grid_y = max(0, min(grid_y, self.grid_rows - 1))
+        return grid_x, grid_y
+
+    def grid_to_world(self, grid_x, grid_y):
+        """Convierte Índices de Steve al centro del Píxel para dibujar en Pygame."""
+        world_x = (grid_x * self.cell_size) + (self.cell_size // 2)
+        world_y = (grid_y * self.cell_size) + (self.cell_size // 2)
+        return world_x, world_y
+
     def entity_team_changer(self,id):
         if  0 <= id <= 4999:
             if 0 <= id <= 999:
