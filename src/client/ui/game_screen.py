@@ -5,7 +5,7 @@ from engine.world import GameWorld
 from engine.camera import Camera
 from ui.minimap import Minimap
 from ui.telemetry import TelemetryPanel
-from ui.component import InfoBox
+from ui.component import InfoBox, TextBox, Button
 from ui.shop import Shop
 
 from utils.json import JSON_Manager
@@ -69,6 +69,12 @@ class GameScreen:
         self.drag_start_screen = None
         self.drag_current_screen = None
 
+        # GAME STATE
+        self.is_game_over = False
+        self.winner_player_id = None
+        self.winner_box = TextBox((240,180),(800,200),(0,159, 12),f"SHARP BLAZE\nVICTORY!",(255,255,255),72)
+        self.game_over_button = Button((465,420),(350,70),(112,112,112),"RETURN TO MENU", (255,255,255),36)
+
     def load_initial_state(self, gold, units, structures, player_ID):
 
         self.player_gold = gold
@@ -77,9 +83,30 @@ class GameScreen:
         # TODO:ADD UNIT UI
         self.world.build_initial_state(units,structures,player_ID)
 
+    def trigger_game_over(self, winner_name):
+        self.is_game_over = True
+        self.winner_player_id = winner_name
+
+        # ¡Aquí es donde inyectas el nombre real para que se actualice en pantalla!
+        nuevo_texto = f"SHARP BLAZE\n{self.winner_player_id} VICTORY!"
+        self.winner_box.update_text(nuevo_texto)
+
     def handle_events(self, events, keys):
         """Processes one-time events like mouse clicks."""
         for event in events:
+            
+            if self.is_game_over:
+                # Si el juego terminó, SOLO escuchamos clics izquierdos para el botón
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    mouse_pos = event.pos
+
+                    # Tu lógica exacta de detección:
+                    if self.game_over_button.button_rectangle.collidepoint(mouse_pos):
+                        print("[GAME SCREEN] Return to Menu clicked!")
+                        self.screen_manager.change_screen("MAIN")
+                continue
+
+        
             # Detect Mouse Button Press
             if event.type == pygame.MOUSEBUTTONDOWN:
 
@@ -157,7 +184,23 @@ class GameScreen:
                     else:
                         self.is_shop_open = False
 
+    def handle_entity_death(self, entity_id: int):
+        """Delete the entity whe it is death."""
+
+        # Delete units
+        if entity_id in self.world.units:
+            del self.world.units[entity_id]
+            print(f"[WORLD] Unit {entity_id} destroyed and removed.")
+
+        # Delete Structures
+        elif entity_id in self.world.structures:
+            del self.world.structures[entity_id]
+            print(f"[WORLD] Structure {entity_id} destroyed and removed.")
+
     def update(self):
+
+        if self.is_game_over:
+            return
 
         if not Config.OFFLINE_DEBUG_MODE:
             data = self.screen_manager.network.receive_json()
@@ -208,6 +251,10 @@ class GameScreen:
                     self.attacker_entity_id = data["payload"]["attacker_entity_id"]
 
                     self.world.units[self.target_entity_id].reduce_health(self.target_entity_id)
+
+                elif data.get("type") == "GAME_OVER":
+                    self.winner_player_id = data["payload"]["winner_player_id"]
+                    self.trigger_game_over(self.winner_player_id)
 
         else:
             # DEBUG MODE
