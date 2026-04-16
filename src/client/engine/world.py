@@ -17,6 +17,26 @@ class GameWorld:
         self.units = {}
         self.structures = {}
 
+        self.cell_size = 50
+        self.grid_cols = 100
+        self.grid_rows = 100
+
+    def world_to_grid(self, world_x, world_y):
+        """Convert the pixels to grid indexes."""
+        grid_x = int(world_x // self.cell_size)
+        grid_y = int(world_y // self.cell_size)
+
+        # Evitar que los clics fuera del mapa rompan el servidor
+        grid_x = max(0, min(grid_x, self.grid_cols - 1))
+        grid_y = max(0, min(grid_y, self.grid_rows - 1))
+        return grid_x, grid_y
+
+    def grid_to_world(self, grid_x, grid_y):
+        """Convert the indexes the grid to world."""
+        world_x = (grid_x * self.cell_size) + (self.cell_size // 2)
+        world_y = (grid_y * self.cell_size) + (self.cell_size // 2)
+        return world_x, world_y
+
     def entity_team_changer(self,id):
         if  0 <= id <= 4999:
             if 0 <= id <= 999:
@@ -85,20 +105,23 @@ class GameWorld:
 
         self.local_player_id = local_player_ID
 
-        for entity_id,(net_x, net_y) in units.items(): 
+        for entity_id,(indexes_x, indexes_y) in units.items(): 
             entity_id2 =int(entity_id)
 
+            pixel_x,pixel_y = self.grid_to_world(indexes_x,indexes_y)
+
             # Entity Instation
-            self.units[entity_id2] = self.return_entities_object(entity_id2,net_x,net_y)
+            self.units[entity_id2] = self.return_entities_object(entity_id2,pixel_x,pixel_y)
 
             # Unity Recolorize
             self.entity_team_changer(entity_id2)
 
-        for entity_id,(net_x, net_y) in structures.items():
+        for entity_id,(indexes_x, indexes_y) in structures.items():
             entity_id2 = int(entity_id)
 
+            pixel_x, pixel_y = self.grid_to_world(indexes_x, indexes_y)
             # Entity Instation
-            self.structures[entity_id2] = self.return_entities_object(entity_id2,net_x,net_y)
+            self.structures[entity_id2] = self.return_entities_object(entity_id2,pixel_x,pixel_y)
 
             # Unity Recolorize
             if 0 <= entity_id2 <= 999 or 5000 <= entity_id2 <= 5999:
@@ -181,14 +204,19 @@ class GameWorld:
             # We clicked an enemy! Mark it red and return ATTACK command
             clicked_enemy_entity.is_targeted = True
 
-            command_payload = JSON_Manager.attack(int(clicked_enemy_id),self.local_player_id)
-            self.network.send_json(command_payload)
+            for unit_id in selected_unit_ids:
+                command_payload = JSON_Manager.attack(int(clicked_enemy_id),unit_id)
+                self.network.send_json(command_payload)
 
         else:
             # We clicked empty ground (or our own unit/neutral structure).
             # Treat it as a standard move command.
+
+            target_grid_x, target_grid_y = self.world_to_grid(target_world_x, target_world_y)
+            
             for unit_id in selected_unit_ids:
-                command_payload = JSON_Manager.get_moveorder(int(unit_id), int(target_world_x), int(target_world_y))
+
+                command_payload = JSON_Manager.get_moveorder(int(unit_id), int(target_grid_x), int(target_grid_y))
                 self.network.send_json(command_payload)
 
     def update(self):

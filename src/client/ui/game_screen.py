@@ -227,6 +227,7 @@ class GameScreen:
                 elif data.get("type") == "UNIT_SPAWNED":
                     self.new_unit_id = data["payload"]["unit_id"]
 
+                    #TODO: Implementar la parte de Hardocding
                     if 5000<=self.new_unit_id <= 9999: 
                         self.world.units[self.new_unit_id] = self.world.return_entities_object(self.new_unit_id,4700, 300)
                     elif 0 <= self.new_unit_id <= 4999:
