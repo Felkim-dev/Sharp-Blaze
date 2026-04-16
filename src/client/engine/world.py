@@ -204,14 +204,19 @@ class GameWorld:
             # We clicked an enemy! Mark it red and return ATTACK command
             clicked_enemy_entity.is_targeted = True
 
-            command_payload = JSON_Manager.attack(int(clicked_enemy_id),self.local_player_id)
-            self.network.send_json(command_payload)
+            for unit_id in selected_unit_ids:
+                command_payload = JSON_Manager.attack(int(clicked_enemy_id),unit_id)
+                self.network.send_json(command_payload)
 
         else:
             # We clicked empty ground (or our own unit/neutral structure).
             # Treat it as a standard move command.
+
+            target_grid_x, target_grid_y = self.world_to_grid(target_world_x, target_world_y)
+            
             for unit_id in selected_unit_ids:
-                command_payload = JSON_Manager.get_moveorder(int(unit_id), int(target_world_x), int(target_world_y))
+
+                command_payload = JSON_Manager.get_moveorder(int(unit_id), int(target_grid_x), int(target_grid_y))
                 self.network.send_json(command_payload)
 
     def update(self):
