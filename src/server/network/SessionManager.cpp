@@ -280,9 +280,11 @@ bool SessionOrchestrator::markReady(SOCKET clientSocket, const int& sessionId)
     if (clientSocket == record.p1)
     {
         record.p1Ready = true;
+        record.p2Ready = true;
     }
     else if (clientSocket == record.p2)
     {
+        record.p1Ready = true;
         record.p2Ready = true;
     }
     else
