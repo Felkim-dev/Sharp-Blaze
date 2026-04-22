@@ -324,6 +324,82 @@ namespace
         assert(firstDistFromTarget >= 1 && firstDistFromTarget <= 2);
         assert(secondDistFromTarget >= 1 && secondDistFromTarget <= 2);
     }
+
+    void testContinuousAttackRespectsCooldownAndRepeats()
+    {
+        auto session = std::make_shared<GameSession>(1, 2, 10);
+        GameEngine engine(session);
+
+        session->upsertUnitPosition(1000, 2500.0f, 2500.0f);
+        session->upsertUnitPosition(6000, 2550.0f, 2500.0f);
+
+        int initialHp = 0;
+        int initialMaxHp = 0;
+        assert(session->getEntityHealth(6000, initialHp, initialMaxHp));
+
+        games_types::PlayerCommand cmd{};
+        cmd.type = games_types::CommandType::AttackUnit;
+        cmd.playerId = 1;
+        cmd.attack.attackerId = 1000;
+        cmd.attack.targetId = 6000;
+
+        engine.tcpCommandEnqueue(cmd);
+        engine.commandQueueProcess();
+
+        int hpAfterFirstHit = 0;
+        int maxAfterFirstHit = 0;
+        assert(session->getEntityHealth(6000, hpAfterFirstHit, maxAfterFirstHit));
+        assert(hpAfterFirstHit < initialHp);
+
+        const int cooldownMs = session->getAttackerCooldownMs();
+        assert(cooldownMs > 0);
+
+        engine.advanceCombat(cooldownMs - 1);
+        int hpBeforeCooldownEnd = 0;
+        int maxBeforeCooldownEnd = 0;
+        assert(session->getEntityHealth(6000, hpBeforeCooldownEnd, maxBeforeCooldownEnd));
+        assert(hpBeforeCooldownEnd == hpAfterFirstHit);
+
+        engine.advanceCombat(1);
+        int hpAfterSecondHit = 0;
+        int maxAfterSecondHit = 0;
+        assert(session->getEntityHealth(6000, hpAfterSecondHit, maxAfterSecondHit));
+        assert(hpAfterSecondHit < hpAfterFirstHit);
+    }
+
+    void testContinuousAttackStopsAfterOutOfRange()
+    {
+        auto session = std::make_shared<GameSession>(1, 2, 11);
+        GameEngine engine(session);
+
+        session->upsertUnitPosition(1000, 2500.0f, 2500.0f);
+        session->upsertUnitPosition(6000, 2550.0f, 2500.0f);
+
+        games_types::PlayerCommand cmd{};
+        cmd.type = games_types::CommandType::AttackUnit;
+        cmd.playerId = 1;
+        cmd.attack.attackerId = 1000;
+        cmd.attack.targetId = 6000;
+
+        engine.tcpCommandEnqueue(cmd);
+        engine.commandQueueProcess();
+
+        session->upsertUnitPosition(6000, 4900.0f, 4900.0f);
+        const int cooldownMs = session->getAttackerCooldownMs();
+        engine.advanceCombat(cooldownMs);
+
+        int hpAfterOutOfRangeTick = 0;
+        int maxAfterOutOfRangeTick = 0;
+        assert(session->getEntityHealth(6000, hpAfterOutOfRangeTick, maxAfterOutOfRangeTick));
+
+        session->upsertUnitPosition(6000, 2550.0f, 2500.0f);
+        engine.advanceCombat(cooldownMs);
+
+        int hpAfterReturnInRange = 0;
+        int maxAfterReturnInRange = 0;
+        assert(session->getEntityHealth(6000, hpAfterReturnInRange, maxAfterReturnInRange));
+        assert(hpAfterReturnInRange == hpAfterOutOfRangeTick);
+    }
 }
 
 int main()
@@ -342,6 +418,8 @@ int main()
     testMoveOrderQueuesCellRoute();
     testMoveOrderAdvancesOneCellPerTick();
     testFormationSpreadAroundSharedTarget();
+    testContinuousAttackRespectsCooldownAndRepeats();
+    testContinuousAttackStopsAfterOutOfRange();
 
     std::cout << "server_logic_tests: all checks passed\n";
     return 0;
