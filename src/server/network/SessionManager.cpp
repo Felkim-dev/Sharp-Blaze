@@ -1,7 +1,9 @@
 #include "../include/SessionManager.h"
 #include "../include/udpDispatcher.h"
+#include "../include/clientProtocol.h"
 
 #include <chrono>
+#include <sstream>
 #include <thread>
 #include <utility>
 
@@ -29,7 +31,8 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
                                          int p1InternalPlayerId,
                                          SOCKET p2Socket,
                                          int p2InternalPlayerId,
-                                         std::function<void(SOCKET, int)> resourceBalanceCallback)
+                                         std::function<void(SOCKET, int)> resourceBalanceCallback,
+                                         std::function<void(SOCKET, const std::string&)> matchEventCallback)
 {
     constexpr int kTickMs = 16;
     const std::chrono::milliseconds targetFrame(kTickMs);
@@ -40,7 +43,42 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
 
         if (engine)
         {
+            engine->commandQueueProcess();
+            engine->advanceMovement(kTickMs);
             engine->advanceCollectors(kTickMs);
+            engine->advanceCombat(kTickMs);
+
+            const auto attackResults = engine->drainAttackResults();
+            for (const auto& result : attackResults)
+            {
+                if (!matchEventCallback)
+                {
+                    continue;
+                }
+
+                SOCKET targetSocket = INVALID_SOCKET;
+                if (result.playerId == p1InternalPlayerId)
+                {
+                    targetSocket = p1Socket;
+                }
+                else if (result.playerId == p2InternalPlayerId)
+                {
+                    targetSocket = p2Socket;
+                }
+
+                if (targetSocket == INVALID_SOCKET)
+                {
+                    continue;
+                }
+
+                const std::string attackResultMessage = client_protocol::BuildAttackResultResponse(
+                    result.attackerId,
+                    result.targetId,
+                    result.accepted,
+                    result.reason,
+                    result.targetCurrentHp);
+                matchEventCallback(targetSocket, attackResultMessage);
+            }
 
             const auto economyEvents = engine->drainEconomyTransactions();
             for (const auto& event : economyEvents)
@@ -65,6 +103,60 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
                     resourceBalanceCallback(targetSocket, event.resultingGold);
                 }
             }
+
+            bool shouldStop = false;
+            const auto combatEvents = engine->drainCombatEvents();
+            for (const auto& event : combatEvents)
+            {
+                if (!matchEventCallback)
+                {
+                    continue;
+                }
+
+                std::string message;
+                if (event.type == games_types::CombatEventType::UnitDamaged)
+                {
+                    std::ostringstream response;
+                    response << "{\"type\":\"UNIT_DAMAGED\",\"payload\":{"
+                             << "\"session_id\":" << event.sessionId << ','
+                             << "\"target_player_id\":" << event.targetPlayerId << ','
+                             << "\"target_entity_id\":" << event.targetEntityId << ','
+                             << "\"attacker_player_id\":" << event.attackerPlayerId << ','
+                             << "\"attacker_entity_id\":" << event.attackerEntityId << ','
+                             << "\"current_hp\":" << event.currentHp
+                             << "}}\n";
+                    message = response.str();
+                }
+                else if (event.type == games_types::CombatEventType::EntityDestroyed)
+                {
+                    message = client_protocol::BuildEntityDestroyedResponse(
+                        event.sessionId,
+                        event.targetEntityId,
+                        event.targetPlayerId,
+                        event.attackerPlayerId);
+                }
+                else if (event.type == games_types::CombatEventType::GameOver)
+                {
+                    message = client_protocol::BuildGameOverResponse(
+                        event.sessionId,
+                        event.winnerPlayerId);
+                    shouldStop = true;
+                }
+
+                if (!message.empty())
+                {
+                    matchEventCallback(p1Socket, message);
+                    if (p2Socket != p1Socket)
+                    {
+                        matchEventCallback(p2Socket, message);
+                    }
+                }
+            }
+
+            if (shouldStop)
+            {
+                runningFlag->store(false);
+            }
         }
 
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -80,6 +172,12 @@ void SessionOrchestrator::setResourceBalanceCallback(std::function<void(SOCKET, 
 {
     std::lock_guard<std::mutex> lock(mtx);
     resourceBalanceCallback = std::move(callback);
+}
+
+void SessionOrchestrator::setMatchEventCallback(std::function<void(SOCKET, const std::string&)> callback)
+{
+    std::lock_guard<std::mutex> lock(mtx);
+    matchEventCallback = std::move(callback);
 }
 
 void SessionOrchestrator::startSimulationNoLock(SessionRecord& record)
@@ -114,7 +212,8 @@ void SessionOrchestrator::startSimulationNoLock(SessionRecord& record)
         record.p1InternalPlayerId,
         record.p2,
         record.p2InternalPlayerId,
-        resourceBalanceCallback);
+        resourceBalanceCallback,
+        matchEventCallback);
 }
 
 void SessionOrchestrator::stopSimulationNoLock(SessionRecord& record)

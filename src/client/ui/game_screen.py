@@ -5,7 +5,8 @@ from engine.world import GameWorld
 from engine.camera import Camera
 from ui.minimap import Minimap
 from ui.telemetry import TelemetryPanel
-from ui.component import InfoBox
+from ui.component import InfoBox, TextBox, Button
+from entities.projectile import RectangularProjectile
 from ui.shop import Shop
 
 from utils.json import JSON_Manager
@@ -64,22 +65,60 @@ class GameScreen:
         self.infobox_hat = InfoBox((250,650),(200,40),gray,"COLLECTORS",self.player_recolector_units_string,white,15,HAT_PATH)
         self.infobox_sword = InfoBox((470,650),(200,40),gray,"ATTACKERS",self.player_attacker_units_string,white,15,SWORD_PATH)
 
-    def load_initial_state(self, gold, units, structures):
+        # UI Drag State
+        self.is_dragging = False
+        self.drag_start_screen = None
+        self.drag_current_screen = None
+
+        # GAME STATE
+        self.is_game_over = False
+        self.winner_player_id = None
+        self.winner_box = TextBox((240,180),(800,200),(0,159, 12),f"SHARP BLAZE\nVICTORY!",(255,255,255),72)
+        self.game_over_button = Button((465,420),(350,70),(112,112,112),"RETURN TO MENU", (255,255,255),36)
+
+    def load_initial_state(self, gold, units, structures, player_ID, obstacles, local_ID, enemy_ID):
 
         self.player_gold = gold
         self.infobox_gold.update_text(str(self.player_gold)) 
 
+        self.local_ID = local_ID
+        self.enemy_ID = enemy_ID
+        self.player_Id = player_ID
+        
         # TODO:ADD UNIT UI
+        self.world.build_initial_state(units,structures,player_ID,obstacles)
 
-        self.world.build_initial_state(units,structures)
+    def trigger_game_over(self, winner_name):
+        self.is_game_over = True
+        self.winner_player_id = winner_name
+
+        # ¡Aquí es donde inyectas el nombre real para que se actualice en pantalla!
+        nuevo_texto = f"SHARP BLAZE {self.winner_player_id} VICTORY!"
+        self.winner_box.update_text(nuevo_texto)
 
     def handle_events(self, events, keys):
         """Processes one-time events like mouse clicks."""
         for event in events:
+
+            if self.is_game_over:
+                # Si el juego terminó, SOLO escuchamos clics izquierdos para el botón
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    mouse_pos = event.pos
+
+                    # Tu lógica exacta de detección:
+                    if self.game_over_button.button_rectangle.collidepoint(mouse_pos):
+                        print("[GAME SCREEN] Return to Menu clicked!")
+                        self.screen_manager.network.disconnect()
+                        self.is_game_over = False
+                        self.winner_player_id = None
+                        self.screen_manager.change_screen("MAIN")
+                continue
+
             # Detect Mouse Button Press
             if event.type == pygame.MOUSEBUTTONDOWN:
 
                 mouse_x, mouse_y = event.pos
+                mouse_pos = event.pos
 
                 # 1. UI PROTECTION: Check if click is on the Square Minimap first!
                 # We simply ask Pygame if the mouse coordinates are inside the minimap's Rect
@@ -112,24 +151,63 @@ class GameScreen:
                 # -------------------------------------------------------------
                 if event.button == 1:
 
-                    selected_entity = self.world.handle_left_click(world_x, world_y)
+                    self.is_dragging = True
+                    self.drag_start_screen = mouse_pos
+                    self.drag_current_screen = mouse_pos
+
+                # -------------------------------------------------------------
+                # RIGHT CLICK (Button 3) -> Issue Move Commands
+                # -------------------------------------------------------------
+
+                elif event.button == 3:
+                    self.world.handle_right_click(world_x, world_y)
+
+            # FASE 2: Movimiento (Actualizar el dibujo)
+            elif event.type == pygame.MOUSEMOTION:
+                if self.is_dragging:
+                    self.drag_current_screen = event.pos
+
+            # FASE 3: Soltar Click (Ejecutar la selección matemática)
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if self.is_dragging:
+                    self.is_dragging = False
+                    end_screen = event.pos
+
+                    if self.minimap.rect.collidepoint(end_screen[0], end_screen[1]):
+                        continue
+
+                    # Translate screen coordinates to world coordinates
+                    start_world_x = self.drag_start_screen[0] + self.camera.x
+                    start_world_y = self.drag_start_screen[1] + self.camera.y
+                    end_world_x = end_screen[0] + self.camera.x
+                    end_world_y = end_screen[1] + self.camera.y
+
+                    # Send to the engine logic
+                    selected_entity = self.world.handle_box_selection(start_world_x, start_world_y, end_world_x, end_world_y)
 
                     if selected_entity and selected_entity.__class__.__name__ == "Shop":
                         self.is_shop_open = True
                         print("[GAME SCREEN] Shop selected! Opening UI.")
                     else:
-                        # Auto-close the shop if we click the ground or another unit
                         self.is_shop_open = False
 
-                    self.world.handle_left_click(world_x, world_y)
+    def handle_entity_death(self, entity_id: int):
+        """Delete the entity whe it is death."""
 
-                # -------------------------------------------------------------
-                # RIGHT CLICK (Button 3) -> Issue Move Commands
-                # -------------------------------------------------------------
-                elif event.button == 3:
-                    self.world.handle_right_click(world_x, world_y)
+        # Delete units
+        if entity_id in self.world.units:
+            del self.world.units[entity_id]
+            print(f"[WORLD] Unit {entity_id} destroyed and removed.")
+
+        # Delete Structures
+        elif entity_id in self.world.structures:
+            del self.world.structures[entity_id]
+            print(f"[WORLD] Structure {entity_id} destroyed and removed.")
 
     def update(self):
+
+        if self.is_game_over:
+            return
 
         if not Config.OFFLINE_DEBUG_MODE:
             data = self.screen_manager.network.receive_json()
@@ -156,6 +234,7 @@ class GameScreen:
                 elif data.get("type") == "UNIT_SPAWNED":
                     self.new_unit_id = data["payload"]["unit_id"]
 
+                    # TODO: Implementar la parte de Hardcoding
                     if 5000<=self.new_unit_id <= 9999: 
                         self.world.units[self.new_unit_id] = self.world.return_entities_object(self.new_unit_id,4700, 300)
                     elif 0 <= self.new_unit_id <= 4999:
@@ -164,11 +243,58 @@ class GameScreen:
                     self.world.entity_team_changer(self.new_unit_id)
 
                 elif data.get("type") == "RESOURCES":
-                    
+
                     self.new_gold = data["payload"]["new_balance"]
 
                     self.player_gold = self.new_gold
                     self.infobox_gold.update_text(str(self.player_gold))
+
+                elif data.get("type") == "UNIT_DAMAGED":
+
+                    # INFORMACION SOBRE EL OBJETIVO
+                    self.target_entity_id = data["payload"]["target_entity_id"]
+                    self.attacker_entity_id = data["payload"]["attacker_entity_id"]
+                    self.target_current_hp = data["payload"]["current_hp"]
+
+                    # Informacion sobre el ATACANTE
+                    self.attacker_entity_id = data["payload"]["attacker_entity_id"]
+
+                    attacker = self.world.get_entity(self.attacker_entity_id)
+                    target = self.world.get_entity(self.target_entity_id)
+
+                    new_bullet = RectangularProjectile(
+                        start_x=attacker.x,
+                        start_y=attacker.y,
+                        target_entity=target,
+                        hp=self.target_current_hp, 
+                    )
+
+                    self.world.projectiles.append(new_bullet)
+
+                    if 1000 <= self.target_entity_id <= 4999 or 6000 <= self.target_entity_id <= 9999:
+                        self.world.units[self.target_entity_id].reduce_health(self.target_current_hp)
+
+                    elif 0 <= self.target_entity_id <= 999 or 5000 <= self.target_entity_id <= 5999:
+                        self.world.structures[self.target_entity_id].reduce_health(self.target_current_hp)
+
+                elif data.get("type") == "GAME_OVER":
+                    self.winner_player_id = data["payload"]["winner_player_id"]
+                    
+                    text = ""
+                    
+                    if self.player_Id == self.winner_player_id:
+                        text = self.local_ID
+                    else:
+                        text = self.enemy_ID
+                        
+                    self.trigger_game_over(text)
+
+                elif data.get("type") == "ENTITY_DESTROYED":
+
+                    id = self.world.detect_death_units()
+
+                    self.handle_entity_death(id)
+                    self.screen_manager.network.latest_positions.pop(id,None)
 
         else:
             # DEBUG MODE
@@ -244,3 +370,26 @@ class GameScreen:
         self.infobox_gold.draw(self.screen)
         self.infobox_hat.draw(self.screen)
         self.infobox_sword.draw(self.screen)
+
+        # ================================= SELECTION BOX =======================================
+        # DRAW SELECTION BOX
+        if self.is_dragging and self.drag_current_screen:
+            # 1. Normalize screen coordinates
+            left = min(self.drag_start_screen[0], self.drag_current_screen[0])
+            top = min(self.drag_start_screen[1], self.drag_current_screen[1])
+            width = abs(self.drag_start_screen[0] - self.drag_current_screen[0])
+            height = abs(self.drag_start_screen[1] - self.drag_current_screen[1])
+
+            # 2. Draw outer border (solid)
+            box_rect = (left, top, width, height)
+            pygame.draw.rect(self.screen, (50, 220, 50), box_rect, 1)
+
+            # 3. Draw inner fill (transparent)
+            # Pygame needs a new Surface to handle alpha transparency on rects
+            alpha_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+            alpha_surface.fill((50, 220, 50, 40))  # Green with low opacity
+            self.screen.blit(alpha_surface, (left, top))
+
+        if self.is_game_over:
+            self.winner_box.draw(self.screen)
+            self.game_over_button.draw(self.screen)

@@ -17,6 +17,11 @@ namespace
         return type == games_types::EntityType::Collector ||
                type == games_types::EntityType::Attacker;
     }
+    bool isAttackerTroop(int entityId)
+    {
+        return games_types::id_ranges::p1Attackers.contains(entityId) ||
+               games_types::id_ranges::p2Attackers.contains(entityId);
+    }
 
     bool parseEntityType(const json& value, games_types::EntityType& outType)
     {
@@ -157,33 +162,71 @@ std::string client_protocol::BuildMatchStartResponse(
     std::uint16_t udpPort,
     std::shared_ptr<GameSession> session)
 {
+    constexpr float kCellSize = 50.0f;
+    constexpr int kGridMaxIndex = 99;
+
+    auto worldToGrid = [](float value) -> int {
+        int cell = static_cast<int>(value / kCellSize);
+        if (cell < 0)
+        {
+            return 0;
+        }
+        if (cell > kGridMaxIndex)
+        {
+            return kGridMaxIndex;
+        }
+        return cell;
+    };
+
     json structures = json::object();
     json units = json::object();
+    json obstacles = json::array();
 
     if (session)
     {
         auto structuresSnapshot = session->getStructuresSnapshot();
         for (const auto& structure : structuresSnapshot)
         {
-            structures[std::to_string(structure.entity_id)] = json::array({structure.x, structure.y});
+            structures[std::to_string(structure.entity_id)] = json::array({
+                worldToGrid(structure.x),
+                worldToGrid(structure.y)
+            });
         }
 
         auto unitsSnapshot = session->getUnitsSnapshot();
         for (const auto& unit : unitsSnapshot)
         {
-            units[std::to_string(unit.entity_id)] = json::array({unit.x, unit.y});
+            units[std::to_string(unit.entity_id)] = json::array({
+                worldToGrid(unit.x),
+                worldToGrid(unit.y)
+            });
         }
         
         auto shopSnapShot = session->getShopsSnapshot();
         for (const auto& shop : shopSnapShot)
         {
-            structures[std::to_string(shop.entityId)] = json::array({shop.x,shop.y});
+            structures[std::to_string(shop.entityId)] = json::array({
+                worldToGrid(shop.x),
+                worldToGrid(shop.y)
+            });
         }
 
         auto resourcesSnapShot = session->getResourcesSnapshot();
         for (const auto &resource : resourcesSnapShot)
         {
-            structures[std::to_string(resource.entityId)] = json::array({resource.x, resource.y});
+            structures[std::to_string(resource.entityId)] = json::array({
+                worldToGrid(resource.x),
+                worldToGrid(resource.y)
+            });
+        }
+
+        auto obstaclesSnapshot = session->getStaticObstaclesSnapshot();
+        for (const auto& obstacle : obstaclesSnapshot)
+        {
+            for (const auto& cell : obstacle.cells)
+            {
+                obstacles.push_back(json::array({cell.x, cell.y}));
+            }
         }
     }
 
@@ -197,6 +240,7 @@ std::string client_protocol::BuildMatchStartResponse(
             {"start", true},
             {"structures", structures},
             {"units", units},
+            {"obstacles", obstacles},
             {"gold",500}
         }}
     };
@@ -226,6 +270,92 @@ std::string client_protocol::BuildResourcesResponse(int newBalance)
         {"type", "RESOURCES"},
         {"payload", {
             {"new_balance", newBalance}
+        }}
+    };
+
+    return response.dump() + '\n';
+}
+
+std::string client_protocol::BuildAttackResultResponse(
+    int attackerId,
+    int targetId,
+    bool accepted,
+    const std::string& reason,
+    int currentHp)
+{
+    json payload = {
+        {"attacker_id", attackerId},
+        {"target_id", targetId},
+        {"reason", reason}
+    };
+
+    if (currentHp >= 0)
+    {
+        payload["current_hp"] = currentHp;
+    }
+
+    json response = {
+        {"type", "ATTACK_RESULT"},
+        {"status", accepted ? "accepted" : "rejected"},
+        {"payload", payload}
+    };
+
+    return response.dump() + '\n';
+}
+
+std::string client_protocol::BuildUnitDamagedResponse(
+    int sessionId,
+    int targetPlayerId,
+    int targetEntityId,
+    int attackerPlayerId,
+    int attackerEntityId,
+    int currentHp,
+    int maxHp)
+{
+    (void)maxHp;
+
+    json response = {
+        {"type", "UNIT_DAMAGED"},
+        {"payload", {
+            {"session_id", sessionId},
+            {"target_player_id", targetPlayerId},
+            {"target_entity_id", targetEntityId},
+            {"attacker_player_id", attackerPlayerId},
+            {"attacker_entity_id", attackerEntityId},
+            {"current_hp", currentHp},
+        }}
+    };
+
+    return response.dump() + '\n';
+}
+
+std::string client_protocol::BuildEntityDestroyedResponse(
+    int sessionId,
+    int entityId,
+    int ownerPlayerId,
+    int attackerPlayerId)
+{
+    json response = {
+        {"type", "ENTITY_DESTROYED"},
+        {"payload", {
+            {"session_id", sessionId},
+            {"entity_id", entityId},
+            {"owner_player_id", ownerPlayerId},
+            {"attacker_player_id", attackerPlayerId}
+        }}
+    };
+
+    return response.dump() + '\n';
+}
+
+std::string client_protocol::BuildGameOverResponse(int sessionId, int playerId)
+{
+    json response = {
+        {"type", "GAME_OVER"},
+        {"payload", {
+            {"session_id", sessionId},
+            {"winner_player_id", playerId},
+            {"reason", "base_destroyed"}
         }}
     };
 
@@ -412,24 +542,83 @@ bool client_protocol::MessageProtocol(
             responseToSend = BuildErrorResponse("missing_or_invalid_unit_id");
             return false;
         }
-        if (!payload.contains("target_x") || !payload["target_x"].is_number())
+        if (!payload.contains("target_x") || !payload["target_x"].is_number_integer())
         {
             responseToSend = BuildErrorResponse("missing_or_invalid_target_x");
             return false;
         }
-        if (!payload.contains("target_y") || !payload["target_y"].is_number())
+        if (!payload.contains("target_y") || !payload["target_y"].is_number_integer())
         {
             responseToSend = BuildErrorResponse("missing_or_invalid_target_y");
             return false;
         }
 
+        const int targetX = payload["target_x"].get<int>();
+        const int targetY = payload["target_y"].get<int>();
+        if (targetX < 0 || targetX > 99)
+        {
+            responseToSend = BuildErrorResponse("target_x_out_of_range");
+            return false;
+        }
+        if (targetY < 0 || targetY > 99)
+        {
+            responseToSend = BuildErrorResponse("target_y_out_of_range");
+            return false;
+        }
+
         outMessage.type = ParsedMessageType::MoveUnit;
         outMessage.moveUnit.unitId = payload["unit_id"].get<int>();
-        outMessage.moveUnit.destX = payload["target_x"].get<float>();
-        outMessage.moveUnit.destY = payload["target_y"].get<float>();
+        outMessage.moveUnit.destination = games_types::CellCoord{targetX, targetY};
         responseToSend = BuildOkResponse();
-        std::cout << outMessage.moveUnit.unitId << "," << outMessage.moveUnit.destX << "," << outMessage.moveUnit.destY<< '\n';
         return true;
+    }
+    if (type == "ATTACK")
+    {
+        if (!data.contains("payload") || !data["payload"].is_object())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_payload");
+            return false;
+        }
+
+        const json& payload = data["payload"];
+        if (!payload.contains("attacker_id") || !payload["attacker_id"].is_number_integer())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_attacker_id");
+            return false;
+        }
+
+        if (!payload.contains("target_id") || !payload["target_id"].is_number_integer())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_target_id");
+            return false;
+        }
+
+        const int attackerId = payload["attacker_id"].get<int>();
+        const int targetId = payload["target_id"].get<int>();
+        if (attackerId <= 0)
+        {
+            responseToSend = BuildErrorResponse("invalid_attacker_id_value");
+            return false;
+        }
+
+        if (targetId < 0)
+        {
+            responseToSend = BuildErrorResponse("invalid_target_id_value");
+            return false;
+        }
+
+        if (!isAttackerTroop(attackerId))
+        {
+            responseToSend = BuildErrorResponse("attacker_id_not_attacker_unit");
+            return false;
+        }
+
+        outMessage.type = ParsedMessageType::Attack;
+        outMessage.attack.attackerId = attackerId;
+        outMessage.attack.targetId = targetId;
+        responseToSend = BuildOkResponse();
+        return true;
+
     }
 
     if (type == "BUY_UNIT")

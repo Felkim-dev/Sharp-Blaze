@@ -205,6 +205,9 @@ class TextBox:
         # Rectangle
         self.textbox_rectangle = pygame.Rect(Position, (RectangleDimension))
 
+    def update_text(self,text):
+        self.text = text
+        
     def draw(self, screen):
 
         # Text render
@@ -512,3 +515,43 @@ class ShopButton(Button):
         screen.blit(main_text_surf, main_text_rect)
         screen.blit(self.gold_icon, coin_icon_rect)
         screen.blit(cost_text_surf, cost_text_rect)
+
+class Health_Indicator():
+
+    def __init__(self,entity_total_life,entity_width):
+
+        # MAIN ATTRIBUTES
+        self.total_life = entity_total_life
+        self.max_width = entity_width
+        self.height = 6
+
+        # COLORS
+        self.border_color = (255,255,255)
+        self.bg_color = (0,0,0)
+        self.health_color = (140, 195, 66)
+
+    def draw(self,screen, current_life, entity_x, entity_y, camera):
+
+        safe_life = max(0, current_life)
+
+        health_percentage = safe_life / self.total_life
+        current_health_width = int(self.max_width * health_percentage)
+
+        # POSITIONING: Translate world coordinates to screen coordinates
+        # Center the bar horizontally relative to the entity
+        screen_x = int(entity_x - camera[0]) - (self.max_width // 2)
+        # Place the bar a few pixels above the entity
+        screen_y = int(entity_y - camera[1]) - 30
+
+        # INSTANTIATE RECTANGLES DYNAMICALLY
+        # Background Rect (Full width, Black)
+        bg_rect = pygame.Rect(screen_x, screen_y, self.max_width, self.height)
+        # Foreground Rect (Percentage width, Green)
+        health_rect = pygame.Rect(screen_x, screen_y, current_health_width, self.height)
+
+        # RENDER (Order matters: Bottom layer to Top layer)
+        pygame.draw.rect(screen, self.bg_color, bg_rect)
+        pygame.draw.rect(screen, self.health_color, health_rect)
+
+        # Draw a 1-pixel white border around the whole bar for crispness
+        pygame.draw.rect(screen, self.border_color, bg_rect, 1)

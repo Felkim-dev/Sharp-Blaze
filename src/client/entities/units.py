@@ -1,6 +1,8 @@
 import pygame
 import math
 
+from ui.component import Health_Indicator
+
 class Unit:
     def __init__(self, unit_id, start_x, start_y):
 
@@ -20,21 +22,45 @@ class Unit:
 
         # SELECTION
         self.is_selected = False
+        self.is_targeted = False
         self.hitbox_radius = 20  # How forgiving the click detection is
 
-    def update_target(self, new_x, new_y):
-        '''Update where the unit will be move'''
-        self.target_x = new_x
-        self.target_y = new_y
+        # LERP
+        self.path_queue = []
+        self.speed = 10.0
 
     def change_color(self,color):
         self.color = color
 
     def update_physics(self):
-        """LERP"""
-        lerp_factor = 0.2
-        self.x += (self.target_x - self.x) * lerp_factor
-        self.y += (self.target_y - self.y) * lerp_factor
+        """LERP con Cola de Waypoints para evitar atravesar paredes"""
+
+        # Si tenemos lugares a donde ir en la cola...
+        if len(self.path_queue) > 0:
+
+            # 1. Miramos el destino más inmediato (el índice 0)
+            current_target_x, current_target_y = self.path_queue[0]
+
+            dx = current_target_x - self.x
+            dy = current_target_y - self.y
+            distance = math.hypot(dx, dy)
+
+            # 3. Si estamos a menos de 5 píxeles, consideramos que ya llegamos a esa esquina
+            if distance < 20.0:
+                self.path_queue.pop(0)  # Lo borramos de la lista
+            else:
+                # 4. Si aún estamos lejos, aplicamos el LERP suave de 0.2 hacia ESE punto
+                self.x += (dx / distance) * self.speed
+                self.y += (dy / distance) * self.speed
+
+    def add_target_position(self, new_x, new_y):
+        # Evitar agregar el mismo punto exacto dos veces seguidas
+        if len(self.path_queue) > 0:
+            last_x, last_y = self.path_queue[-1]
+            if last_x == new_x and last_y == new_y:
+                return  # Ignoramos el punto duplicado
+
+        self.path_queue.append((new_x, new_y))
 
     def check_click(self, world_click_x, world_click_y):
         """Returns True if the world coordinates fall inside this unit's hitbox."""
@@ -52,12 +78,24 @@ class Unit:
                 screen, (0, 255, 0), (screen_x, screen_y), self.hitbox_radius + 2, 2
             )
 
+        elif self.is_targeted:
+            screen_x = int(self.x - camera_x)
+            screen_y = int(self.y - camera_y)
+
+            # Draw a green circle with 2px thickness (outline only)
+            pygame.draw.circle(screen, (220, 50, 50), (screen_x, screen_y), self.hitbox_radius + 2, 2)
+
+    def reduce_health(self, current_health):
+
+        self.hp = min(self.hp, current_health)
+
 
 class Attacker(Unit):
     def __init__(self, unit_id, start_x, start_y):
         super().__init__(unit_id, start_x, start_y)
 
         self.size = 15
+        self.health_bar = Health_Indicator(self.hp, self.size*2)
 
     def draw(self,screen, camera_x, camera_y):
         """The unit is drawed"""
@@ -73,6 +111,8 @@ class Attacker(Unit):
             p3 = (screen_x + self.size, screen_y + self.size)
 
             pygame.draw.polygon(screen, self.color, [p1, p2, p3])
+        
+            self.health_bar.draw(screen,self.hp,self.x,self.y,(camera_x,camera_y))
 
 
 class Recolectors(Unit):
@@ -80,6 +120,8 @@ class Recolectors(Unit):
         super().__init__(unit_id, start_x, start_y)
 
         self.radius = 15
+        self.health_bar = Health_Indicator(self.hp, self.radius*2)
+
     def draw(self,screen,camera_x,camera_y):
 
         pos_x = int(self.x - camera_x)
@@ -89,3 +131,5 @@ class Recolectors(Unit):
 
         if (-self.radius < pos_x < screen.get_width() + self.radius) and (-self.radius < pos_y < screen.get_height() + self.radius):
             pygame.draw.circle(screen, self.color, (pos_x,pos_y), 15)
+
+            self.health_bar.draw(screen, self.hp, self.x, self.y, (camera_x,camera_y))
