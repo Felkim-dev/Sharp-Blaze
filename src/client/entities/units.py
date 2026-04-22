@@ -27,7 +27,7 @@ class Unit:
 
         # LERP
         self.path_queue = []
-        self.lerp_factor = 0.2
+        self.speed = 10.0
 
     def change_color(self,color):
         self.color = color
@@ -41,16 +41,17 @@ class Unit:
             # 1. Miramos el destino más inmediato (el índice 0)
             current_target_x, current_target_y = self.path_queue[0]
 
-            # 2. Calculamos a qué distancia estamos de ese punto
-            distance = math.hypot(current_target_x - self.x, current_target_y - self.y)
+            dx = current_target_x - self.x
+            dy = current_target_y - self.y
+            distance = math.hypot(dx, dy)
 
             # 3. Si estamos a menos de 5 píxeles, consideramos que ya llegamos a esa esquina
-            if distance < 5:
+            if distance < 20.0:
                 self.path_queue.pop(0)  # Lo borramos de la lista
             else:
                 # 4. Si aún estamos lejos, aplicamos el LERP suave de 0.2 hacia ESE punto
-                self.x += (current_target_x - self.x) * self.lerp_factor
-                self.y += (current_target_y - self.y) * self.lerp_factor
+                self.x += (dx / distance) * self.speed
+                self.y += (dy / distance) * self.speed
 
     def add_target_position(self, new_x, new_y):
         # Evitar agregar el mismo punto exacto dos veces seguidas

@@ -224,25 +224,25 @@ class GameWorld:
             for unit_id in selected_unit_ids:
                 unit = self.units.get(unit_id)
                 if unit:
-                    unit.path_queue.clear()
 
-            command_payload = JSON_Manager.attack(int(clicked_enemy_id),unit_id)
-            self.network.send_json(command_payload)
+                    command_payload = JSON_Manager.attack(int(clicked_enemy_id),unit_id)
+                    self.network.send_json(command_payload)
 
         else:
             # We clicked empty ground (or our own unit/neutral structure).
             # Treat it as a standard move command.
-
-            target_grid_x, target_grid_y = self.world_to_grid(target_world_x, target_world_y)
-
             for unit_id in selected_unit_ids:
 
                 unit = self.units.get(unit_id)
                 if unit:
                     unit.path_queue.clear()
+
+                    self.network.clear_entity_buffer(unit_id)
                     
-                command_payload = JSON_Manager.get_moveorder(int(unit_id), int(target_grid_x), int(target_grid_y))
-                self.network.send_json(command_payload)
+                    target_grid_x, target_grid_y = self.world_to_grid(target_world_x, target_world_y)
+
+                    command_payload = JSON_Manager.get_moveorder(int(unit_id), int(target_grid_x), int(target_grid_y))
+                    self.network.send_json(command_payload)
 
     def update(self):
 
