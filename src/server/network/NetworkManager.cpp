@@ -294,8 +294,9 @@ void NetworkManager::start(){
             std::cerr << "[ERROR] Accept failed.\n";
             continue;
         }
+        // Handle a different client (player), when connects to the main server. Assign a new thread to each player.
         std::thread(&NetworkManager::handleClient, this, clientSocket, playerIdCounter).detach();
-        playerIdCounter++;
+        playerIdCounter++;  // Sum 1 to rhe previous playerIDCounter assigned to previous player
     }
 }
 

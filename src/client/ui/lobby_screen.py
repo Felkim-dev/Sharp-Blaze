@@ -101,7 +101,7 @@ class LobbyScreen:
                             }
 
                             game_screen = self.screen_manager.screens["GAME"]
-                            game_screen.load_initial_state(units,structures)
+                            game_screen.load_initial_state(500,units,structures)
                             self.screen_manager.change_screen("GAME")
                         else:
                             self.screen_manager.network.send_json(JSON_Manager.get_startgame())
