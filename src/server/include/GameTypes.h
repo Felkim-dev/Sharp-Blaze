@@ -236,12 +236,6 @@ namespace games_types
         std::vector<CellCoord> cells;
     };
 
-    struct StaticObstacle
-    {
-        int id = 0;
-        std::vector<CellCoord> cells;
-    };
-
     struct ShopAuthorizationState
     {
         bool authorized = false;

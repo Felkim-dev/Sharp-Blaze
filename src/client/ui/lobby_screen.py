@@ -1,9 +1,10 @@
 import pygame
 
-from ui.component import Button, Text,TextBox,CloseButton
+from ui.component import Button, Text, TextBox, CloseButton
 
 from utils.config import Config
-from utils.json import JSON_Manager
+from utils.json   import JSON_Manager
+from ia.easy_bot  import EasyBot
 class LobbyScreen:
     def __init__(self, screen_manager, screen):
 
@@ -52,7 +53,20 @@ class LobbyScreen:
         init_y = (self.screen.get_height() // 3) + 50
 
         # Button creation
-        self.btn_Start = Button((center_x_button, init_y+100),BUTTON_WH,self.GRAY,"START GAME",self.BLACK,TEXT_SIZE,)
+        self.btn_Start = Button(
+            (center_x_button, init_y + 100),
+            BUTTON_WH, self.GRAY, "START GAME", self.BLACK, TEXT_SIZE,
+        )
+
+        # BOT MATCH button — lanza el EasyBot como jugador 2
+        BOT_COLOR = (0, 180, 120)   # verde para distinguirlo del START
+        self.btn_bot_match = Button(
+            (center_x_button, init_y + 160),
+            BUTTON_WH, BOT_COLOR, "BOT MATCH", self.BLACK, TEXT_SIZE,
+        )
+
+        # Estado del bot (None = no lanzado aun)
+        self._bot: EasyBot | None = None
 
         # TEXT BOX CREATION
         size_text_boxes = 25
@@ -101,10 +115,28 @@ class LobbyScreen:
                             }
 
                             game_screen = self.screen_manager.screens["GAME"]
-                            game_screen.load_initial_state(500,units,structures)
+                            game_screen.load_initial_state(
+                                500,           # gold
+                                units,
+                                structures,
+                                1,             # player_ID (humano es player 1 en debug)
+                                [],            # obstacles (vacio en debug)
+                                "Player1",     # local_ID
+                                "Player2",     # enemy_ID
+                            )
                             self.screen_manager.change_screen("GAME")
                         else:
                             self.screen_manager.network.send_json(JSON_Manager.get_startgame())
+
+                    # ── Boton BOT MATCH ─────────────────────────────────
+                    if (not Config.OFFLINE_DEBUG_MODE
+                            and self._bot is None
+                            and self.btn_bot_match.button_rectangle.collidepoint(mouse_pos)):
+
+                        print("[LobbyScreen] Lanzando EasyBot...")
+                        self._bot = EasyBot(nickname="BOT_EASY")
+                        self._bot.start()   # corre en hilo daemon, no bloquea Pygame
+                        print("[LobbyScreen] EasyBot lanzado en hilo de fondo.")
 
             if self.btn_close.handle_event(event):
                 self.screen_manager.network.disconnect()
@@ -117,6 +149,10 @@ class LobbyScreen:
 
                 if self.textbox_nickname2.text != "WAITING...":
                     self.btn_Start.check_hover(mouse_pos)
+
+                # Hover del boton BOT MATCH (solo si el bot no fue lanzado aun)
+                if self._bot is None and not Config.OFFLINE_DEBUG_MODE:
+                    self.btn_bot_match.check_hover(mouse_pos)
 
     def update(self):
 
@@ -174,6 +210,16 @@ class LobbyScreen:
 
         # COMPONENTS DRAW
         self.btn_Start.draw(self.screen)
+
+        # Boton BOT MATCH: visible solo en modo online y mientras el bot no fue lanzado
+        if not Config.OFFLINE_DEBUG_MODE and self._bot is None:
+            self.btn_bot_match.draw(self.screen)
+        elif not Config.OFFLINE_DEBUG_MODE and self._bot is not None:
+            # Mostrar mensaje de estado del bot
+            font = pygame.font.SysFont(None, 24)
+            surf = font.render("BOT conectandose...", True, (0, 220, 140))
+            rect = self.btn_bot_match.button_rectangle
+            self.screen.blit(surf, (rect.x + 10, rect.y + 15))
 
         self.textbox_nickname1.draw(self.screen)
         self.textbox_nickname2.draw(self.screen)
