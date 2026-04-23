@@ -96,7 +96,7 @@ void NetworkManager::tryMatchPlayersNoLock()
         sendText(b,msg2);
 
         std::cout << "[MATCH] " << p1.playerName << " vs " << p2.playerName
-                    << " | " << sessionId << "\n";
+                    << " | " << sessionId << std::endl;
     }
 }
 
@@ -155,11 +155,11 @@ void NetworkManager::handleReadyNoLock(SOCKET socket, const int &sessionId)
 
     if (sendText(players.first, startMsgP1))
     {
-        std::cout << "GAME_START ENVIADO CORRECTAMENTE\n";
+        std::cout << "GAME_START ENVIADO CORRECTAMENTE" << std::endl;
     }
     sendText(players.second, startMsgP2);
 
-    std::cout << "[MATCH] " << effectiveSessionId << " started.\n";
+    std::cout << "[MATCH] " << effectiveSessionId << " started." << std:: endl;
 }
 
 void NetworkManager::cleanupDisconnectedNoLock(SOCKET socket)
@@ -214,7 +214,7 @@ NetworkManager::NetworkManager(int p):port(p){
     // INIT de platform_socket.h
     if (!net::Init())
     {
-        std::cerr << "[ERROR] Socket library failed.\n";
+        std::cerr << "[ERROR] Socket library failed." << std::endl;
     }
 
     sessionOrchestrator.setResourceBalanceCallback(
@@ -259,7 +259,7 @@ void NetworkManager::start(){
     serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (!net::IsValid(serverSocket))
     {
-        std::cerr << "[ERROR] Socket creation failed." << net::GetLastError() << '\n';
+        std::cerr << "[ERROR] Socket creation failed." << net::GetLastError() << std:: endl;
         net::Cleanup();
         return;
     }
@@ -272,7 +272,7 @@ void NetworkManager::start(){
     // bind the socket to the address and port
     if (bind(serverSocket, (sockaddr *)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
     {
-        std::cerr << "[ERROR] Socket bind failed." << net::GetLastError() << '\n';
+        std::cerr << "[ERROR] Socket bind failed." << net::GetLastError() << std::endl;
         net::CloseSocket(serverSocket);
         net::Cleanup();
         return;
@@ -281,12 +281,12 @@ void NetworkManager::start(){
     // listen for incoming connections
     if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR)
     {
-        std::cerr << "[ERROR] Listen failed." << net::GetLastError() << '\n';
+        std::cerr << "[ERROR] Listen failed." << net::GetLastError() << std::endl;
         net::CloseSocket(serverSocket);
         net::Cleanup();
         return;
     }
-    std::cout << "[INFO] Server is listening on port " << port << '\n';
+    std::cout << "[INFO] Server is listening on port " << port << std::endl;
     int playerIdCounter = 1;
 
     isRunning = true;
@@ -302,7 +302,7 @@ void NetworkManager::start(){
         SOCKET clientSocket = accept(serverSocket, (sockaddr *)&clientAddr, &clientSize);
         if (!net::IsValid(clientSocket))
         {
-            std::cerr << "[ERROR] Accept failed.\n";
+            std::cerr << "[ERROR] Accept failed." << std::endl;
             continue;
         }
         std::thread(&NetworkManager::handleClient, this, clientSocket, playerIdCounter).detach();
@@ -330,7 +330,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
 
             if (!framingOk)
             {
-                std::cerr << "[ERROR] Framing failed for P" << playerId << ". Closing connection.\n";
+                std::cerr << "[ERROR] Framing failed for P" << playerId << ". Closing connection." << std::endl;
                 break;
             }
 
@@ -349,7 +349,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                     if (!sendText(clientSocket, responseToSend))
                     {
                         std::cerr << "[ERROR] send() failed for P" << playerId
-                                  << " code=" << net::GetLastError() << "\n";
+                                  << " code=" << net::GetLastError() << std::endl;
                         break;
                     }
                 }
@@ -392,7 +392,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                     }
 
                     std::cout << "[QUEUE] P" << playerId << " (" << parsed.initialConnect.playerId
-                              << ") connected.\n";
+                              << ") connected." << std::endl;
                 }
                 else if (parsed.type == client_protocol::ParsedMessageType::PlayerReady)
                 {
@@ -401,6 +401,7 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                 }
                 else if (parsed.type == client_protocol::ParsedMessageType::MoveUnit)
                 {
+                    std::cout << "llego una peticion de movimiento" << std::endl;
                     int sessionId;
                     int internalPlayerId = 0;
                     {
@@ -577,13 +578,13 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
         }
         else if (bytesReceived == 0)
         {
-            std::cout << "[INFO] Player " << playerId << " disconnected.\n";
+            std::cout << "[INFO] Player " << playerId << " disconnected." << std::endl;
             break;
         }
         else
         {
             std::cerr << "[ERROR] recv() failed for P" << playerId
-                      << " code=" << net::GetLastError() << "\n";
+                      << " code=" << net::GetLastError() << std::endl;
             break;
         }
     }

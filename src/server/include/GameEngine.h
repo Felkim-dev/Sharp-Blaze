@@ -69,11 +69,14 @@ class GameEngine
 		void setNewRouteToCell(const games_types::PlayerCommand& cmd, const games_types::CellCoord& destinationCell);
 		void processMoveCommandsWithFormation(const std::vector<games_types::PlayerCommand>& moveCommands);
 		void processAttackCommand(const games_types::PlayerCommand& cmd);
+		AttackRequestResult executeAttackAttempt(int playerId, int attackerId, int targetId);
+		bool shouldKeepAttackLock(const AttackRequestResult& result) const;
 
 		std::shared_ptr<GameSession> session;
 		std::shared_ptr<PathFinder> pathFinder;
 		std::queue<games_types::PlayerCommand> commandQueue;
 		std::unordered_map<int, std::deque<games_types::CellCoord>> movementRoutes;
+		std::unordered_map<int, int> attackLockTargetByAttacker;
 		std::unordered_map<int, FormationAssignment> formationByUnit;
 		std::uint64_t formationEpoch = 0;
 		std::unordered_map<int, int> attackerCooldownRemainingMs;

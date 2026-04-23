@@ -111,8 +111,8 @@ std::string client_protocol::BuildErrorResponse(const std::string &reason)
         {"status", "rejected"},
         {"reason", reason}
     };
-    std::cout << reason <<'\n';
-    std::cout << "error en el msj\n";
+    std::cout << reason << std::endl;
+    std::cout << "error en el msj" << std::endl;
     return response.dump() +"\n"; 
 }
 
@@ -442,7 +442,7 @@ bool client_protocol::MessageProtocol(
     {
         if (!data.contains("payload") || !data["payload"].is_object())
         {   
-            std::cout << "llego el json bien\n";
+            std::cout << "llego el json bien" << std::endl;
             responseToSend = BuildErrorResponse("missing_or_invalid_payload");
             return false;
         }

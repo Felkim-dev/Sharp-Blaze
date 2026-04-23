@@ -3,14 +3,14 @@
 #include "../include/udpDispatcher.h"
 
 int main(){
-    std::cout << "------SHARP BLAZE SERVER ENGINE------\n";
+    std::cout << "------SHARP BLAZE SERVER ENGINE------" <<std::endl;
 
     //INICIALIZA UDP DISTPATCHER
 
     GlobalUDPDispatcher &udpDispatcher = GlobalUDPDispatcher::getInstance();
     if (!udpDispatcher.init())
     {
-        std::cerr << "[ERROR] Failed to initialize UDP dispatcher\n";
+        std::cerr << "[ERROR] Failed to initialize UDP dispatcher" <<std::endl;
         return 1;
     }
     //inicializa TCP SERVER
