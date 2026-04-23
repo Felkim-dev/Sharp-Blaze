@@ -47,8 +47,8 @@ class EasyBot(BotController):
         
         # Cooldowns y asignaciones
         self.last_purchase_tick = 0
-        self.last_attack_tick = 0
         self.shop_unit_id = None
+        self.attacking = False
         
         print("[EasyBot] Instanciado. Estrategia: equilibrada (recolectar y atacar).")
 
@@ -90,7 +90,7 @@ class EasyBot(BotController):
                 self.net.send_json(JSON_Manager.get_moveorder(self.shop_unit_id, tx, ty))
 
         # ── 2. COMPRAS (con cooldown) ──
-        can_buy = (self._tick - self.last_purchase_tick) >= 5
+        can_buy = (self._tick - self.last_purchase_tick) >= 15  # Comprar una unidad cada 15 segundos
         if state.shop_authorized and can_buy and total_units < self.MAX_UNITS:
             if num_collectors < self.MAX_COLLECTORS and state.gold >= self.COLLECTOR_COST:
                 print(f"[EasyBot] ACCION: Comprando Collector (oro={state.gold})")
@@ -114,11 +114,14 @@ class EasyBot(BotController):
                 if cstate == "TO_MINE":
                     if mine_pos:
                         dist_to_mine = math.hypot(upos[0] - mine_pos[0], upos[1] - mine_pos[1])
-                        if dist_to_mine < 2.5:
+                        if dist_to_mine < 8.0:
                             self.collector_state[uid] = "WAIT_MINE"
                             self.wait_ticks[uid] = 2
-                        else:
-                            self.net.send_json(JSON_Manager.get_moveorder(uid, int(mine_pos[0]), int(mine_pos[1])))
+                        elif self._tick % 5 == 0:
+                            import random
+                            ox = random.randint(-4, 4)
+                            oy = random.randint(-4, 4)
+                            self.net.send_json(JSON_Manager.get_moveorder(uid, int(mine_pos[0]) + ox, int(mine_pos[1]) + oy))
                 
                 elif cstate == "WAIT_MINE":
                     self.wait_ticks[uid] = self.wait_ticks.get(uid, 0) - 1
@@ -127,11 +130,14 @@ class EasyBot(BotController):
                         
                 elif cstate == "TO_BASE":
                     dist_to_base = math.hypot(upos[0] - base_pos[0], upos[1] - base_pos[1])
-                    if dist_to_base < 4.0:
+                    if dist_to_base < 15.0:
                         self.collector_state[uid] = "WAIT_BASE"
                         self.wait_ticks[uid] = 1
-                    else:
-                        self.net.send_json(JSON_Manager.get_moveorder(uid, int(base_pos[0]), int(base_pos[1])))
+                    elif self._tick % 5 == 0:
+                        import random
+                        ox = random.randint(-6, 6)
+                        oy = random.randint(-6, 6)
+                        self.net.send_json(JSON_Manager.get_moveorder(uid, int(base_pos[0]) + ox, int(base_pos[1]) + oy))
                         
                 elif cstate == "WAIT_BASE":
                     self.wait_ticks[uid] = self.wait_ticks.get(uid, 0) - 1
@@ -139,17 +145,49 @@ class EasyBot(BotController):
                         self.collector_state[uid] = "TO_MINE"
 
         # ── 4. ATAQUE ──
-        # Mandar guerreros a la base enemiga cada 20 segundos
-        if attackers and (self._tick - self.last_attack_tick) >= 20:
-            enemy_base = state.enemy_base
-            if enemy_base:
-                print(f"[EasyBot] ACCION: Enviando {len(attackers)} atacantes al enemigo!")
-                tx, ty = int(enemy_base[0]), int(enemy_base[1])
+        # Acumular guerreros en la base y enviar ataque al tener 5
+        if attackers:
+            if not getattr(self, 'attacking', False):
+                if len(attackers) >= 5:
+                    self.attacking = True
+                    print(f"[EasyBot] ACCION: Ejercito listo! Iniciando asedio con {len(attackers)} unidades.")
+            else:
+                if len(attackers) == 0:
+                    self.attacking = False
+                    print(f"[EasyBot] ACCION: Ejercito aniquilado. Retirada tactica.")
+
+            if getattr(self, 'attacking', False) and state.enemy_base_id is not None and state.enemy_base:
+                enemy_base_pos = state.enemy_base
+                target_id = state.enemy_base_id
+                
                 for uid in attackers:
                     if uid == self.shop_unit_id:
                         continue
-                    self.net.send_json(JSON_Manager.get_moveorder(uid, tx, ty))
-                self.last_attack_tick = self._tick
+                        
+                    upos = state.my_units[uid]
+                    dist = math.hypot(upos[0] - enemy_base_pos[0], upos[1] - enemy_base_pos[1])
+                    
+                    if dist < 15.0:
+                        # Si esta cerca de la base, le damos la orden de ATAQUE (repetidamente)
+                        self.net.send_json(JSON_Manager.attack(target_id, uid))
+                    elif self._tick % 10 == 0:
+                        # Si esta lejos, actualizamos su ruta de acercamiento cada 10s
+                        import random
+                        ox = random.randint(-4, 4)
+                        oy = random.randint(-4, 4)
+                        tx, ty = int(enemy_base_pos[0]) + ox, int(enemy_base_pos[1]) + oy
+                        self.net.send_json(JSON_Manager.get_moveorder(uid, tx, ty))
+            else:
+                # Si no estamos atacando, distribuirlos un poco alrededor de la base para que no se apilen
+                if self._tick % 10 == 0 and state.my_base:
+                    import random
+                    for uid in attackers:
+                        if uid == self.shop_unit_id:
+                            continue
+                        ox = random.randint(-3, 3)
+                        oy = random.randint(-3, 3)
+                        tx, ty = int(state.my_base[0]) + ox, int(state.my_base[1]) + oy
+                        self.net.send_json(JSON_Manager.get_moveorder(uid, tx, ty))
 
     # ─────────────────────────────────────────────────────────
     #  Helpers internos

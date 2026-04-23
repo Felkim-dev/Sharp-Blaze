@@ -76,7 +76,9 @@ class BotState:
 
         # Estructuras fijas del mapa
         self.my_base:    tuple | None = None   # (x, y) base del bot
+        self.my_base_id: int | None   = None
         self.enemy_base: tuple | None = None   # (x, y) base del humano
+        self.enemy_base_id: int | None = None
         self.mines: dict[int, tuple]  = {}     # minas de oro
         self.shops: dict[int, tuple]  = {}     # tiendas
 
@@ -272,9 +274,11 @@ class BotState:
 
         elif label == "bot_structure":
             self.my_base = (x, y)
+            self.my_base_id = entity_id
 
         elif label == "human_structure":
             self.enemy_base = (x, y)
+            self.enemy_base_id = entity_id
 
         elif label == "mine":
             self.mines[entity_id] = (x, y)
