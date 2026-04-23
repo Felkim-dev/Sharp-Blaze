@@ -83,7 +83,7 @@ class ConnectingScreen:
 
                 # Comprobation that the input box is clicked
                 if self.btn_cancel.button_rectangle.collidepoint(mouse_pos):
-                    self.screen_manager.network.desconectar()
+                    self.screen_manager.network.disconnect()
                     self.screen_manager.change_screen("JOIN")
 
             elif event.type == pygame.MOUSEMOTION:
@@ -92,6 +92,15 @@ class ConnectingScreen:
                 mouse_pos = event.pos
 
                 self.btn_cancel.check_hover(mouse_pos)
+
+    def update(self):
+        """Handle connection-state transitions while this screen is active."""
+        state = self.screen_manager.network.connection_status
+
+        if state == "IDLE" and self.screen_manager.network.connected:
+            self.screen_manager.change_screen("LOBBY")
+        elif state == "ERROR":
+            self.textbox_connecting.update_text("CONNECTION ERROR")
 
     def draw(self):
         # SCREEN DRAW

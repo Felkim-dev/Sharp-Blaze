@@ -1,9 +1,13 @@
 import pygame
 import sys
 import os
+import threading
 
 from ui.component import Button, Text
 from ui.floating_shapes import FloatingShape
+from ia.bot_player import BotPlayer
+from ia.bot_game_loop import BotGameLoop
+from utils.config import Config
 
 class MainScreen:
     def __init__(self, screen_manager,screen):
@@ -49,6 +53,10 @@ class MainScreen:
         for _ in range(25):
             shape = FloatingShape(self.screen_width, self.screen_height)
             self.background_shapes.append(shape)
+        
+        # Bot match state
+        self.bot_instance = None
+        self.bot_loop = None
 
     def handle_events(self, events,keys):
 
@@ -64,7 +72,7 @@ class MainScreen:
                     self.screen_manager.change_screen("JOIN")
 
                 elif self.btn_bot.button_rectangle.collidepoint(mouse_pos):
-                    print("Iniciando partida BOT MATCH...")
+                    self._start_bot_match()
 
                 elif self.btn_options.button_rectangle.collidepoint(mouse_pos):
                     print("Abriendo OPCIONES...")
@@ -104,3 +112,34 @@ class MainScreen:
         # TEXT DRAW
 
         self.text_title.draw(self.screen)
+
+    def _start_bot_match(self):
+        """Initialize bot and connect both bot and player to server for bot match"""
+        print("[MAIN_SCREEN] Starting Bot Match...")
+        
+        # Create bot player instance
+        self.bot_instance = BotPlayer("SharpBlaze_Bot_1")
+        
+        # Connect bot in background thread
+        def connect_bot():
+            print("[MAIN_SCREEN] Bot connecting to server...")
+            if self.bot_instance.connect():
+                print("[MAIN_SCREEN] Bot connected successfully")
+                # Store bot reference in screen manager for other screens
+                self.screen_manager.bot_instance = self.bot_instance
+            else:
+                print("[MAIN_SCREEN] Bot connection failed")
+        
+        # Launch bot connection in thread to avoid blocking UI
+        bot_thread = threading.Thread(target=connect_bot, daemon=True)
+        bot_thread.start()
+        
+        # Now connect the player as well (using same protocol as join_screen)
+        from utils.json import JSON_Manager
+        player_join_data = JSON_Manager.get_datajoin("Player")
+        
+        print("[MAIN_SCREEN] Player connecting to server...")
+        self.screen_manager.network.connect(player_join_data)
+        
+        # Move to connecting screen (player will wait there)
+        self.screen_manager.change_screen("CONNECTING")

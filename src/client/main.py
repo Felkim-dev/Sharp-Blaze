@@ -29,6 +29,10 @@ class GAME:
 
         #OBJECT NETWORK
         self.network = NetworkManager()
+        
+        # Bot match state
+        self.bot_instance = None
+        self.bot_game_loop = None
 
         #DICTIONARY OF THE VALID SCREENS
         self.screens = {

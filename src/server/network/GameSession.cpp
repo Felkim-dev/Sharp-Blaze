@@ -900,8 +900,8 @@ void GameSession::initializeGameState()
 
 	//un recolector por cada jugador en estado idle
 	collectors.clear();
-	collectors[3000] = CollectorUnit{3000, player1, games_types::CollectorState::Idle, 380.0f, 4550.0f, -1, 0, 200, 1000, 500, 0, collectorHp, collectorHp};
-	collectors[8000] = CollectorUnit{8000, player2, games_types::CollectorState::Idle, 4620.0f, 450.0f, -1, 0, 200, 1000, 500, 0, collectorHp, collectorHp};
+	collectors[3000] = CollectorUnit{3000, player1, games_types::CollectorState::Idle, 500.0f, 4550.0f, -1, 0, 200, 1000, 500, 0, collectorHp, collectorHp};
+	collectors[8000] = CollectorUnit{8000, player2, games_types::CollectorState::Idle, 4575.0f, 375.0f, -1, 0, 200, 1000, 500, 0, collectorHp, collectorHp};
 	entityCurrentHp[3000] = collectorHp;
 	entityCurrentHp[8000] = collectorHp;
 	entityMaxHp[3000] = collectorHp;
@@ -939,7 +939,7 @@ void GameSession::initializeGameState()
 	entityMaxHp[6002] = attackerHp;
 	
 	//recolector inicial jugador 2
-	units[8000] = UnitPosition{8000, 4620.0f, 450.0f};
+	units[8000] = UnitPosition{8000, 4575.0f, 375.0f};
 
 	//por ahora una unica tienda estatica en el mapa
 	shops[11000] = ShopUnit{11000, 2500.0f, 2500.0f, 120.0f};

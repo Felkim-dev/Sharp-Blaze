@@ -4,6 +4,7 @@ from ui.component import Button, Text,TextBox,CloseButton
 
 from utils.config import Config
 from utils.json import JSON_Manager
+from ia.bot_game_loop import BotGameLoop
 class LobbyScreen:
     def __init__(self, screen_manager, screen):
 
@@ -68,6 +69,10 @@ class LobbyScreen:
         posx_text_player2 = center_x_text_player2 + width_text // 2
         posy_text_player2 = init_y - 40
         self.text_player2 = Text((posx_text_player2, posy_text_player2), "OPPONENT", TEXT_WH[1] // 2, self.WHITE)
+        
+        # Bot game loop state
+        self.bot_game_loop = None
+        self.bot_game_loop_started = False
 
     def handle_events(self, events, keys):
         """where screen manages the events of their buttons and input boxes"""
@@ -160,6 +165,26 @@ class LobbyScreen:
                     game_screen.load_initial_state(gold,units,structures, self.player_id,obstacles,self.local_player_id,self.enemy_player_id)
 
                     self.screen_manager.network.init_udp_connection(self.session_id,self.player_id)
+                    
+                    # Initialize bot game loop if this is a bot match
+                    if self.screen_manager.bot_instance and not self.bot_game_loop_started:
+                        print("[LOBBY] Starting bot game loop...")
+                        bot_instance = self.screen_manager.bot_instance
+                        self.bot_game_loop = BotGameLoop(
+                            bot_player=bot_instance,
+                            session_id=self.session_id,
+                            player_id=bot_instance.player_id,
+                            local_player_id=bot_instance.local_player_id,
+                            enemy_player_id=bot_instance.enemy_player_id,
+                            difficulty="normal",
+                            tick_rate_ms=500
+                        )
+                        if self.bot_game_loop.start():
+                            self.bot_game_loop_started = True
+                            self.screen_manager.bot_game_loop = self.bot_game_loop
+                            print("[LOBBY] Bot game loop started successfully")
+                        else:
+                            print("[LOBBY] Failed to start bot game loop")
 
                     self.screen_manager.change_screen("GAME")
 

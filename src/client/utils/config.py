@@ -1,7 +1,7 @@
 class Config:
     #------- NETWORK ----------
     
-    SERVER_IP = "10.121.108.121"
+    SERVER_IP = "127.0.0.1"
     TCP_PORT_SERVER = 5555
     UDP_PORT_CLIENT = 0
     
