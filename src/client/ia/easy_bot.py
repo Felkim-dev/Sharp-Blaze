@@ -33,11 +33,24 @@ class EasyBot(BotController):
 
     DECISION_INTERVAL_S = 1.0     # una decision por segundo
     COLLECTOR_COST      = 100
+    ATTACKER_COST       = 200
+    MAX_COLLECTORS      = 15
+    MAX_UNITS           = 50
 
     def __init__(self, nickname: str = "BOT_EASY"):
         super().__init__(nickname)
         self._tick = 0            # contador de decisiones tomadas
-        print("[EasyBot] Instanciado. Estrategia: solo recolectar.")
+        
+        # FSM de recolectores: uid -> estado ("TO_MINE", "WAIT_MINE", "TO_BASE", "WAIT_BASE")
+        self.collector_state = {}
+        self.wait_ticks = {}
+        
+        # Cooldowns y asignaciones
+        self.last_purchase_tick = 0
+        self.last_attack_tick = 0
+        self.shop_unit_id = None
+        
+        print("[EasyBot] Instanciado. Estrategia: equilibrada (recolectar y atacar).")
 
     # ─────────────────────────────────────────────────────────
     #  Estrategia principal
@@ -58,35 +71,85 @@ class EasyBot(BotController):
 
         print(f"[EasyBot] Tick {self._tick} | {state.summary()}")
 
-        # ── PRIORIDAD 1: Comprar si el shop nos autorizo ──────
-        if state.shop_authorized and state.gold >= self.COLLECTOR_COST:
-            print(f"[EasyBot] ACCION: Comprando Collector (oro={state.gold})")
-            self.net.send_json(JSON_Manager.get_unit_recolectors())
-            return
+        total_units = len(state.my_units)
+        collectors = state.get_my_collectors()
+        num_collectors = len(collectors)
+        attackers = state.get_my_attackers()
 
-        # ── PRIORIDAD 2: Ir al shop si tenemos oro pero sin auth
-        if state.gold >= self.COLLECTOR_COST and not state.shop_authorized and state.shops:
-            shop_pos = next(iter(state.shops.values()))  # primer shop
-            unit_id  = self._closest_unit_to(shop_pos, state.my_units)
-
-            if unit_id is not None:
+        # ── 1. GESTION DEL SHOP ──
+        # El bot facil necesita una unidad permanente en el shop para poder comprar.
+        if not state.shop_authorized and state.shops:
+            if self.shop_unit_id is None or self.shop_unit_id not in state.my_units:
+                shop_pos = next(iter(state.shops.values()))
+                self.shop_unit_id = self._closest_unit_to(shop_pos, state.my_units)
+            
+            if self.shop_unit_id and self._tick % 5 == 0: # Enviar periodicamente
+                shop_pos = next(iter(state.shops.values()))
                 tx, ty = int(shop_pos[0]), int(shop_pos[1])
-                print(f"[EasyBot] ACCION: Moviendo unidad {unit_id} al shop {(tx, ty)}")
-                self.net.send_json(JSON_Manager.get_moveorder(unit_id, tx, ty))
-            return
+                print(f"[EasyBot] ACCION: Moviendo unidad {self.shop_unit_id} al shop")
+                self.net.send_json(JSON_Manager.get_moveorder(self.shop_unit_id, tx, ty))
 
-        # ── PRIORIDAD 3: Mover collectors a minas cada 3 ticks
-        if self._tick % 3 == 0 and state.mines:
-            collectors = state.get_my_collectors()
-            if not collectors:
-                return
+        # ── 2. COMPRAS (con cooldown) ──
+        can_buy = (self._tick - self.last_purchase_tick) >= 5
+        if state.shop_authorized and can_buy and total_units < self.MAX_UNITS:
+            if num_collectors < self.MAX_COLLECTORS and state.gold >= self.COLLECTOR_COST:
+                print(f"[EasyBot] ACCION: Comprando Collector (oro={state.gold})")
+                self.net.send_json(JSON_Manager.get_unit_recolectors())
+                self.last_purchase_tick = self._tick
+            elif num_collectors >= self.MAX_COLLECTORS and state.gold >= self.ATTACKER_COST:
+                print(f"[EasyBot] ACCION: Comprando Attacker (oro={state.gold})")
+                self.net.send_json(JSON_Manager.get_unit_attacker())
+                self.last_purchase_tick = self._tick
 
+        # ── 3. RECOLECCION (FSM) ──
+        if state.mines and state.my_base:
             for uid, upos in collectors.items():
+                if uid == self.shop_unit_id:
+                    continue  # No mover a la unidad que mantiene el shop
+                
+                cstate = self.collector_state.get(uid, "TO_MINE")
                 mine_pos = state.get_nearest_mine(from_pos=upos)
-                if mine_pos:
-                    tx, ty = int(mine_pos[0]), int(mine_pos[1])
-                    print(f"[EasyBot] ACCION: Moviendo collector {uid} a mina {(tx, ty)}")
+                base_pos = state.my_base
+                
+                if cstate == "TO_MINE":
+                    if mine_pos:
+                        dist_to_mine = math.hypot(upos[0] - mine_pos[0], upos[1] - mine_pos[1])
+                        if dist_to_mine < 2.5:
+                            self.collector_state[uid] = "WAIT_MINE"
+                            self.wait_ticks[uid] = 2
+                        else:
+                            self.net.send_json(JSON_Manager.get_moveorder(uid, int(mine_pos[0]), int(mine_pos[1])))
+                
+                elif cstate == "WAIT_MINE":
+                    self.wait_ticks[uid] = self.wait_ticks.get(uid, 0) - 1
+                    if self.wait_ticks[uid] <= 0:
+                        self.collector_state[uid] = "TO_BASE"
+                        
+                elif cstate == "TO_BASE":
+                    dist_to_base = math.hypot(upos[0] - base_pos[0], upos[1] - base_pos[1])
+                    if dist_to_base < 4.0:
+                        self.collector_state[uid] = "WAIT_BASE"
+                        self.wait_ticks[uid] = 1
+                    else:
+                        self.net.send_json(JSON_Manager.get_moveorder(uid, int(base_pos[0]), int(base_pos[1])))
+                        
+                elif cstate == "WAIT_BASE":
+                    self.wait_ticks[uid] = self.wait_ticks.get(uid, 0) - 1
+                    if self.wait_ticks[uid] <= 0:
+                        self.collector_state[uid] = "TO_MINE"
+
+        # ── 4. ATAQUE ──
+        # Mandar guerreros a la base enemiga cada 20 segundos
+        if attackers and (self._tick - self.last_attack_tick) >= 20:
+            enemy_base = state.enemy_base
+            if enemy_base:
+                print(f"[EasyBot] ACCION: Enviando {len(attackers)} atacantes al enemigo!")
+                tx, ty = int(enemy_base[0]), int(enemy_base[1])
+                for uid in attackers:
+                    if uid == self.shop_unit_id:
+                        continue
                     self.net.send_json(JSON_Manager.get_moveorder(uid, tx, ty))
+                self.last_attack_tick = self._tick
 
     # ─────────────────────────────────────────────────────────
     #  Helpers internos

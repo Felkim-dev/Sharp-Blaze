@@ -258,12 +258,8 @@ class BotNetworkBridge:
                 if len(raw) == _UDP_PACKET_SIZE:
                     entity_id, grid_x, grid_y = struct.unpack("<iff", raw)
 
-                    # Convertir coordenadas de grid a coordenadas del mundo
-                    world_x = (grid_x * _GRID_CELL_SIZE) + (_GRID_CELL_SIZE // 2)
-                    world_y = (grid_y * _GRID_CELL_SIZE) + (_GRID_CELL_SIZE // 2)
-
                     with self._pos_lock:
-                        self._positions[entity_id] = (world_x, world_y)
+                        self._positions[entity_id] = (grid_x, grid_y)
 
                     packets_received += 1
                     # Log cada 300 paquetes para no saturar la consola (~5s a 60Hz)

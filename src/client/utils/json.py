@@ -71,3 +71,12 @@ class JSON_Manager:
         }
         
         return attack_payload
+
+    def get_recolector_order(unit_id, mine_id):
+        return {
+            "type": "GATHER_ORDER",
+            "payload": {
+                "unit_id": unit_id,
+                "mine_id": mine_id,
+            },
+        }
