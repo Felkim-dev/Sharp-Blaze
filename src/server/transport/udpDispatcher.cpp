@@ -21,12 +21,12 @@ GlobalUDPDispatcher::GlobalUDPDispatcher()
     netInitialized(false),
     isRunning(false)
 {
-    std::cout << "[UDP] GlobalUdpDispatcher constructor\n";
+    std::cout << "[UDP] GlobalUdpDispatcher constructor" << std::endl;
 };
 
 GlobalUDPDispatcher::~GlobalUDPDispatcher()
 {
-    std::cout << "[UDP] GlobalUdpDispatcher destructor \n";
+    std::cout << "[UDP] GlobalUdpDispatcher destructor" <<std::endl;
     shutdown();
 };
 
@@ -35,7 +35,7 @@ bool GlobalUDPDispatcher::init()
 {
     if(isRunning.load())
     {
-        std::cerr << "[UDP] Already initialized \n";
+        std::cerr << "[UDP] Already initialized" <<std::endl;
         return false;
     };
 
@@ -43,7 +43,7 @@ bool GlobalUDPDispatcher::init()
     netInitialized = net::Init();
     if(!netInitialized)
     {
-        std::cerr << "[UDP][ERROR] Socket library init failed \n";
+        std::cerr << "[UDP][ERROR] Socket library init failed" <<std::endl;
         return false;
     }
 
@@ -60,7 +60,7 @@ bool GlobalUDPDispatcher::init()
     //inicializar hilos de recepcion y emision
     workerRecepcion = std::thread(&GlobalUDPDispatcher::loopRecepcion,this);
     workerEmision = std::thread(&GlobalUDPDispatcher::loopEmision, this);
-    std::cout << "[UDP] GlobalUDPDistpatcher initialized succesfully\n";
+    std::cout << "[UDP] GlobalUDPDistpatcher initialized succesfully" << std::endl;
     return true;
 };
 
@@ -70,7 +70,7 @@ void GlobalUDPDispatcher::shutdown()
     {
         return;
     }
-    std::cout << "[UDP] shutting down GlobalUDPDispatcher \n";
+    std::cout << "[UDP] shutting down GlobalUDPDispatcher" <<std::endl;
     
     if(workerRecepcion.joinable())
     {
@@ -87,7 +87,7 @@ void GlobalUDPDispatcher::shutdown()
         net::Cleanup();
         netInitialized = false;
     }
-    std::cout << "[UDP] GlobaUDPDistpatcher shutdown complete\n";
+    std::cout << "[UDP] GlobaUDPDistpatcher shutdown complete" <<std::endl;
 };
 
 bool GlobalUDPDispatcher::createSocket()
@@ -95,7 +95,7 @@ bool GlobalUDPDispatcher::createSocket()
     udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if(!net::IsValid(udpSocket))
     {
-        std::cerr << "[UDP][ERROR] socket failed.code=" << net::GetLastError() << '\n';
+        std::cerr << "[UDP][ERROR] socket failed.code=" << net::GetLastError() << std::endl;
         return false;
     }
 
@@ -109,7 +109,7 @@ bool GlobalUDPDispatcher::createSocket()
     //Bind al puerto 5556
     if(bind(udpSocket, reinterpret_cast<sockaddr*>(&localAddr),sizeof(localAddr)) == SOCKET_ERROR)
     {
-        std::cerr << "[UDP][ERROR] bind failed on port 5556. code=" << net::GetLastError() << '\n';
+        std::cerr << "[UDP][ERROR] bind failed on port 5556. code=" << net::GetLastError() << std::endl;
         net::CloseSocket(udpSocket);
         udpSocket = INVALID_SOCKET;
         return false;
@@ -117,7 +117,7 @@ bool GlobalUDPDispatcher::createSocket()
     //no-blocking mode
     if(!net::SetNonBlocking(udpSocket))
     {
-        std::cerr << "[UDP][ERROR] SetNonBlocking failed. code=" << net::GetLastError() << '\n';
+        std::cerr << "[UDP][ERROR] SetNonBlocking failed. code=" << net::GetLastError() << std::endl;
     }
     return true;
 };
@@ -128,7 +128,7 @@ void GlobalUDPDispatcher::closeSocket()
     {
         net::CloseSocket(udpSocket);
         udpSocket = INVALID_SOCKET;
-        std::cout << "[UDP] Socket closed\n";
+        std::cout << "[UDP] Socket closed" << std::endl;
     }
     return;
 };
@@ -143,7 +143,7 @@ bool GlobalUDPDispatcher::tryParseUdpHello(const char* buffer, int size,
     if (size != expectedSize)
     {
         std::cerr << "[UDP][WARN] UDP_HELLO packet wrong size: expected " << expectedSize 
-                  << " got " << size << "\n";
+                  << " got " << size << std::endl;
         return false;
     }
 
@@ -170,7 +170,7 @@ bool GlobalUDPDispatcher::tryParseUdpHello(const char* buffer, int size,
     {
         std::cerr << "[UDP][WARN] UDP_HELLO checksum mismatch: expected 0x"
                   << std::hex << checksumComputed
-                  << " got 0x" << checksumReceived << std::dec << "\n";
+                  << " got 0x" << checksumReceived << std::dec << std::endl;
         return false;
     }
 
@@ -193,7 +193,7 @@ void GlobalUDPDispatcher::pruneStaleEndpointsLocked()
             if (now - it->second.lastSeen > kEndpointTimeout)
             {
                 std::cerr << "[UDP][WARN] endpoint expired: session=" << sessionPair.first
-                          << " player=" << it->second.playerId << '\n';
+                          << " player=" << it->second.playerId << std::endl;
                 it = endpoints.erase(it);
             }
             else
@@ -206,7 +206,7 @@ void GlobalUDPDispatcher::pruneStaleEndpointsLocked()
 
 void GlobalUDPDispatcher::loopRecepcion()
 {
-    std::cout << "[UDP] loopRecepcion thread started \n";
+    std::cout << "[UDP] loopRecepcion thread started" << std::endl;
     
     char buffer[1024];
     sockaddr_in senderAddr;
@@ -223,7 +223,7 @@ void GlobalUDPDispatcher::loopRecepcion()
             if (tryParseUdpHello(buffer, bytesReceived, hello))
             {
                 std::cout << "[UDP] Valid UDP_HELLO: sessionId=" << hello.sessionId
-                          << " playerId=" << hello.playerId << "\n";
+                          << " playerId=" << hello.playerId << std::endl;
                 registerEndpoint(hello, senderAddr);
             }
             else
@@ -231,7 +231,7 @@ void GlobalUDPDispatcher::loopRecepcion()
                 const auto ipNumeric = ntohl(senderAddr.sin_addr.s_addr);
                 const int port = ntohs(senderAddr.sin_port);
                 std::string clientKey = std::to_string(ipNumeric) + ":" + std::to_string(port);
-                std::cerr << "[UDP][WARN] Invalid UDP_HELLO from " << clientKey << "\n";
+                std::cerr << "[UDP][WARN] Invalid UDP_HELLO from " << clientKey << std::endl;
             }
         }
         else
@@ -239,13 +239,13 @@ void GlobalUDPDispatcher::loopRecepcion()
             int err = net::GetLastError();
             if(err != NET_EWOULDBLOCK)
             {
-                std::cerr << "[UDP][WARN] recvfrom() error: " << err << '\n';
+                std::cerr << "[UDP][WARN] recvfrom() error: " << err << std::endl;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
         }
     }
-    std::cout << "[UDP] loopRecepcion thread exiting\n";
+    std::cout << "[UDP] loopRecepcion thread exiting" <<std::endl;
 };
 
 void GlobalUDPDispatcher::loopEmision() {
@@ -338,7 +338,14 @@ void GlobalUDPDispatcher::loopEmision() {
                         0,
                         reinterpret_cast<const sockaddr*>(&endpoint.addr),
                         sizeof(endpoint.addr));
-
+                    if (sentBytes != 12)
+                    {
+                        std::cout << "se envio algo pero no mide 12" << std::endl;
+                    }
+                    if (sentBytes == 12)
+                    {
+                        std::cout << "Si envio algo" << std::endl;
+                    }
                     if (sentBytes < 0)
                     {
                         const int err = net::GetLastError();
@@ -346,7 +353,7 @@ void GlobalUDPDispatcher::loopEmision() {
                         {
                             std::cerr << "[UDP][WARN] sendto() failed for session=" << batch.sessionId
                                       << " player=" << endpoint.playerId
-                                      << " error=" << err << '\n';
+                                      << " error=" << err << std::endl;
                         }
                     }
                 }
@@ -360,7 +367,7 @@ void GlobalUDPDispatcher::loopEmision() {
             std::this_thread::sleep_for(frameTime - elapsed);
         }
     }
-    std::cout << "[UDP] loopEmision thread exiting\n";
+    std::cout << "[UDP] loopEmision thread exiting" << std::endl;
 };
 
 /*
@@ -378,14 +385,14 @@ void GlobalUDPDispatcher::onSessionStarted(
 
     std::lock_guard<std::mutex> lock(sessionsMutex);
     activeSessions[sessionId].session = std::move(session);
-    std::cout << "[UDP] Session started: " << sessionId << '\n';
+    std::cout << "[UDP] Session started: " << sessionId << std::endl;
 }
 
 void GlobalUDPDispatcher::onSessionClosed(const int& sessionId)
 {
     std::lock_guard<std::mutex> lock(sessionsMutex);
     activeSessions.erase(sessionId);
-    std::cout << "[UDP] Session closed: " << sessionId << '\n';
+    std::cout << "[UDP] Session closed: " << sessionId << std::endl;
 }
 
 void GlobalUDPDispatcher::registerEndpoint(
@@ -398,7 +405,7 @@ void GlobalUDPDispatcher::registerEndpoint(
     if (sessionIt == activeSessions.end())
     {
         std::cerr << "[UDP][WARN] registerEndpoint ignored for unknown session: "
-                  << hello.sessionId << '\n';
+                  << hello.sessionId << std::endl;
         return;
     }
 
@@ -411,7 +418,7 @@ void GlobalUDPDispatcher::registerEndpoint(
     sessionIt->second.endpointsByPlayer[hello.playerId] = std::move(endpoint);
 
     std::cout << "[UDP] endpoint registered: session=" << hello.sessionId
-              << " player=" << hello.playerId << '\n';
+              << " player=" << hello.playerId << std::endl;
 }
 
 void GlobalUDPDispatcher::unregisterEndpoint(
@@ -428,7 +435,7 @@ void GlobalUDPDispatcher::unregisterEndpoint(
 
     sessionIt->second.endpointsByPlayer.erase(playerId);
     std::cout << "[UDP] endpoint unregistered: session=" << sessionId
-              << " player=" << playerId << '\n';
+              << " player=" << playerId << std::endl;
 }
 
 std::shared_ptr<GameSession> GlobalUDPDispatcher::getSession(const int& sessionId) const

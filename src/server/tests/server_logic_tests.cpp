@@ -421,6 +421,6 @@ int main()
     testContinuousAttackRespectsCooldownAndRepeats();
     testContinuousAttackStopsAfterOutOfRange();
 
-    std::cout << "server_logic_tests: all checks passed\n";
+    std::cout << "server_logic_tests: all checks passed" << std::endl;
     return 0;
 }
