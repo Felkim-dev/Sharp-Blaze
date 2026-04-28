@@ -1,71 +1,186 @@
 # Sharp Blaze | Distributed RTS Simulator 🎮🛰️
 
-**Sharp Blaze** is a real-time strategy (RTS) simulator designed as a comprehensive integration platform for five core Computer Science disciplines. Developed over a 12-week timeframe by a two-person team in their seventh semester, the project simulates a networked environment where "data packets" compete for resources within a distributed, highly optimized, and containerized ecosystem.
+**Sharp Blaze** is a real-time strategy (RTS) game built as a multidisciplinary integration platform covering five core Computer Science subjects. Two players compete on a shared grid world managing units and resources, with all game state synchronized through an authoritative C++ server. The system is fully containerized and uses a broker service for automatic matchmaking.
 
 ---
 
 ## 📖 Project Overview
 
-This project serves as a multidisciplinary integration platform for senior-level computational studies. The system architecture relies on **containerized microservices**, featuring an authoritative server developed in **C++** that manages concurrency and state synchronization via low-level sockets. The **Python-based** client integrates an **Artificial Intelligence** module combining **A*** navigation with a **Finite State Machine (FSM)**. Strategic decision-making is driven by a **Linear Programming (Simplex)** model to ensure optimal resource management.
+The architecture is composed of three independent services that work together:
+
+1. **Broker** (`src/broker`) — A Python matchmaking server (port **6000**). Clients connect here to enter the matchmaking queue. When two players are waiting, the broker automatically spawns a dedicated game-server Docker container and sends both clients the connection details.
+
+2. **Game Server** (`src/server`) — An authoritative C++ server. Handles TCP (port **5555**) for game logic messages and UDP (port **5556**) for high-frequency position broadcasts. Built with CMake and packaged as a Docker image (`sharp-blaze-server:latest`).
+
+3. **Client** (`src/client`) — A Python/Pygame application (1280×720). Manages all game screens (Main → Join → Lobby → Connecting → Game), sends player input over TCP, and receives real-time position updates over UDP.
+
+### Connection Flow
+```
+Client ──TCP──▶ Broker (6000)
+                  │ match found → spawns container
+                  │
+Client ◀──TCP── Broker (server IP:TCP port)
+                  │
+Client ──TCP──▶ Game Server (5555)
+Client ──UDP──▶ Game Server (5556)
+```
 
 ---
 
 ## 🎓 Academic Integration
 
-The project is structured to meet the mandatory requirements for the following subjects:
-
-* **Distributed Systems:** Authoritative Client-Server architecture using Sockets (TCP/UDP) in **C++** to manage state synchronization and concurrency between nodes.
-* **Artificial Intelligence:** Implementation of an autonomous adversary bot utilizing **A*** search algorithms for pathfinding and reactive decision-making systems.
-* **Optimization Methods:** Economic decision-making engine using the **Simplex Method** to maximize unit production and resource gathering under constraints.
-* **Service Administration:** Deployment and orchestration of the entire ecosystem using **Docker** and **Docker Compose** for environment isolation.
-* **Software Engineering:** Development following **Agile (Scrum)** methodologies, featuring professional **Git** workflows and formal technical documentation.
+| Subject | Implementation |
+|---|---|
+| **Distributed Systems** | Authoritative Client-Server over POSIX sockets (TCP + UDP) in C++. Session management with multi-threading and spatial grid synchronization. |
+| **Artificial Intelligence** | A* pathfinder (`PathFinder.cpp`) integrated server-side for unit navigation. Client-side AI module scaffolded under `src/client/ia/`. |
+| **Optimization Methods** | Simplex-based strategic decision engine scaffolded under `src/client/optimization/`. |
+| **Service Administration** | Full containerization with Docker and Docker Compose. The broker manages dynamic container lifecycle via the Docker SDK. |
+| **Software Engineering** | Agile/Scrum workflow with Git, formal technical documentation in `docs/`, and modular screen/component architecture in the client. |
 
 ---
 
 ## 🛠️ Tech Stack
 
-* **Languages:** C++ (Server-side), Python (Client & IA).
-* **Graphics Library:** Pygame.
-* **Infrastructure:** Docker, Docker Compose.
-* **Networking:** Low-level Sockets (POSIX).
-* **Math/AI Libraries:** SciPy, NumPy (for Optimization and Pathfinding).
+| Layer | Technology |
+|---|---|
+| Game Server | C++17, CMake, POSIX Sockets |
+| Broker | Python 3.12, asyncio, Docker SDK |
+| Client | Python 3.12, Pygame-CE 2.5.7 |
+| Infrastructure | Docker, Docker Compose |
+| Networking | TCP (game logic) + UDP (position updates) |
 
 ---
 
-## 🚀 Quick Start (Deployment)
+## 🚀 Quick Start — Docker (Recommended)
 
-To launch the complete environment (Server + 2 Clients + Bot) on any machine with Docker installed:
+> **Requirements:** Docker Engine with access to the Docker socket.
 
 ```bash
-# Clone the repository
-git clone [https://github.com/your-repo/Unificated_Game.git](https://github.com/your-repo/Unificated_Game.git)
+# 1. Clone the repository
+git clone https://github.com/Felkim-dev/Sharp-Blaze.git
+cd Sharp-Blaze
 
-# Enter the directory
-cd Unificated_Game
-
-# Build and run the services
+# 2. Build the game-server image and start the broker
 docker-compose up --build
 ```
+
+The broker will be listening on port **6000**. Start the client separately on any machine (see below).
+
 ---
+
+## ▶️ Running the Client
+
+> **Requirements:** Python 3.12+
+
+```bash
+cd src/client
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the client
+python main.py
+```
+
+The client connects to the broker at `127.0.0.1:6000` by default. To connect to a remote broker, edit `src/client/utils/config.py`:
+
+```python
+BROKER_IP   = "127.0.0.1"   # Change to the broker's IP address
+BROKER_PORT = 6000
+```
+
+---
+
+## 🖥️ Running the Server Manually (without Docker)
+
+### Broker
+
+> **Requirements:** Python 3.12+, Docker daemon running
+
+```bash
+cd src/broker
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the broker
+python app.py
+```
+
+### Game Server
+
+> **Requirements:** CMake 3.x, GCC/Clang with C++17 support
+
+```bash
+cd src/server
+
+# Configure and build
+cmake -S Makefile -B build/linux -DCMAKE_BUILD_TYPE=Release
+cmake --build build/linux -j
+
+# Run the server
+./build/linux/sharp_blaze_server
+```
+
+The server reads its configuration from environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `SHARP_BLAZE_TCP_PORT` | `5555` | TCP listening port |
+| `SHARP_BLAZE_SESSION_ID` | `0` | Session ID for dedicated instances |
+| `SHARP_BLAZE_SESSION_TOKEN` | — | Auth token issued by the broker |
+
+---
+
+## 📁 Project Structure
+
+```
+Sharp-Blaze/
+├── docker-compose.yml          # Starts the broker; builds game-server image
+├── src/
+│   ├── broker/                 # Python matchmaking service (port 6000)
+│   │   ├── app.py
+│   │   └── Dockerfile
+│   ├── server/                 # C++ authoritative game server (TCP 5555 / UDP 5556)
+│   │   ├── main.cpp
+│   │   ├── network/            # TCP session management
+│   │   ├── transport/          # UDP dispatcher
+│   │   ├── infrastructure/     # Spatial grid
+│   │   ├── include/            # Header files
+│   │   └── Dockerfile
+│   ├── client/                 # Python/Pygame client
+│   │   ├── main.py
+│   │   ├── ui/                 # Screens: Main, Join, Lobby, Connecting, Game
+│   │   ├── network/            # TCP + UDP network manager
+│   │   ├── engine/             # World grid and camera
+│   │   ├── entities/           # Units, structures, projectiles
+│   │   ├── ia/                 # AI module (A* / FSM)
+│   │   ├── optimization/       # Simplex decision engine
+│   │   └── utils/              # Config, JSON helpers
+│   └── config/
+│       └── combat_stats.json   # Shared unit stats
+└── docs/                       # Architecture diagrams, sprint records, requirements
+```
+
+---
+
 ## 📅 Development Roadmap (12 Weeks)
-The project is divided into 6 Sprints of 2 weeks each:
 
-1. S1-S2: Infrastructure. Initial Handshake and Dockerization setup.
+| Sprint | Focus |
+|---|---|
+| S1–S2 | Infrastructure: initial handshake, broker, Docker setup |
+| S3–S4 | World & Movement: shared grid, TCP/UDP sync, camera |
+| S5–S6 | Game Logic: resource system, combat, health management |
+| S7–S8 | Tactical AI: A* pathfinding server-side integration |
+| S9–S10 | Strategic Optimization: Simplex model for bot decisions |
+| S11–S12 | QA & Polish: load testing, bug fixes, final documentation |
 
-2. S3-S4: World & Movement. Shared grid implementation and network synchronization.
-
-3. S5-S6: Game Logic. Resource systems, combat mechanics, and health management.
-
-4. S7-S8: Tactical AI. Implementation of intelligent navigation (A*).
-
-5. S9-S10: Strategic Optimization. Integration of the Simplex model for bot decision-making.
-
-6. S11-S12: QA & Polish. Load testing, bug fixing, and final documentation.
 ---
+
 ## 👥 Contributors
-- Lead Developer A - Backend, Networking & Infrastructure - Steve Tene.
 
-- Lead Developer B - Frontend, AI & Optimization Logic - Felipe Quilumbango.
+- **Steve Tene** — Lead Developer A · Backend, Networking & Infrastructure
+- **Felipe Quilumbango** — Lead Developer B · Frontend, AI & Optimization Logic
+- **Kevin Sánchez** — Lead Developer C · AI Implementation
 
-- Lead Developer C - AI impleemntation - Kevin Sánchez.
---- 
+---
