@@ -104,7 +104,9 @@ class LobbyScreen:
                             game_screen.load_initial_state(units,structures)
                             self.screen_manager.change_screen("GAME")
                         else:
-                            self.screen_manager.network.send_json(JSON_Manager.get_startgame())
+                            # Send START_GAME with session_id if available (dedicated session)
+                            session_id = getattr(self, 'session_id', None)
+                            self.screen_manager.network.send_json(JSON_Manager.get_startgame(session_id))
 
             if self.btn_close.handle_event(event):
                 self.screen_manager.network.disconnect()
@@ -127,12 +129,14 @@ class LobbyScreen:
 
                 print(data)
 
-                if data.get("type") == "QUEUE_STATUS":
+                message_type = data.get("type") or data.get("action")
+
+                if message_type == "QUEUE_STATUS":
                     self.textbox_nickname1.text = data["payload"]["you"]
                     self.textbox_nickname2.text = "WAITING..."
                     self.textbox_nickname2.text_color = (84, 84, 84)
 
-                elif data.get("type") == "MATCH_FOUND":
+                elif message_type == "BROKER_MATCH_FOUND":
 
                     self.local_player_id = data["payload"]["you"]
                     self.enemy_player_id = data["payload"]["opponent"]
@@ -145,7 +149,9 @@ class LobbyScreen:
 
                     self.textbox_nickname2.text_color = self.WHITE
 
-                if data.get("type") == "START_GAME" and data["payload"]["start"]:
+                    self.screen_manager.network.connect_to_game_server(data["payload"])
+
+                if message_type == "START_GAME" and data["payload"]["start"]:
 
                     units = data["payload"]["units"]
 

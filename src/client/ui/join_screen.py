@@ -123,9 +123,7 @@ class JoinScreen:
 
                         if self.screen_manager.network.connection_status != "CONNECTING":
 
-                            data_join = JSON_Manager.get_datajoin(self.inputbox_nickname.user_input)
-
-                            self.screen_manager.network.connect(data_join)
+                            self.screen_manager.network.connect_to_broker(self.inputbox_nickname.user_input)
 
                 # Comprobation that the input box is clicked
                 if self.inputbox_nickname.inputbox_rectangle.collidepoint(mouse_pos):

@@ -470,6 +470,16 @@ bool client_protocol::MessageProtocol(
         outMessage.initialConnect.clientVersion = payload["client_version"].get<std::string>();
         outMessage.initialConnect.isReady = payload["is_ready"].get<bool>();
         
+        // Optional fields for dedicated sessions
+        if (payload.contains("session_id") && payload["session_id"].is_number_integer())
+        {
+            outMessage.initialConnect.sessionId = payload["session_id"].get<int>();
+        }
+        if (payload.contains("match_token") && payload["match_token"].is_string())
+        {
+            outMessage.initialConnect.token = payload["match_token"].get<std::string>();
+        }
+        
         responseToSend = BuildOkResponse();
         return true;
     }

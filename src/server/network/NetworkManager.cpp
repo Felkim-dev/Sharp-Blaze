@@ -245,6 +245,11 @@ NetworkManager::~NetworkManager(){
     stop();
 };
 
+void NetworkManager::initializeDedicatedSession(int sessionId)
+{
+    sessionOrchestrator.createDedicatedSession(sessionId);
+}
+
 void NetworkManager::stop(){
 
     isRunning = false;
@@ -373,7 +378,41 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         };
                     }
 
-                    if (g_players[clientSocket].sessionId == 0)
+                    // If client provides a session_id (dedicated session), use it directly
+                    if (parsed.initialConnect.sessionId > 0)
+                    {
+                        g_players[clientSocket].sessionId = parsed.initialConnect.sessionId;
+
+                        int internalPlayerId = g_players[clientSocket].internalPlayerId;
+                        if (internalPlayerId == 0)
+                        {
+                            int playersInSession = 0;
+                            for (const auto& playerEntry : g_players)
+                            {
+                                if (playerEntry.first != clientSocket && playerEntry.second.sessionId == parsed.initialConnect.sessionId)
+                                {
+                                    ++playersInSession;
+                                }
+                            }
+                            internalPlayerId = playersInSession;
+                            g_players[clientSocket].internalPlayerId = internalPlayerId;
+                        }
+
+                        if (!sessionOrchestrator.registerClientToSession(
+                                clientSocket,
+                                parsed.initialConnect.sessionId,
+                                internalPlayerId))
+                        {
+                            std::cerr << "[ERROR] Failed to register client " << parsed.initialConnect.playerId
+                                      << " to dedicated session " << parsed.initialConnect.sessionId << std::endl;
+                        }
+
+                        std::cout << "[DEDICATED] P" << playerId << " (" << parsed.initialConnect.playerId
+                                  << ") connected to session " << parsed.initialConnect.sessionId
+                                  << " with token: " << parsed.initialConnect.token << std::endl;
+                    }
+                    // Otherwise, queue for matchmaking
+                    else if (g_players[clientSocket].sessionId == 0)
                     {
                         const bool alreadyQueued =
                             std::find(g_waitingQueue.begin(), g_waitingQueue.end(), clientSocket) != g_waitingQueue.end();

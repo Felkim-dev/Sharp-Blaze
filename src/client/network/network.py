@@ -5,6 +5,7 @@ import struct
 import time
 
 from utils.config import Config
+from utils.json import JSON_Manager
 
 class NetworkManager:
     """Class that manages all the connections"""
@@ -20,6 +21,9 @@ class NetworkManager:
         self.connection_status = "IDLE"
         self.receive_buffer = ""
         self.pending_messages = []
+        self.current_player_name = None
+        self.current_match = None
+        self.tcp_port_server = None
 
         # ------------------- UDP INITIAL STATES -------------------
         self.client_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -33,8 +37,13 @@ class NetworkManager:
     # --------------------------- UDP Methods -------------------------------------
     def init_udp_connection(self,session_id,player_id):
         """It is called when the Lobby Start button is clicked"""
-        self.server_ip = Config.SERVER_IP
-        self.udp_port_server = 5556
+        # Use the endpoint from the broker match, fall back to config if not available
+        if self.current_match:
+            self.server_ip = self.current_match.get("ip", Config.SERVER_IP)
+            self.udp_port_server = int(self.current_match.get("udp_port", 5556))
+        else:
+            self.server_ip = Config.SERVER_IP
+            self.udp_port_server = Config.GAME_SERVER_UDP_PORT
 
         local_session_id = int(session_id)
         local_player_id = int(player_id)
@@ -47,6 +56,7 @@ class NetworkManager:
         welcome_message = header + struct.pack("!I", checksum)
 
         print(f"Session_id {local_session_id}, player_id {local_player_id}, checksum {checksum}")
+        print(f"Connecting to UDP server: {self.server_ip}:{self.udp_port_server}")
 
         try:
             self.client_udp.sendto(welcome_message,(self.server_ip,self.udp_port_server))
@@ -110,20 +120,57 @@ class NetworkManager:
     # ------------------------------- TCP methods ------------------------------------------------------
     def connect(self, datos_iniciales):
 
-        self.server_ip = Config.SERVER_IP
-        self.tcp_port_server = Config.TCP_PORT_SERVER
+        if isinstance(datos_iniciales, dict) and datos_iniciales.get("action") == "queue":
+            self.connect_to_broker(datos_iniciales["player_id"])
+            return
+
+        raise ValueError("connect() now expects a broker queue payload")
+
+    def connect_to_broker(self, player_name):
 
         if self.connection_status == "CONNECTING":
             return
+
+        self.current_player_name = player_name
         self.connection_status = "CONNECTING"
 
         thread = threading.Thread(
-            target=self.connection_thread, args=(self.server_ip, self.tcp_port_server, datos_iniciales)
+            target=self.connection_thread,
+            args=(Config.BROKER_IP, Config.BROKER_PORT, JSON_Manager.get_queue_request(player_name), False),
         )
         thread.daemon = True
         thread.start()
 
-    def connection_thread(self, ip, port, datos_iniciales):
+    def connect_to_game_server(self, match_payload):
+        if self.connection_status == "CONNECTING":
+            return
+
+        self.current_match = match_payload
+        self.server_ip = match_payload.get("ip", Config.SERVER_IP)
+        self.tcp_port_server = int(match_payload.get("port", Config.TCP_PORT_SERVER))
+        self.udp_port_server = int(match_payload.get("udp_port", Config.GAME_SERVER_UDP_PORT))
+
+        self._close_tcp_socket()
+        self.connection_status = "CONNECTING"
+
+        player_id = self.current_player_name or match_payload.get("you") or match_payload.get("player_id")
+        thread = threading.Thread(
+            target=self.connection_thread,
+            args=(
+                self.server_ip,
+                self.tcp_port_server,
+                JSON_Manager.get_initial_connect(
+                    player_id,
+                    match_payload.get("session_id"),
+                    match_payload.get("token"),
+                ),
+                False,
+            ),
+        )
+        thread.daemon = True
+        thread.start()
+
+    def connection_thread(self, ip, port, datos_iniciales, auto_start_game=False):
         self.client_tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         self.client_tcp.settimeout(3.0)
@@ -132,6 +179,10 @@ class NetworkManager:
 
             mensaje = json.dumps(datos_iniciales) + "\n"
             self.client_tcp.send(mensaje.encode("utf-8"))
+
+            if auto_start_game:
+                start_message = json.dumps(JSON_Manager.get_startgame()) + "\n"
+                self.client_tcp.send(start_message.encode("utf-8"))
 
             self.client_tcp.settimeout(None)
             self.client_tcp.setblocking(False)
@@ -147,6 +198,18 @@ class NetworkManager:
             print(f"Connection error: {e}")
             self.connected = False
             self.connection_status = "ERROR"
+
+    def _close_tcp_socket(self):
+        if self.client_tcp is not None:
+            try:
+                self.client_tcp.close()
+            except Exception as e:
+                print(f"Error forcing the socket to close: {e}")
+
+        self.client_tcp = None
+        self.connected = False
+        self.receive_buffer = ""
+        self.pending_messages.clear()
 
     def send_json(self, data_dictionary):
         if self.connected:
@@ -210,26 +273,19 @@ class NetworkManager:
         except Exception as e:
             print(f"Advertencia al re-bindear UDP: {e}")
 
-        if self.client_tcp is not None:
+        self._close_tcp_socket()
 
-            try:
-                self.client_tcp.close()
-            except Exception as e:
-                print(f"Error forcing the socket to close: {e}")
+        # RESTARTING VARIBLES TO THE INITIAL STATE
+        self.connection_status = "IDLE"
+        self.current_player_name = None
+        self.current_match = None
 
-            # RESTARTING VARIBLES TO THE INITIAL STATE
-            self.client_tcp = None
-            self.connected = False
-            self.connection_status = "IDLE"
-            self.receive_buffer = ""
-            self.pending_messages.clear()
-
-            # Estados UDP
-            self.server_ip = None
-            self.udp_port_server = None
-            self.latest_positions.clear()
-            self.current_rtt = 0
-            print("Disconnection complete and network restarted.")
+        # Estados UDP
+        self.server_ip = None
+        self.udp_port_server = None
+        self.latest_positions.clear()
+        self.current_rtt = 0
+        print("Disconnection complete and network restarted.")
 
     def calculate_rtt(self, sent_timestamp):
         """Called when the UDP thread receives a ping echo from the C++ server."""
