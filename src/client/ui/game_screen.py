@@ -116,7 +116,7 @@ class GameScreen:
         attackers = 0
         collectors = 0
         for u_id, unit in self.world.units.items():
-            if self.world.get_owner_from_id(u_id) == self.local_ID:
+            if self.world.get_owner_from_id(u_id) == self.player_Id:
                 if unit.__class__.__name__ == "Attacker":
                     attackers += 1
                 elif unit.__class__.__name__ == "Recolectors":
