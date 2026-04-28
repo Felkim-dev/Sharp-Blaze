@@ -2,7 +2,11 @@
 
 #include <filesystem>
 #include <fstream>
+#include <queue>
+#include <random>
 #include <limits>
+#include <unordered_set>
+#include <vector>
 
 #include "third_party/json.hpp"
 
@@ -10,6 +14,27 @@ using json = nlohmann::json;
 
 namespace
 {
+constexpr int kGridCols = 100;
+constexpr int kGridRows = 100;
+constexpr int kReservedPaddingCells = 5;
+constexpr int kMazeAttemptLimit = 10;
+constexpr int kObstacleSpacing = 10;
+constexpr int kObstacleWallLength = 14;
+constexpr int kCornerArmLength = 8;
+constexpr float kObstacleFillChance = 0.34f;
+constexpr float kLongWallChance = 0.72f;
+constexpr float kCornerChance = 0.38f;
+
+struct CellCoordHash
+{
+	std::size_t operator()(const games_types::CellCoord& cell) const noexcept
+	{
+		const std::size_t x = static_cast<std::size_t>(cell.x);
+		const std::size_t y = static_cast<std::size_t>(cell.y);
+		return (y << 16U) ^ x;
+	}
+};
+
 int readIntField(const json& node, const std::initializer_list<const char*>& keys, int fallback)
 {
 	for (const char* key : keys)
@@ -20,6 +45,213 @@ int readIntField(const json& node, const std::initializer_list<const char*>& key
 		}
 	}
 	return fallback;
+}
+
+games_types::CellCoord worldToGridCell(float x, float y)
+{
+	return games_types::CellCoord{
+		std::max(0, std::min(kGridCols - 1, static_cast<int>(x / 50.0f))),
+		std::max(0, std::min(kGridRows - 1, static_cast<int>(y / 50.0f)))};
+}
+
+void addReservedFootprint(std::unordered_set<games_types::CellCoord, CellCoordHash>& reservedCells,
+					  int centerX,
+					  int centerY,
+					  int padding)
+{
+	for (int offsetY = -padding; offsetY <= padding; ++offsetY)
+	{
+		for (int offsetX = -padding; offsetX <= padding; ++offsetX)
+		{
+			const int cellX = centerX + offsetX;
+			const int cellY = centerY + offsetY;
+			if (cellX < 0 || cellX >= kGridCols || cellY < 0 || cellY >= kGridRows)
+			{
+				continue;
+			}
+
+			reservedCells.insert(games_types::CellCoord{cellX, cellY});
+		}
+	}
+}
+
+void buildReservedCells(const std::unordered_map<int, UnitPosition>& structures,
+					const std::unordered_map<int, ResourceNode>& resources,
+					const std::unordered_map<int, UnitPosition>& units,
+					const std::unordered_map<int, ShopUnit>& shops,
+					std::unordered_set<games_types::CellCoord, CellCoordHash>& reservedCells)
+{
+	reservedCells.clear();
+
+	for (const auto& entry : structures)
+	{
+		const games_types::CellCoord cell = worldToGridCell(entry.second.x, entry.second.y);
+		addReservedFootprint(reservedCells, cell.x, cell.y, kReservedPaddingCells);
+	}
+
+	for (const auto& entry : resources)
+	{
+		const games_types::CellCoord cell = worldToGridCell(entry.second.x, entry.second.y);
+		addReservedFootprint(reservedCells, cell.x, cell.y, kReservedPaddingCells);
+	}
+
+	for (const auto& entry : units)
+	{
+		const games_types::CellCoord cell = worldToGridCell(entry.second.x, entry.second.y);
+		addReservedFootprint(reservedCells, cell.x, cell.y, kReservedPaddingCells);
+	}
+
+	for (const auto& entry : shops)
+	{
+		const games_types::CellCoord cell = worldToGridCell(entry.second.x, entry.second.y);
+		addReservedFootprint(reservedCells, cell.x, cell.y, kReservedPaddingCells);
+	}
+}
+
+void generateObstacleField(unsigned int seed, std::vector<std::vector<std::uint8_t>>& openGrid)
+{
+	openGrid.assign(kGridRows, std::vector<std::uint8_t>(kGridCols, 1));
+
+	std::mt19937 rng(seed);
+	std::uniform_real_distribution<float> chance(0.0f, 1.0f);
+	std::uniform_int_distribution<int> offset(0, kObstacleSpacing - 1);
+
+	for (int baseY = 6; baseY < kGridRows - 6; baseY += kObstacleSpacing)
+	{
+		for (int baseX = 6; baseX < kGridCols - 6; baseX += kObstacleSpacing)
+		{
+			if (chance(rng) > kObstacleFillChance)
+			{
+				continue;
+			}
+
+			const bool horizontalWall = chance(rng) < kLongWallChance;
+			if (horizontalWall)
+			{
+				const int startX = std::max(1, std::min(kGridCols - kObstacleWallLength - 2, baseX - (kObstacleWallLength / 2) + offset(rng) / 2));
+				const int y = std::max(2, std::min(kGridRows - 3, baseY + (offset(rng) % 3) - 1));
+				for (int x = startX; x < startX + kObstacleWallLength; ++x)
+				{
+					openGrid[y][x] = 0;
+				}
+
+				if (chance(rng) < kCornerChance)
+				{
+					const bool cornerUp = chance(rng) < 0.5f;
+					const int cornerX = startX + kObstacleWallLength - 1;
+					const int cornerStartY = cornerUp ? std::max(1, y - kCornerArmLength + 1) : y;
+					const int cornerEndY = cornerUp ? y : std::min(kGridRows - 2, y + kCornerArmLength - 1);
+					for (int armY = cornerStartY; armY <= cornerEndY; ++armY)
+					{
+						openGrid[armY][cornerX] = 0;
+					}
+				}
+			}
+			else
+			{
+				const int x = std::max(2, std::min(kGridCols - 3, baseX + (offset(rng) % 3) - 1));
+				const int startY = std::max(1, std::min(kGridRows - kObstacleWallLength - 2, baseY - (kObstacleWallLength / 2) + offset(rng) / 2));
+				for (int y = startY; y < startY + kObstacleWallLength; ++y)
+				{
+					openGrid[y][x] = 0;
+				}
+
+				if (chance(rng) < kCornerChance)
+				{
+					const bool cornerLeft = chance(rng) < 0.5f;
+					const int cornerY = startY + kObstacleWallLength - 1;
+					const int cornerStartX = cornerLeft ? std::max(1, x - kCornerArmLength + 1) : x;
+					const int cornerEndX = cornerLeft ? x : std::min(kGridCols - 2, x + kCornerArmLength - 1);
+					for (int armX = cornerStartX; armX <= cornerEndX; ++armX)
+					{
+						openGrid[cornerY][armX] = 0;
+					}
+				}
+			}
+		}
+	}
+}
+
+bool isTraversableCell(const std::vector<std::vector<std::uint8_t>>& openGrid,
+					  const std::unordered_set<games_types::CellCoord, CellCoordHash>& reservedCells,
+					  const games_types::CellCoord& cell)
+{
+	if (cell.x < 0 || cell.x >= kGridCols || cell.y < 0 || cell.y >= kGridRows)
+	{
+		return false;
+	}
+
+	return openGrid[cell.y][cell.x] != 0 || reservedCells.find(cell) != reservedCells.end();
+}
+
+bool hasTraversablePath(const std::vector<std::vector<std::uint8_t>>& openGrid,
+					   const std::unordered_set<games_types::CellCoord, CellCoordHash>& reservedCells,
+					   const games_types::CellCoord& start,
+					   const games_types::CellCoord& goal)
+{
+	if (!isTraversableCell(openGrid, reservedCells, start) || !isTraversableCell(openGrid, reservedCells, goal))
+	{
+		return false;
+	}
+
+	std::queue<games_types::CellCoord> pending;
+	std::vector<std::vector<std::uint8_t>> visited(kGridRows, std::vector<std::uint8_t>(kGridCols, 0));
+	pending.push(start);
+	visited[start.y][start.x] = 1;
+
+	const int dx[4] = {1, -1, 0, 0};
+	const int dy[4] = {0, 0, 1, -1};
+
+	while (!pending.empty())
+	{
+		const games_types::CellCoord current = pending.front();
+		pending.pop();
+
+		if (current == goal)
+		{
+			return true;
+		}
+
+		for (int index = 0; index < 4; ++index)
+		{
+			const games_types::CellCoord next{current.x + dx[index], current.y + dy[index]};
+			if (!isTraversableCell(openGrid, reservedCells, next) || visited[next.y][next.x])
+			{
+				continue;
+			}
+
+			visited[next.y][next.x] = 1;
+			pending.push(next);
+		}
+	}
+
+	return false;
+}
+
+std::vector<games_types::CellCoord> buildObstacleCells(const std::vector<std::vector<std::uint8_t>>& openGrid,
+										  const std::unordered_set<games_types::CellCoord, CellCoordHash>& reservedCells)
+{
+	std::vector<games_types::CellCoord> obstacleCells;
+	obstacleCells.reserve((kGridCols * kGridRows) / 2);
+
+	for (int y = 0; y < kGridRows; ++y)
+	{
+		for (int x = 0; x < kGridCols; ++x)
+		{
+			const games_types::CellCoord cell{x, y};
+			if (reservedCells.find(cell) != reservedCells.end())
+			{
+				continue;
+			}
+
+			if (openGrid[y][x] == 0)
+			{
+				obstacleCells.push_back(cell);
+			}
+		}
+	}
+
+	return obstacleCells;
 }
 }
 
@@ -944,16 +1176,33 @@ void GameSession::initializeGameState()
 	//por ahora una unica tienda estatica en el mapa
 	shops[11000] = ShopUnit{11000, 2500.0f, 2500.0f, 120.0f};
 
-	// obstaculo inicial para pruebas de A*: linea horizontal de 25 celdas
+	std::unordered_set<games_types::CellCoord, CellCoordHash> reservedCells;
+	buildReservedCells(structures, resources, units, shops, reservedCells);
+
+	std::vector<std::vector<std::uint8_t>> openGrid;
+	std::vector<games_types::CellCoord> obstacleCells;
+	const games_types::CellCoord base1Cell = worldToGridCell(structures.at(0).x, structures.at(0).y);
+	const games_types::CellCoord base2Cell = worldToGridCell(structures.at(5000).x, structures.at(5000).y);
+
+	for (int attempt = 0; attempt < kMazeAttemptLimit; ++attempt)
+	{
+		generateObstacleField(static_cast<unsigned int>(sessionId + attempt + 1), openGrid);
+		obstacleCells = buildObstacleCells(openGrid, reservedCells);
+
+		if (hasTraversablePath(openGrid, reservedCells, base1Cell, base2Cell))
+		{
+			break;
+		}
+
+		obstacleCells.clear();
+	}
+
 	staticObstacles.clear();
 	games_types::StaticObstacle obstacleLine{};
 	obstacleLine.id = 12000;
-	for (int x = 40; x <= 64; ++x)
-	{
-		obstacleLine.cells.push_back(games_types::CellCoord{x, 25});
-	}
+	obstacleLine.cells = std::move(obstacleCells);
 	staticObstacles[obstacleLine.id] = obstacleLine;
-	
+
 	// para saber que id asignar a las tropas que compren
 	nextP1AttackerId = 1003;
 	nextP1CollectorId = 3001;
