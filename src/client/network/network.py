@@ -228,6 +228,10 @@ class NetworkManager:
         if self.connected:
             try:
                 data = self.client_tcp.recv(4096).decode("utf-8")
+                if not data:
+                    print("[NETWORK] Servidor TCP cerró la conexión.")
+                    self._close_tcp_socket()
+                    return {"type": "DISCONNECTED"}
                 print(f"Mensaje de entrada TCP: {data}")
                 if data:
                     self.receive_buffer += data
@@ -254,7 +258,8 @@ class NetworkManager:
                 pass
             except Exception as e:
                 print(f"Error to receive: {e}")
-                self.connected = False
+                self._close_tcp_socket()
+                return {"type": "DISCONNECTED"}
 
         return None
 

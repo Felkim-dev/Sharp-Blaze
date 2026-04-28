@@ -96,7 +96,7 @@ class DockerMatchSpawner(MatchSpawner):
             "environment": environment,
             "ports": ports,
             "name": f"sharp-blaze-match-{session_id}",
-            "remove": False,
+            "remove": True,
         }
 
         if self._network:

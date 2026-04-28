@@ -210,19 +210,22 @@ class TextBox:
         
     def draw(self, screen):
 
-        # Text render
-        self.text_surface = self.inputbox_font.render(self.text, True, self.text_color)
-
-        # TEXT CENTER INTO THE RECTANGLE
-        self.text_rect = self.text_surface.get_rect()
-        self.text_rect.center = self.textbox_rectangle.center
-
         # DRAW OF THE TOP RECTANGLE
         pygame.draw.rect(screen,self.rectangle_color,self.textbox_rectangle,border_radius=self.CORNERS_RADIUS)
         # DRAW OF THE WHITE RECTANGLE
         pygame.draw.rect(screen,self.WHITE,self.textbox_rectangle,self.BORDER_SIZE,border_radius=self.CORNERS_RADIUS)
 
-        screen.blit(self.text_surface, self.text_rect)
+        # Handle multiline text
+        lines = self.text.split('\n')
+        total_height = len(lines) * self.inputbox_font.get_height()
+        start_y = self.textbox_rectangle.centery - (total_height // 2)
+
+        for i, line in enumerate(lines):
+            text_surface = self.inputbox_font.render(line, True, self.text_color)
+            text_rect = text_surface.get_rect()
+            text_rect.centerx = self.textbox_rectangle.centerx
+            text_rect.top = start_y + (i * self.inputbox_font.get_height())
+            screen.blit(text_surface, text_rect)
 
 class CloseButton:
     def __init__(self, x, y, size=30):
