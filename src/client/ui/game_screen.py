@@ -76,7 +76,30 @@ class GameScreen:
         self.winner_box = TextBox((240,180),(800,200),(0,159, 12),f"SHARP BLAZE\nVICTORY!",(255,255,255),72)
         self.game_over_button = Button((465,420),(350,70),(112,112,112),"RETURN TO MENU", (255,255,255),36)
 
+    def reset_state(self):
+        # Clear world objects
+        self.world.units.clear()
+        self.world.structures.clear()
+        self.world.projectiles.clear()
+        self.world.obstacles.clear()
+        
+        # Reset game states
+        self.is_game_over = False
+        self.winner_player_id = None
+        self.is_shop_open = False
+        self.is_dragging = False
+        
+        # Reset camera
+        self.camera.x = 0
+        self.camera.y = 0
+        
+        # Reset Network variables
+        if hasattr(self.screen_manager.network, 'latest_positions'):
+            self.screen_manager.network.latest_positions.clear()
+
     def load_initial_state(self, gold, units, structures, player_ID, obstacles, local_ID, enemy_ID):
+        
+        self.reset_state()
 
         self.player_gold = gold
         self.infobox_gold.update_text(str(self.player_gold)) 
@@ -87,13 +110,35 @@ class GameScreen:
         
         # TODO:ADD UNIT UI
         self.world.build_initial_state(units,structures,player_ID,obstacles)
+        self.update_unit_counts()
+
+    def update_unit_counts(self):
+        attackers = 0
+        collectors = 0
+        for u_id, unit in self.world.units.items():
+            if self.world.get_owner_from_id(u_id) == self.local_ID:
+                if unit.__class__.__name__ == "Attacker":
+                    attackers += 1
+                elif unit.__class__.__name__ == "Recolectors":
+                    collectors += 1
+                    
+        self.player_attacker_units = attackers
+        self.player_recolector_units = collectors
+        
+        self.infobox_sword.update_text(str(self.player_attacker_units))
+        self.infobox_hat.update_text(str(self.player_recolector_units))
 
     def trigger_game_over(self, winner_name):
         self.is_game_over = True
         self.winner_player_id = winner_name
 
         # ¡Aquí es donde inyectas el nombre real para que se actualice en pantalla!
-        nuevo_texto = f"SHARP BLAZE {self.winner_player_id} VICTORY!"
+        nuevo_texto = f"SHARP BLAZE\n{self.winner_player_id} VICTORY!"
+        self.winner_box.update_text(nuevo_texto)
+        
+    def trigger_disconnect(self):
+        self.is_game_over = True
+        nuevo_texto = f"GAME\nDISCONNECTED!"
         self.winner_box.update_text(nuevo_texto)
 
     def handle_events(self, events, keys):
@@ -127,20 +172,31 @@ class GameScreen:
                     continue
 
                 if self.is_shop_open:
+                    shop_rect = pygame.Rect(self.shop.x, self.shop.y, self.shop.width, self.shop.height)
+                    
+                    if shop_rect.collidepoint(mouse_x, mouse_y):
+                        action = self.shop.handle_click(event, event.pos)
 
-                    action = self.shop.handle_click(event,event.pos)
-
-                    if action == "CLOSE":
+                        if action == "CLOSE":
+                            self.is_shop_open = False
+                            for entity in self.world.structures.values():
+                                if entity.__class__.__name__ == "Shop":
+                                    entity.is_selected = False
+                        elif action == "BUY_COLLECTOR":
+                            print("[GAME] Sending TCP command to buy Collector...")
+                            self.screen_manager.network.send_json(JSON_Manager.get_unit_recolectors())
+                        elif action == "BUY_ATTACKER":
+                            print("[GAME] Sending TCP command to buy Attacker...")
+                            self.screen_manager.network.send_json(JSON_Manager.get_unit_attacker())
+                        
+                        # Consume the click if inside the shop UI, preventing it from selecting world units
+                        continue
+                    else:
+                        # Clicked outside the shop. Close it and deselect the shop structure.
                         self.is_shop_open = False
-                        continue
-                    elif action == "BUY_COLLECTOR":
-                        print("[GAME] Sending TCP command to buy Collector...")
-                        self.screen_manager.network.send_json(JSON_Manager.get_unit_recolectors())
-                        continue
-                    elif action == "BUY_ATTACKER":
-                        print("[GAME] Sending TCP command to buy Attacker...")
-                        self.screen_manager.network.send_json(JSON_Manager.get_unit_attacker())
-                        continue
+                        for entity in self.world.structures.values():
+                            if entity.__class__.__name__ == "Shop":
+                                entity.is_selected = False
 
                 # 2. TRANSLATE: Screen Coordinates -> World Coordinates
                 world_x = mouse_x + self.camera.x
@@ -203,6 +259,8 @@ class GameScreen:
         elif entity_id in self.world.structures:
             del self.world.structures[entity_id]
             print(f"[WORLD] Structure {entity_id} destroyed and removed.")
+            
+        self.update_unit_counts()
 
     def update(self):
 
@@ -227,6 +285,7 @@ class GameScreen:
                         self.new_gold = data["payload"]["new_balance"]
 
                         self.world.spawn_unit(self.new_unit_id,self.new_spawn_x,self.new_spawn_y)
+                        self.update_unit_counts()
 
                         self.player_gold = self.new_gold
                         self.infobox_gold.update_text(str(self.player_gold)) 
@@ -241,6 +300,7 @@ class GameScreen:
                         self.world.units[self.new_unit_id] = self.world.return_entities_object(self.new_unit_id,300, 4700)
 
                     self.world.entity_team_changer(self.new_unit_id)
+                    self.update_unit_counts()
 
                 elif data.get("type") == "RESOURCES":
 
@@ -295,6 +355,9 @@ class GameScreen:
 
                     self.handle_entity_death(id)
                     self.screen_manager.network.latest_positions.pop(id,None)
+                    
+                elif data.get("type") == "DISCONNECTED":
+                    self.trigger_disconnect()
 
         else:
             # DEBUG MODE

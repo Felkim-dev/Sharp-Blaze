@@ -52,6 +52,7 @@ private:
         std::shared_ptr<GameEngine> engine;
         std::shared_ptr<std::atomic<bool>> simulationRunning;
         std::thread simulationThread;
+        bool isDedicated = false;
     };
 
     int makeSessionId();

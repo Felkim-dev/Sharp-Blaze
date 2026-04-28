@@ -265,8 +265,7 @@ int SessionOrchestrator::createMatch(const MatchCandidate& a, const MatchCandida
 void SessionOrchestrator::createDedicatedSession(int sessionId)
 {
     std::lock_guard<std::mutex> lock(mtx);
-
-    auto session = std::make_shared<GameSession>(0, 0, sessionId);
+    auto session = std::make_shared<GameSession>(1, 2, sessionId);
     auto engine = std::make_shared<GameEngine>(session);
 
     SessionRecord record;
@@ -278,6 +277,7 @@ void SessionOrchestrator::createDedicatedSession(int sessionId)
     record.session = session;
     record.engine = engine;
     record.simulationRunning = std::make_shared<std::atomic<bool>>(false);
+    record.isDedicated = true;
 
     sessionsById[sessionId] = std::move(record);
     std::cout << "[SESSION] Created dedicated session " << sessionId << std::endl;
@@ -395,6 +395,12 @@ void SessionOrchestrator::closeByClient(SOCKET clientSocket)
     {
         stopSimulationNoLock(recordToStop);
         GlobalUDPDispatcher::getInstance().onSessionClosed(sessionId);
+        
+        if (recordToStop.isDedicated)
+        {
+            std::cout << "[SERVER] Dedicated session " << sessionId << " closed. Exiting process." << std::endl;
+            std::exit(0);
+        }
     }
 }
 

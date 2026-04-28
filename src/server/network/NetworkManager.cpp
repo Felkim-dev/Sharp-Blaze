@@ -394,8 +394,14 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                                     ++playersInSession;
                                 }
                             }
-                            internalPlayerId = playersInSession;
+                            internalPlayerId = playersInSession + 1;
                             g_players[clientSocket].internalPlayerId = internalPlayerId;
+                        }
+
+                        // Create the session if it doesn't exist
+                        if (!sessionOrchestrator.getSession(parsed.initialConnect.sessionId))
+                        {
+                            sessionOrchestrator.createDedicatedSession(parsed.initialConnect.sessionId);
                         }
 
                         if (!sessionOrchestrator.registerClientToSession(
