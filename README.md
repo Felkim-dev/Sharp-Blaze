@@ -180,7 +180,7 @@ Sharp-Blaze/
 ## 👥 Contributors
 
 - **Steve Tene** — Lead Developer A · Backend, Networking & Infrastructure
-- **Felipe Quilumbango** — Lead Developer B · Frontend, AI & Optimization Logic
+- **Felipe Quilumbango** — Lead Developer B · Frontend
 - **Kevin Sánchez** — Lead Developer C · AI Implementation
 
 ---
