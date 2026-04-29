@@ -24,6 +24,11 @@ public:
     ~SessionOrchestrator();
 
     int createMatch(const MatchCandidate& a, const MatchCandidate& b);
+    
+    // For dedicated sessions (created by broker)
+    void createDedicatedSession(int sessionId);
+    bool registerClientToSession(SOCKET clientSocket, int sessionId, int internalPlayerId);
+    
     bool markReady(SOCKET clientSocket, const int& sessionId);
     void closeByClient(SOCKET clientSocket);
     void setResourceBalanceCallback(std::function<void(SOCKET, int)> callback);
@@ -47,6 +52,7 @@ private:
         std::shared_ptr<GameEngine> engine;
         std::shared_ptr<std::atomic<bool>> simulationRunning;
         std::thread simulationThread;
+        bool isDedicated = false;
     };
 
     int makeSessionId();

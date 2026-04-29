@@ -67,6 +67,7 @@ class GameEngine
 		bool propertyValidation(int playerId, int unitId) const;
 		void setNewRoute(const games_types::PlayerCommand& cmd);
 		void setNewRouteToCell(const games_types::PlayerCommand& cmd, const games_types::CellCoord& destinationCell);
+		void repathUnit(int unitId, const games_types::CellCoord& destinationCell);
 		void processMoveCommandsWithFormation(const std::vector<games_types::PlayerCommand>& moveCommands);
 		void processAttackCommand(const games_types::PlayerCommand& cmd);
 		AttackRequestResult executeAttackAttempt(int playerId, int attackerId, int targetId);
@@ -80,6 +81,7 @@ class GameEngine
 		std::unordered_map<int, FormationAssignment> formationByUnit;
 		std::uint64_t formationEpoch = 0;
 		std::unordered_map<int, int> attackerCooldownRemainingMs;
+		std::unordered_map<int, int> movementCooldownRemainingMs;
 		std::vector<games_types::CombatEvent> pendingCombatEvents;
 		std::vector<AttackRequestResult> pendingAttackResults;
 		mutable std::mutex mtxCommands;

@@ -16,6 +16,8 @@ namespace client_protocol
         std::string playerId;
         std::string clientVersion;
         bool isReady = false;
+        int sessionId = 0;
+        std::string token;
     };
 
     struct PlayerReadyData

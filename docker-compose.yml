@@ -1,0 +1,24 @@
+services:
+  broker:
+    build:
+      context: ./src/broker
+      dockerfile: Dockerfile
+    environment:
+      BROKER_HOST: 0.0.0.0
+      BROKER_PORT: 6000
+      BROKER_GAME_IMAGE: sharp-blaze-server:latest
+      BROKER_GAME_TCP_PORT: 5555
+      BROKER_GAME_UDP_PORT: 5556
+      BROKER_GAME_HOST_IP: 172.23.200.14 #agregar ip de la maquina que esta hosteando, sino no sirve
+    ports:
+      - "6000:6000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  game-server-image:
+    build:
+      context: ./src/server
+      dockerfile: Dockerfile
+    image: sharp-blaze-server:latest
+    profiles:
+      - build-only

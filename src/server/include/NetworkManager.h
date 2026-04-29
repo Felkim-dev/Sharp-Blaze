@@ -18,6 +18,7 @@ public:
     ~NetworkManager();        //destructor
     void start();             //para iniciar el server 
     void stop();              //para detener el server
+    void initializeDedicatedSession(int sessionId); // For broker-created sessions
 
 private:
     struct PlayerState
