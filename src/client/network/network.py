@@ -57,10 +57,17 @@ class NetworkManager:
 
         print(f"Session_id {local_session_id}, player_id {local_player_id}, checksum {checksum}")
         print(f"Connecting to UDP server: {self.server_ip}:{self.udp_port_server}")
-
         try:
-            self.client_udp.sendto(welcome_message,(self.server_ip,self.udp_port_server))
-            print("UDP Channel open. Waiting for positions")
+            max_retries = 20
+            for attempt in range(max_retries):
+                self.client_udp.sendto(welcome_message,(self.server_ip,self.udp_port_server))
+                print(f"UDP_HELLO sent(attempt: {attempt+1}) Waiting for positions...")
+                time.sleep(0.1)
+                
+                # If we've received at least one position, assume endpoint was registered
+                if self.latest_positions:
+                    print("UDP endpoint confirmed (received positions).")
+                    break
 
             self.start_udp_thread()
         except Exception as e:
