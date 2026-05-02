@@ -14,7 +14,7 @@ class TelemetryPanel:
 
         # 2. Pygame Font setup (Using a default bold font, similar to your image)
         pygame.font.init()
-        self.font = pygame.font.SysFont(COMPONENTS_FONT, 16, bold=True)
+        self.font = pygame.font.Font(COMPONENTS_FONT, 16)
 
         # 3. Create a semi-transparent dark surface
         self.bg_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)

@@ -59,24 +59,24 @@ class MainScreen:
                 if event.button == 1:
                     mouse_pos = event.pos
 
-                # COLISSION WITH EACH BUTTON
+                    # COLISSION WITH EACH BUTTON
 
-                if self.btn_join.button_rectangle.collidepoint(mouse_pos):
-                    AudioManager().play_click()
-                    self.screen_manager.change_screen("JOIN")
+                    if self.btn_join.button_rectangle.collidepoint(mouse_pos):
+                        AudioManager().play_click()
+                        self.screen_manager.change_screen("JOIN")
 
-                elif self.btn_bot.button_rectangle.collidepoint(mouse_pos):
-                    AudioManager().play_click()
-                    print("Iniciando partida BOT MATCH...")
+                    elif self.btn_bot.button_rectangle.collidepoint(mouse_pos):
+                        AudioManager().play_click()
+                        print("Iniciando partida BOT MATCH...")
 
-                elif self.btn_options.button_rectangle.collidepoint(mouse_pos):
-                    AudioManager().play_click()
-                    print("Abriendo OPCIONES...")
+                    elif self.btn_options.button_rectangle.collidepoint(mouse_pos):
+                        AudioManager().play_click()
+                        print("Abriendo OPCIONES...")
 
-                elif self.btn_exit.button_rectangle.collidepoint(mouse_pos):
-                    AudioManager().play_click()
-                    pygame.quit()
-                    sys.exit()
+                    elif self.btn_exit.button_rectangle.collidepoint(mouse_pos):
+                        AudioManager().play_click()
+                        pygame.quit()
+                        sys.exit()
 
             elif event.type == pygame.MOUSEMOTION:
 
