@@ -2,7 +2,7 @@ import pygame
 import sys
 import os
 
-from ui.component import Button, Text
+from ui.component import Button, Text, Slider
 from ui.floating_shapes import FloatingShape
 from utils.audio import AudioManager
 
@@ -43,9 +43,13 @@ class MainScreen:
         self.text_title = Text((self.screen.get_rect().centerx, self.screen.get_rect().centery//2),"SHARP BLAZE", 100,self.WHITE,TITLE_FONT)
 
         # =====================================================
+        # MENU STATE: "MAIN", "OPTIONS", "VOLUME"
+        # =====================================================
+        self.menu_state = "MAIN"
+
+        # =====================================================
         # OPTIONS MENU
         # =====================================================
-        self.show_options = False
 
         # OPTIONS TITLE (using Anton font)
         self.text_options_title = Text(
@@ -59,6 +63,56 @@ class MainScreen:
         self.btn_resolution = Button((center_x, options_init_y + separation_y * 1), BUTTON_WH, self.LIGHT_BLUE, "Resolution", self.BLACK, TEXT_SIZE)
         self.btn_credits = Button((center_x, options_init_y + separation_y * 2), BUTTON_WH, self.LIGHT_BLUE, "Credits", self.BLACK, TEXT_SIZE)
         self.btn_back = Button((center_x, options_init_y + separation_y * 3), BUTTON_WH, self.RED, "Back", self.BLACK, TEXT_SIZE)
+
+        # =====================================================
+        # VOLUME MENU
+        # =====================================================
+
+        # VOLUME TITLE (using Anton font)
+        self.text_volume_title = Text(
+            (self.screen.get_rect().centerx, self.screen.get_rect().centery // 2),
+            "VOLUME", 100, self.WHITE, TITLE_FONT
+        )
+
+        # SLIDERS
+        audio = AudioManager()
+
+        # Layout: center the entire label+bar block on screen
+        label_area_width = 160
+        gap = 20
+        bar_width = 400
+        bar_height = 50
+        total_width = label_area_width + gap + bar_width
+        block_left = self.screen.get_rect().centerx - total_width // 2 - 60
+
+        label_right_x = block_left + label_area_width
+        bar_x = label_right_x + gap
+        slider_y_music = 310
+        slider_y_sfx = 390
+
+        self.slider_music = Slider(
+            label_y=slider_y_music,
+            label_right_x=label_right_x,
+            bar_x=bar_x,
+            bar_width=bar_width,
+            bar_height=bar_height,
+            label_text="Music:",
+            initial_value=int(audio.music_volume * 100),
+        )
+
+        self.slider_sfx = Slider(
+            label_y=slider_y_sfx,
+            label_right_x=label_right_x,
+            bar_x=bar_x,
+            bar_width=bar_width,
+            bar_height=bar_height,
+            label_text="Effects:",
+            initial_value=int(audio.sfx_volume * 100),
+        )
+
+        # VOLUME BACK BUTTON
+        volume_back_y = options_init_y + separation_y * 3
+        self.btn_volume_back = Button((center_x, volume_back_y), BUTTON_WH, self.RED, "Back", self.BLACK, TEXT_SIZE)
 
         # Create a list of background shapes (e.g., 25 floating shapes)
         self.screen_width = screen.get_width()
@@ -77,12 +131,20 @@ class MainScreen:
                 if event.button == 1:
                     mouse_pos = event.pos
 
-                    if self.show_options:
+                    if self.menu_state == "VOLUME":
+                        # ---- VOLUME MENU EVENT HANDLING ----
+
+                        # Slider interactions are handled below (all event types)
+                        if self.btn_volume_back.button_rectangle.collidepoint(mouse_pos):
+                            AudioManager().play_click()
+                            self.menu_state = "OPTIONS"
+
+                    elif self.menu_state == "OPTIONS":
                         # ---- OPTIONS MENU EVENT HANDLING ----
 
                         if self.btn_volume.button_rectangle.collidepoint(mouse_pos):
                             AudioManager().play_click()
-                            print("Abriendo VOLUME...")
+                            self.menu_state = "VOLUME"
 
                         elif self.btn_resolution.button_rectangle.collidepoint(mouse_pos):
                             AudioManager().play_click()
@@ -94,7 +156,7 @@ class MainScreen:
 
                         elif self.btn_back.button_rectangle.collidepoint(mouse_pos):
                             AudioManager().play_click()
-                            self.show_options = False
+                            self.menu_state = "MAIN"
 
                     else:
                         # ---- MAIN MENU EVENT HANDLING ----
@@ -109,7 +171,7 @@ class MainScreen:
 
                         elif self.btn_options.button_rectangle.collidepoint(mouse_pos):
                             AudioManager().play_click()
-                            self.show_options = True
+                            self.menu_state = "OPTIONS"
 
                         elif self.btn_exit.button_rectangle.collidepoint(mouse_pos):
                             AudioManager().play_click()
@@ -120,18 +182,31 @@ class MainScreen:
 
                 mouse_pos = event.pos
 
-                if self.show_options:
+                if self.menu_state == "OPTIONS":
                     # HOVER DETECTION FOR OPTIONS BUTTONS
                     self.btn_volume.check_hover(mouse_pos)
                     self.btn_resolution.check_hover(mouse_pos)
                     self.btn_credits.check_hover(mouse_pos)
                     self.btn_back.check_hover(mouse_pos)
+                elif self.menu_state == "VOLUME":
+                    # HOVER DETECTION FOR VOLUME BACK BUTTON
+                    self.btn_volume_back.check_hover(mouse_pos)
                 else:
                     # HOVER DETECTION FOR MAIN MENU BUTTONS
                     self.btn_join.check_hover(mouse_pos)
                     self.btn_bot.check_hover(mouse_pos)
                     self.btn_options.check_hover(mouse_pos)
                     self.btn_exit.check_hover(mouse_pos)
+
+            # SLIDER EVENT HANDLING (needs all event types: down, up, motion)
+            if self.menu_state == "VOLUME":
+                audio = AudioManager()
+
+                if self.slider_music.handle_event(event):
+                    audio.set_music_volume(self.slider_music.value)
+
+                if self.slider_sfx.handle_event(event):
+                    audio.set_sfx_volume(self.slider_sfx.value)
 
     def update(self):
         for shape in self.background_shapes:
@@ -145,7 +220,16 @@ class MainScreen:
         for shape in self.background_shapes:
             shape.draw(self.screen)
 
-        if self.show_options:
+        if self.menu_state == "VOLUME":
+            # ---- VOLUME MENU DRAW ----
+            self.text_volume_title.draw(self.screen)
+
+            self.slider_music.draw(self.screen)
+            self.slider_sfx.draw(self.screen)
+
+            self.btn_volume_back.draw(self.screen)
+
+        elif self.menu_state == "OPTIONS":
             # ---- OPTIONS MENU DRAW ----
             self.text_options_title.draw(self.screen)
 
@@ -162,3 +246,4 @@ class MainScreen:
 
             # TEXT DRAW
             self.text_title.draw(self.screen)
+

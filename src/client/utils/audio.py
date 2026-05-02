@@ -35,16 +35,19 @@ class AudioManager:
         self.sfx_shop = self._load(os.path.join(AUDIO_DIR, "shop.wav"))
 
         # Volume defaults (0.0 – 1.0)
-        if self.sfx_click:
-            self.sfx_click.set_volume(0.5)
-        if self.sfx_dead:
-            self.sfx_dead.set_volume(0.7)
-        if self.sfx_receive_shot:
-            self.sfx_receive_shot.set_volume(0.4)
-        if self.sfx_shoot:
-            self.sfx_shoot.set_volume(0.4)
-        if self.sfx_shop:
-            self.sfx_shop.set_volume(0.6)
+        self.sfx_volume = 1.0      # Master SFX volume (0.0 – 1.0)
+        self.music_volume = 1.0    # Master Music volume (0.0 – 1.0)
+
+        # Base volume ratios for each SFX (relative to master)
+        self._sfx_base = {
+            'click': 0.5,
+            'dead': 0.7,
+            'receive_shot': 0.4,
+            'shoot': 0.4,
+            'shop': 0.6,
+        }
+
+        self._apply_sfx_volume()
 
     # ------------------------------------------------------------------ helpers
     @staticmethod
@@ -55,6 +58,30 @@ class AudioManager:
         except Exception as e:
             print(f"[AUDIO] Could not load {path}: {e}")
             return None
+
+    def _apply_sfx_volume(self):
+        """Apply the master SFX volume to all loaded sound effects."""
+        sfx_map = {
+            'click': self.sfx_click,
+            'dead': self.sfx_dead,
+            'receive_shot': self.sfx_receive_shot,
+            'shoot': self.sfx_shoot,
+            'shop': self.sfx_shop,
+        }
+        for key, sound in sfx_map.items():
+            if sound:
+                sound.set_volume(self._sfx_base[key] * self.sfx_volume)
+
+    # --------------------------------------------------------- volume controls
+    def set_sfx_volume(self, volume_percent: int):
+        """Set master SFX volume from a 0-100 slider value."""
+        self.sfx_volume = max(0.0, min(1.0, volume_percent / 100))
+        self._apply_sfx_volume()
+
+    def set_music_volume(self, volume_percent: int):
+        """Set music volume from a 0-100 slider value."""
+        self.music_volume = max(0.0, min(1.0, volume_percent / 100))
+        pygame.mixer.music.set_volume(self.music_volume)
 
     # ------------------------------------------------------------ public API
     def play_click(self):
@@ -81,3 +108,4 @@ class AudioManager:
         """A successful purchase was made in the shop."""
         if self.sfx_shop:
             self.sfx_shop.play()
+

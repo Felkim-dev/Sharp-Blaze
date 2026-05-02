@@ -558,3 +558,102 @@ class Health_Indicator():
 
         # Draw a 1-pixel white border around the whole bar for crispness
         pygame.draw.rect(screen, self.border_color, bg_rect, 1)
+
+class Slider:
+    """A rectangular horizontal slider with a label, 0-100 range, and inline 0/100 markers."""
+
+    def __init__(
+        self,
+        label_y: int,
+        label_right_x: int,
+        bar_x: int,
+        bar_width: int,
+        bar_height: int,
+        label_text: str,
+        initial_value: int = 50,
+        label_size: int = 22,
+    ):
+        # VALUE
+        self.value = max(0, min(100, initial_value))  # Clamped 0-100
+
+        # COLORS
+        self.WHITE = (255, 255, 255)
+        self.BLACK = (0, 0, 0)
+        self.CYAN = (0, 212, 255)
+        self.SEMI_WHITE = (255, 255, 255)  # Rendered with set_alpha for transparency
+
+        # FONTS (IntroRust)
+        self.label_font = pygame.font.Font(COMPONENTS_FONT, label_size)
+        self.inner_font = pygame.font.Font(COMPONENTS_FONT, bar_height - 10)
+
+        # LABEL positioning (right-aligned to label_right_x)
+        self.label_surface = self.label_font.render(label_text, True, self.WHITE)
+        self.label_rect = self.label_surface.get_rect()
+        self.label_rect.midright = (label_right_x, label_y)
+
+        # BAR positioning
+        self.bar_rect = pygame.Rect(bar_x, label_y - bar_height // 2, bar_width, bar_height)
+        self.bar_width = bar_width
+        self.bar_height = bar_height
+
+        # DRAG STATE
+        self.dragging = False
+
+        # PRE-RENDER inner "0" and "100" labels (semi-transparent white)
+        self.label_0_surface = self.inner_font.render("0", True, self.SEMI_WHITE)
+        self.label_0_surface.set_alpha(160)
+        self.label_100_surface = self.inner_font.render("100", True, self.SEMI_WHITE)
+        self.label_100_surface.set_alpha(160)
+
+    def handle_event(self, event):
+        """Process mouse events for clicking/dragging. Returns True if value changed."""
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.bar_rect.collidepoint(event.pos):
+                self.dragging = True
+                return self._update_value_from_mouse(event.pos[0])
+
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.dragging = False
+
+        elif event.type == pygame.MOUSEMOTION:
+            if self.dragging:
+                return self._update_value_from_mouse(event.pos[0])
+
+        return False
+
+    def _update_value_from_mouse(self, mouse_x):
+        """Update the slider value based on mouse X position."""
+        old_value = self.value
+        relative_x = mouse_x - self.bar_rect.left
+        self.value = max(0, min(100, int((relative_x / self.bar_width) * 100)))
+        return self.value != old_value
+
+    def draw(self, screen):
+        """Draw the complete slider: label on the left, rectangular bar with inner 0/100."""
+
+        padding = 10  # Inner padding for the "0" and "100" text
+
+        # 1. LABEL (left side, right-aligned)
+        screen.blit(self.label_surface, self.label_rect)
+
+        # 2. BAR BACKGROUND (black fill)
+        pygame.draw.rect(screen, self.BLACK, self.bar_rect)
+
+        # 3. FILL (cyan, proportional to value)
+        fill_width = int((self.value / 100) * self.bar_width)
+        if fill_width > 0:
+            fill_rect = pygame.Rect(self.bar_rect.left, self.bar_rect.top, fill_width, self.bar_height)
+            pygame.draw.rect(screen, self.CYAN, fill_rect)
+
+        # 4. BAR BORDER (white outline)
+        pygame.draw.rect(screen, self.WHITE, self.bar_rect, 3)
+
+        # 5. "0" LABEL (inside the bar, left side)
+        label_0_rect = self.label_0_surface.get_rect()
+        label_0_rect.midleft = (self.bar_rect.left + padding, self.bar_rect.centery)
+        screen.blit(self.label_0_surface, label_0_rect)
+
+        # 6. "100" LABEL (inside the bar, right side)
+        label_100_rect = self.label_100_surface.get_rect()
+        label_100_rect.midright = (self.bar_rect.right - padding, self.bar_rect.centery)
+        screen.blit(self.label_100_surface, label_100_rect)
