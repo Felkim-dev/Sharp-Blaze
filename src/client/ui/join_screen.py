@@ -115,23 +115,23 @@ class JoinScreen:
                 if event.button == 1:
                     mouse_pos = event.pos
 
-                if (
-                    self.btn_join.button_rectangle.collidepoint(mouse_pos)
-                    and len(self.inputbox_nickname.user_input) > 3
-                ):
+                    if (
+                        self.btn_join.button_rectangle.collidepoint(mouse_pos)
+                        and len(self.inputbox_nickname.user_input) > 3
+                    ):
 
-                    # ------------------ DEBUG MODE -------------------------
-                    if not Config.OFFLINE_DEBUG_MODE:
+                        # ------------------ DEBUG MODE -------------------------
+                        if not Config.OFFLINE_DEBUG_MODE:
 
-                        if self.screen_manager.network.connection_status != "CONNECTING":
-                            AudioManager().play_click()
-                            self.screen_manager.network.connect_to_broker(self.inputbox_nickname.user_input)
+                            if self.screen_manager.network.connection_status != "CONNECTING":
+                                AudioManager().play_click()
+                                self.screen_manager.network.connect_to_broker(self.inputbox_nickname.user_input)
 
-                # Comprobation that the input box is clicked
-                if self.inputbox_nickname.inputbox_rectangle.collidepoint(mouse_pos):
-                    self.inputbox_nickname.is_selected = True
-                else:
-                    self.inputbox_nickname.is_selected = False
+                    # Comprobation that the input box is clicked
+                    if self.inputbox_nickname.inputbox_rectangle.collidepoint(mouse_pos):
+                        self.inputbox_nickname.is_selected = True
+                    else:
+                        self.inputbox_nickname.is_selected = False
 
             if event.type == pygame.KEYDOWN:
 

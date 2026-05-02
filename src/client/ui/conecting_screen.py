@@ -83,11 +83,11 @@ class ConnectingScreen:
                 if event.button == 1:
                     mouse_pos = event.pos
 
-                # Comprobation that the input box is clicked
-                if self.btn_cancel.button_rectangle.collidepoint(mouse_pos):
-                    AudioManager().play_click()
-                    self.screen_manager.network.desconectar()
-                    self.screen_manager.change_screen("JOIN")
+                    # Comprobation that the button is clicked
+                    if self.btn_cancel.button_rectangle.collidepoint(mouse_pos):
+                        AudioManager().play_click()
+                        self.screen_manager.network.desconectar()
+                        self.screen_manager.change_screen("JOIN")
 
             elif event.type == pygame.MOUSEMOTION:
 
