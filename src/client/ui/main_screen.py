@@ -42,6 +42,24 @@ class MainScreen:
         # TEXT
         self.text_title = Text((self.screen.get_rect().centerx, self.screen.get_rect().centery//2),"SHARP BLAZE", 100,self.WHITE,TITLE_FONT)
 
+        # =====================================================
+        # OPTIONS MENU
+        # =====================================================
+        self.show_options = False
+
+        # OPTIONS TITLE (using Anton font)
+        self.text_options_title = Text(
+            (self.screen.get_rect().centerx, self.screen.get_rect().centery // 2),
+            "OPTIONS", 100, self.WHITE, TITLE_FONT
+        )
+
+        # OPTIONS BUTTONS
+        options_init_y = 310
+        self.btn_volume = Button((center_x, options_init_y + separation_y * 0), BUTTON_WH, self.LIGHT_BLUE, "Volume", self.BLACK, TEXT_SIZE)
+        self.btn_resolution = Button((center_x, options_init_y + separation_y * 1), BUTTON_WH, self.LIGHT_BLUE, "Resolution", self.BLACK, TEXT_SIZE)
+        self.btn_credits = Button((center_x, options_init_y + separation_y * 2), BUTTON_WH, self.LIGHT_BLUE, "Credits", self.BLACK, TEXT_SIZE)
+        self.btn_back = Button((center_x, options_init_y + separation_y * 3), BUTTON_WH, self.RED, "Back", self.BLACK, TEXT_SIZE)
+
         # Create a list of background shapes (e.g., 25 floating shapes)
         self.screen_width = screen.get_width()
         self.screen_height = screen.get_height()
@@ -59,34 +77,61 @@ class MainScreen:
                 if event.button == 1:
                     mouse_pos = event.pos
 
-                    # COLISSION WITH EACH BUTTON
+                    if self.show_options:
+                        # ---- OPTIONS MENU EVENT HANDLING ----
 
-                    if self.btn_join.button_rectangle.collidepoint(mouse_pos):
-                        AudioManager().play_click()
-                        self.screen_manager.change_screen("JOIN")
+                        if self.btn_volume.button_rectangle.collidepoint(mouse_pos):
+                            AudioManager().play_click()
+                            print("Abriendo VOLUME...")
 
-                    elif self.btn_bot.button_rectangle.collidepoint(mouse_pos):
-                        AudioManager().play_click()
-                        print("Iniciando partida BOT MATCH...")
+                        elif self.btn_resolution.button_rectangle.collidepoint(mouse_pos):
+                            AudioManager().play_click()
+                            print("Abriendo RESOLUTION...")
 
-                    elif self.btn_options.button_rectangle.collidepoint(mouse_pos):
-                        AudioManager().play_click()
-                        print("Abriendo OPCIONES...")
+                        elif self.btn_credits.button_rectangle.collidepoint(mouse_pos):
+                            AudioManager().play_click()
+                            print("Abriendo CREDITS...")
 
-                    elif self.btn_exit.button_rectangle.collidepoint(mouse_pos):
-                        AudioManager().play_click()
-                        pygame.quit()
-                        sys.exit()
+                        elif self.btn_back.button_rectangle.collidepoint(mouse_pos):
+                            AudioManager().play_click()
+                            self.show_options = False
+
+                    else:
+                        # ---- MAIN MENU EVENT HANDLING ----
+
+                        if self.btn_join.button_rectangle.collidepoint(mouse_pos):
+                            AudioManager().play_click()
+                            self.screen_manager.change_screen("JOIN")
+
+                        elif self.btn_bot.button_rectangle.collidepoint(mouse_pos):
+                            AudioManager().play_click()
+                            print("Iniciando partida BOT MATCH...")
+
+                        elif self.btn_options.button_rectangle.collidepoint(mouse_pos):
+                            AudioManager().play_click()
+                            self.show_options = True
+
+                        elif self.btn_exit.button_rectangle.collidepoint(mouse_pos):
+                            AudioManager().play_click()
+                            pygame.quit()
+                            sys.exit()
 
             elif event.type == pygame.MOUSEMOTION:
 
-                # MOUSE ON BUTTON DETECTION
                 mouse_pos = event.pos
 
-                self.btn_join.check_hover(mouse_pos)
-                self.btn_bot.check_hover(mouse_pos)
-                self.btn_options.check_hover(mouse_pos)
-                self.btn_exit.check_hover(mouse_pos)
+                if self.show_options:
+                    # HOVER DETECTION FOR OPTIONS BUTTONS
+                    self.btn_volume.check_hover(mouse_pos)
+                    self.btn_resolution.check_hover(mouse_pos)
+                    self.btn_credits.check_hover(mouse_pos)
+                    self.btn_back.check_hover(mouse_pos)
+                else:
+                    # HOVER DETECTION FOR MAIN MENU BUTTONS
+                    self.btn_join.check_hover(mouse_pos)
+                    self.btn_bot.check_hover(mouse_pos)
+                    self.btn_options.check_hover(mouse_pos)
+                    self.btn_exit.check_hover(mouse_pos)
 
     def update(self):
         for shape in self.background_shapes:
@@ -100,12 +145,20 @@ class MainScreen:
         for shape in self.background_shapes:
             shape.draw(self.screen)
 
-        # BUTTONS DRAW
-        self.btn_join.draw(self.screen)
-        self.btn_bot.draw(self.screen)
-        self.btn_options.draw(self.screen)
-        self.btn_exit.draw(self.screen)
+        if self.show_options:
+            # ---- OPTIONS MENU DRAW ----
+            self.text_options_title.draw(self.screen)
 
-        # TEXT DRAW
+            self.btn_volume.draw(self.screen)
+            self.btn_resolution.draw(self.screen)
+            self.btn_credits.draw(self.screen)
+            self.btn_back.draw(self.screen)
+        else:
+            # ---- MAIN MENU DRAW ----
+            self.btn_join.draw(self.screen)
+            self.btn_bot.draw(self.screen)
+            self.btn_options.draw(self.screen)
+            self.btn_exit.draw(self.screen)
 
-        self.text_title.draw(self.screen)
+            # TEXT DRAW
+            self.text_title.draw(self.screen)
