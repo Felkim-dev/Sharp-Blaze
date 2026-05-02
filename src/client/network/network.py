@@ -30,6 +30,12 @@ class NetworkManager:
         self.client_udp.bind(("0.0.0.0",Config.UDP_PORT_CLIENT))
         self.udp_port_server = None
         self.server_ip = None
+        self.udp_keepalive_active = False
+        self.udp_keepalive_thread = None
+        self.udp_hello_message = None
+        self.udp_session_id = None
+        self.udp_player_id = None
+        self.udp_endpoint_registered = False
 
         self.latest_positions = {}  
         self.is_udp_listening = False
@@ -53,26 +59,58 @@ class NetworkManager:
         for b in header:
             checksum ^= b
 
-        welcome_message = header + struct.pack("!I", checksum)
+        hello_message = header + struct.pack("!I", checksum)
+        self.udp_hello_message = hello_message
+        self.udp_keepalive_active = True
+        self.udp_endpoint_registered = False
+        self.udp_session_id = session_id
+        self.udp_player_id = player_id
 
         print(f"Session_id {local_session_id}, player_id {local_player_id}, checksum {checksum}")
         print(f"Connecting to UDP server: {self.server_ip}:{self.udp_port_server}")
         try:
+            self.start_udp_thread()
+
+            # Start keepalive early so the NAT mapping stays alive while we wait for the session.
+            if self.udp_keepalive_thread is None or not self.udp_keepalive_thread.is_alive():
+                self.udp_keepalive_active = True
+                self.udp_keepalive_thread = threading.Thread(
+                    target=self._udp_keepalive_loop,
+                    daemon=True,
+                )
+                self.udp_keepalive_thread.start()
+
             max_retries = 20
             for attempt in range(max_retries):
-                self.client_udp.sendto(welcome_message,(self.server_ip,self.udp_port_server))
+                self.client_udp.sendto(hello_message,(self.server_ip,self.udp_port_server))
                 print(f"UDP_HELLO sent(attempt: {attempt+1}) Waiting for positions...")
                 time.sleep(0.1)
                 
-                # If we've received at least one position, assume endpoint was registered
-                if self.latest_positions:
-                    print("UDP endpoint confirmed (received positions).")
+                # If we've received at least one valid UDP packet, assume the endpoint was registered.
+                if self.udp_endpoint_registered:
+                    print("UDP endpoint confirmed (received packet from server).")
                     break
-
-            self.start_udp_thread()
         except Exception as e:
             print(f"Error at moment of UDP channel openning: {e}")
 
+    def _udp_keepalive_loop(self):
+        """Periodically send udp_hello to keep NAT mapping alive"""
+        print("[UDP] Keepalive thread started")
+        keepalive_interval = 5
+        while self.udp_keepalive_active:
+            try:
+                time.sleep(keepalive_interval)
+                if not self.udp_keepalive_active:
+                    break
+                if self.udp_hello_message is None or self.server_ip is None or self.udp_port_server is None:
+                    continue
+                self.client_udp.sendto(self.udp_hello_message,(self.server_ip,self.udp_port_server))
+                print(f"[UDP] Keepalive sent(session = {self.udp_session_id}, player = {self.udp_player_id})") 
+            except Exception as e:
+                print(f"[UDP] Keepalive error: {e}")
+                break
+        print("[UDP] Keepalive thread stopped")
+    
     def start_udp_thread(self):
         """Runs the secondary thread that hears the network"""
         if not self.is_udp_listening:
@@ -99,6 +137,7 @@ class NetworkManager:
 
                     # Agregamos la nueva coordenada al final de su lista
                     self.latest_positions[entity_id].append((x, y))
+                    self.udp_endpoint_registered = True
 
             except OSError:
                 # Ocurre si cerramos el socket al desconectar
@@ -272,6 +311,8 @@ class NetworkManager:
 
     def disconnect(self):
         self.is_udp_listening = False
+        self.udp_keepalive_active = False
+        self.udp_endpoint_registered = False
 
         if self.client_udp is not None:
             try:
