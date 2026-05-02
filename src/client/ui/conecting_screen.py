@@ -1,5 +1,6 @@
 import pygame
 from ui.component import Button, CloseButton,TextBox
+from utils.audio import AudioManager
 
 class ConnectingScreen:
     def __init__(self, screen_manager, screen):
@@ -75,6 +76,7 @@ class ConnectingScreen:
         """where screen manages the events of their buttons and input boxes"""
         for event in events:
             if self.btn_close.handle_event(event):
+                AudioManager().play_click()
                 self.screen_manager.change_screen("MAIN")
 
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -83,6 +85,7 @@ class ConnectingScreen:
 
                 # Comprobation that the input box is clicked
                 if self.btn_cancel.button_rectangle.collidepoint(mouse_pos):
+                    AudioManager().play_click()
                     self.screen_manager.network.desconectar()
                     self.screen_manager.change_screen("JOIN")
 

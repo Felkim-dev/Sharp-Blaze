@@ -11,6 +11,7 @@ from ui.shop import Shop
 
 from utils.json import JSON_Manager
 from utils.config import Config
+from utils.audio import AudioManager
 
 class GameScreen:
     def __init__(self, screen_manager , screen):
@@ -152,6 +153,7 @@ class GameScreen:
 
                     # Tu lógica exacta de detección:
                     if self.game_over_button.button_rectangle.collidepoint(mouse_pos):
+                        AudioManager().play_click()
                         print("[GAME SCREEN] Return to Menu clicked!")
                         self.screen_manager.network.disconnect()
                         self.is_game_over = False
@@ -287,6 +289,9 @@ class GameScreen:
                         self.world.spawn_unit(self.new_unit_id,self.new_spawn_x,self.new_spawn_y)
                         self.update_unit_counts()
 
+                        # Play shop purchase sound on successful buy
+                        AudioManager().play_shop()
+
                         self.player_gold = self.new_gold
                         self.infobox_gold.update_text(str(self.player_gold)) 
 
@@ -331,6 +336,10 @@ class GameScreen:
 
                     self.world.projectiles.append(new_bullet)
 
+                    # Audio: attacker fires and target receives the shot
+                    AudioManager().play_shoot()
+                    AudioManager().play_receive_shot()
+
                     if 1000 <= self.target_entity_id <= 4999 or 6000 <= self.target_entity_id <= 9999:
                         self.world.units[self.target_entity_id].reduce_health(self.target_current_hp)
 
@@ -352,6 +361,9 @@ class GameScreen:
                 elif data.get("type") == "ENTITY_DESTROYED":
 
                     id = self.world.detect_death_units()
+
+                    # Play death sound when an entity is destroyed
+                    AudioManager().play_dead()
 
                     self.handle_entity_death(id)
                     self.screen_manager.network.latest_positions.pop(id,None)

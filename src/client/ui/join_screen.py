@@ -4,6 +4,7 @@ import string
 from ui.component import Button, InputBox, Text,CloseButton,TextBox
 
 from utils.config import Config
+from utils.audio import AudioManager
 
 from utils.json import JSON_Manager
 class JoinScreen:
@@ -106,6 +107,7 @@ class JoinScreen:
         for event in events:
 
             if self.btn_close.handle_event(event):
+                AudioManager().play_click()
                 self.inputbox_nickname.user_input = ""
                 self.screen_manager.change_screen("MAIN")
 
@@ -122,7 +124,7 @@ class JoinScreen:
                     if not Config.OFFLINE_DEBUG_MODE:
 
                         if self.screen_manager.network.connection_status != "CONNECTING":
-
+                            AudioManager().play_click()
                             self.screen_manager.network.connect_to_broker(self.inputbox_nickname.user_input)
 
                 # Comprobation that the input box is clicked

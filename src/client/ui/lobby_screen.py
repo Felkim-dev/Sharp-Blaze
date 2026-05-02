@@ -4,6 +4,7 @@ from ui.component import Button, Text,TextBox,CloseButton
 
 from utils.config import Config
 from utils.json import JSON_Manager
+from utils.audio import AudioManager
 class LobbyScreen:
     def __init__(self, screen_manager, screen):
 
@@ -78,6 +79,7 @@ class LobbyScreen:
                     mouse_pos = event.pos
 
                     if self.textbox_nickname2.text != "WAITING..." and self.btn_Start.button_rectangle.collidepoint(mouse_pos):
+                        AudioManager().play_click()
 
                         if Config.OFFLINE_DEBUG_MODE: # DEBUG MODE
 
@@ -109,6 +111,7 @@ class LobbyScreen:
                             self.screen_manager.network.send_json(JSON_Manager.get_startgame(session_id))
 
             if self.btn_close.handle_event(event):
+                AudioManager().play_click()
                 self.screen_manager.network.disconnect()
                 self.screen_manager.change_screen("MAIN")
 

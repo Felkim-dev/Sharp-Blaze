@@ -4,6 +4,7 @@ import os
 
 from ui.component import Button, Text
 from ui.floating_shapes import FloatingShape
+from utils.audio import AudioManager
 
 class MainScreen:
     def __init__(self, screen_manager,screen):
@@ -61,15 +62,19 @@ class MainScreen:
                 # COLISSION WITH EACH BUTTON
 
                 if self.btn_join.button_rectangle.collidepoint(mouse_pos):
+                    AudioManager().play_click()
                     self.screen_manager.change_screen("JOIN")
 
                 elif self.btn_bot.button_rectangle.collidepoint(mouse_pos):
+                    AudioManager().play_click()
                     print("Iniciando partida BOT MATCH...")
 
                 elif self.btn_options.button_rectangle.collidepoint(mouse_pos):
+                    AudioManager().play_click()
                     print("Abriendo OPCIONES...")
 
                 elif self.btn_exit.button_rectangle.collidepoint(mouse_pos):
+                    AudioManager().play_click()
                     pygame.quit()
                     sys.exit()
 
