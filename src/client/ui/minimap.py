@@ -4,10 +4,16 @@ import math
 
 class Minimap:
     def __init__(self, screen_width, screen_height, map_width, map_height):
-        # 1. Square Minimap Geometry
-        self.width = 200
-        self.height = 200
-        self.margin = 20
+        # SCALE FACTORS relative to base resolution 1280x720
+        BASE_W, BASE_H = 1280, 720
+        sx = screen_width / BASE_W
+        sy = screen_height / BASE_H
+        s = min(sx, sy)  # Use uniform scale for square minimap
+
+        # 1. Square Minimap Geometry (scaled)
+        self.width = int(200 * s)
+        self.height = int(200 * s)
+        self.margin = int(20 * s)
 
         # Calculate the top-left corner of the minimap (bottom right of the window)
         self.x = screen_width - self.width - self.margin

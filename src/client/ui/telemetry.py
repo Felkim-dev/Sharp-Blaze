@@ -5,16 +5,22 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 COMPONENTS_FONT = os.path.join(CURRENT_DIR, "..", "assets", "IntroRust.otf")
 
 class TelemetryPanel:
-    def __init__(self, screen_width):
-        # 1. Panel Dimensions and Position (Top Right Corner)
-        self.width = 180
-        self.height = 60
-        self.x = screen_width - self.width - 20
-        self.y = 20
+    def __init__(self, screen_width, screen_height):
+        # SCALE FACTORS relative to base resolution 1280x720
+        BASE_W, BASE_H = 1280, 720
+        sx = screen_width / BASE_W
+        sy = screen_height / BASE_H
 
-        # 2. Pygame Font setup (Using a default bold font, similar to your image)
+        # 1. Panel Dimensions and Position (Top Right Corner, scaled)
+        self.width = int(180 * sx)
+        self.height = int(60 * sy)
+        self.x = screen_width - self.width - int(20 * sx)
+        self.y = int(20 * sy)
+
+        # 2. Pygame Font setup (scaled)
         pygame.font.init()
-        self.font = pygame.font.Font(COMPONENTS_FONT, 16)
+        font_size = int(16 * sy)
+        self.font = pygame.font.Font(COMPONENTS_FONT, font_size)
 
         # 3. Create a semi-transparent dark surface
         self.bg_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
@@ -23,6 +29,11 @@ class TelemetryPanel:
         # 4. Networking Variables
         self.rtt_ms = 0
         self.last_ping_time = 0
+
+        # Store padding for text placement (scaled)
+        self.pad_x = int(15 * sx)
+        self.pad_y1 = int(10 * sy)
+        self.pad_y2 = int(30 * sy)
 
     def draw(self, screen, clock, network_manager):
         """Draws the telemetry panel on the screen."""
@@ -45,5 +56,5 @@ class TelemetryPanel:
         fps_text = self.font.render(f"FPS: {current_fps}", True, text_color)
 
         # E. Draw the text inside the panel box
-        screen.blit(latency_text, (self.x + 15, self.y + 10))
-        screen.blit(fps_text, (self.x + 15, self.y + 30))
+        screen.blit(latency_text, (self.x + self.pad_x, self.y + self.pad_y1))
+        screen.blit(fps_text, (self.x + self.pad_x, self.y + self.pad_y2))

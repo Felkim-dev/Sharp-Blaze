@@ -657,3 +657,187 @@ class Slider:
         label_100_rect = self.label_100_surface.get_rect()
         label_100_rect.midright = (self.bar_rect.right - padding, self.bar_rect.centery)
         screen.blit(self.label_100_surface, label_100_rect)
+
+class Dropdown:
+    """A dropdown selector with a label and a list of options."""
+
+    def __init__(
+        self,
+        label_y: int,
+        label_right_x: int,
+        box_x: int,
+        box_width: int,
+        box_height: int,
+        label_text: str,
+        options: list,
+        selected_index: int = 0,
+        label_size: int = 22,
+    ):
+        # OPTIONS
+        self.options = options
+        self.selected_index = selected_index
+        self.is_open = False
+
+        # COLORS
+        self.WHITE = (255, 255, 255)
+        self.BLACK = (0, 0, 0)
+        self.CYAN = (0, 212, 255)
+        self.HOVER_COLOR = (40, 40, 50)
+        self.BORDER_WIDTH = 3
+
+        # FONTS (IntroRust)
+        self.label_font = pygame.font.Font(COMPONENTS_FONT, label_size)
+        self.option_font = pygame.font.Font(COMPONENTS_FONT, box_height - 16)
+
+        # LABEL positioning (right-aligned to label_right_x)
+        self.label_surface = self.label_font.render(label_text, True, self.WHITE)
+        self.label_rect = self.label_surface.get_rect()
+        self.label_rect.midright = (label_right_x, label_y)
+
+        # MAIN BOX (closed state)
+        self.box_rect = pygame.Rect(box_x, label_y - box_height // 2, box_width, box_height)
+        self.box_width = box_width
+        self.box_height = box_height
+
+        # OPTION RECTS (expanded state, built dynamically)
+        self.option_rects = []
+        for i in range(len(self.options)):
+            y = self.box_rect.bottom + (i * self.box_height)
+            self.option_rects.append(pygame.Rect(box_x, y, box_width, box_height))
+
+        # HOVER STATE
+        self.hovered_index = -1
+
+    def get_selected(self):
+        """Return the currently selected option string."""
+        return self.options[self.selected_index]
+
+    def handle_event(self, event):
+        """Process mouse events. Returns True if selection changed."""
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mouse_pos = event.pos
+
+            if self.is_open:
+                # Check if an option was clicked
+                for i, rect in enumerate(self.option_rects):
+                    if rect.collidepoint(mouse_pos):
+                        old_index = self.selected_index
+                        self.selected_index = i
+                        self.is_open = False
+                        return old_index != self.selected_index
+
+                # Clicked outside, close the dropdown
+                self.is_open = False
+                return False
+            else:
+                # Toggle open/close on the main box
+                if self.box_rect.collidepoint(mouse_pos):
+                    self.is_open = True
+
+        elif event.type == pygame.MOUSEMOTION:
+            if self.is_open:
+                self.hovered_index = -1
+                for i, rect in enumerate(self.option_rects):
+                    if rect.collidepoint(event.pos):
+                        self.hovered_index = i
+                        break
+
+        return False
+
+    def draw(self, screen):
+        """Draw the dropdown: label, main box, and expanded options if open."""
+
+        # 1. LABEL (left side, right-aligned)
+        screen.blit(self.label_surface, self.label_rect)
+
+        # 2. MAIN BOX (selected value)
+        pygame.draw.rect(screen, self.BLACK, self.box_rect)
+        pygame.draw.rect(screen, self.WHITE, self.box_rect, self.BORDER_WIDTH)
+
+        # Selected text
+        selected_surface = self.option_font.render(self.options[self.selected_index], True, self.CYAN)
+        selected_rect = selected_surface.get_rect(center=self.box_rect.center)
+        screen.blit(selected_surface, selected_rect)
+
+        # Arrow indicator
+        arrow_text = "▼" if not self.is_open else "▲"
+        arrow_surface = self.option_font.render(arrow_text, True, self.WHITE)
+        arrow_rect = arrow_surface.get_rect()
+        arrow_rect.midright = (self.box_rect.right - 10, self.box_rect.centery)
+        screen.blit(arrow_surface, arrow_rect)
+
+        # 3. EXPANDED OPTIONS (if open)
+        if self.is_open:
+            for i, rect in enumerate(self.option_rects):
+                # Background
+                bg_color = self.HOVER_COLOR if i == self.hovered_index else self.BLACK
+                pygame.draw.rect(screen, bg_color, rect)
+                pygame.draw.rect(screen, self.WHITE, rect, self.BORDER_WIDTH)
+
+                # Option text
+                color = self.CYAN if i == self.selected_index else self.WHITE
+                opt_surface = self.option_font.render(self.options[i], True, color)
+                opt_rect = opt_surface.get_rect(center=rect.center)
+                screen.blit(opt_surface, opt_rect)
+
+class Checkbox:
+    """A square toggle checkbox with a label."""
+
+    def __init__(
+        self,
+        label_y: int,
+        label_right_x: int,
+        box_x: int,
+        box_size: int,
+        label_text: str,
+        checked: bool = False,
+        label_size: int = 22,
+    ):
+        self.checked = checked
+
+        # COLORS
+        self.WHITE = (255, 255, 255)
+        self.BLACK = (0, 0, 0)
+        self.CYAN = (0, 212, 255)
+        self.BORDER_WIDTH = 3
+
+        # FONT (IntroRust)
+        self.label_font = pygame.font.Font(COMPONENTS_FONT, label_size)
+
+        # LABEL (right-aligned to label_right_x)
+        self.label_surface = self.label_font.render(label_text, True, self.WHITE)
+        self.label_rect = self.label_surface.get_rect()
+        self.label_rect.midright = (label_right_x, label_y)
+
+        # BOX (square)
+        self.box_rect = pygame.Rect(box_x, label_y - box_size // 2, box_size, box_size)
+
+        # Checkmark font (slightly smaller than box)
+        self.check_font = pygame.font.Font(COMPONENTS_FONT, box_size - 10)
+        self.check_surface = self.check_font.render("X", True, self.WHITE)
+
+    def handle_event(self, event):
+        """Toggle on left-click. Returns True if state changed."""
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.box_rect.collidepoint(event.pos):
+                self.checked = not self.checked
+                return True
+        return False
+
+    def draw(self, screen):
+        """Draw the checkbox: label + square box."""
+
+        # 1. LABEL
+        screen.blit(self.label_surface, self.label_rect)
+
+        # 2. BOX FILL
+        fill_color = self.CYAN if self.checked else self.BLACK
+        pygame.draw.rect(screen, fill_color, self.box_rect)
+
+        # 3. WHITE BORDER
+        pygame.draw.rect(screen, self.WHITE, self.box_rect, self.BORDER_WIDTH)
+
+        # 4. CHECKMARK (if checked)
+        if self.checked:
+            check_rect = self.check_surface.get_rect(center=self.box_rect.center)
+            screen.blit(self.check_surface, check_rect)

@@ -23,6 +23,11 @@ class GameScreen:
         # MAIN COLOR
         self.MAINDARK = (19, 23, 34)
 
+        # SCALE FACTORS relative to base resolution 1280x720
+        BASE_W, BASE_H = 1280, 720
+        sx = self.screen.get_width() / BASE_W
+        sy = self.screen.get_height() / BASE_H
+
         # WORLD
         self.world = GameWorld(self.screen_manager.network)
 
@@ -31,11 +36,11 @@ class GameScreen:
         screen_h = self.screen.get_height()
         self.camera = Camera(screen_w, screen_h, map_width=5000, map_height=5000)
 
-        # MINIMAP
-        self.minimap = Minimap(screen_w,screen_h,map_width=5000, map_height=5000)
+        # MINIMAP (scaled)
+        self.minimap = Minimap(screen_w, screen_h, map_width=5000, map_height=5000)
 
-        # Instantiate the Telemetry Panel
-        self.telemetry = TelemetryPanel(self.screen.get_width())
+        # Instantiate the Telemetry Panel (scaled)
+        self.telemetry = TelemetryPanel(screen_w, screen_h)
 
         # SHOP
         self.shop = Shop()
@@ -62,9 +67,13 @@ class GameScreen:
         SWORD_PATH = os.path.join(CURRENT_DIR, "..", "assets", "sword.png")
 
         # Instantiate the Text Boxes of Gold, Collectors and Attackers
-        self.infobox_gold = InfoBox((50,650),(175,40),gray,"GOLD",self.player_gold_string,white,15,GOLD_PATH)
-        self.infobox_hat = InfoBox((250,650),(200,40),gray,"COLLECTORS",self.player_recolector_units_string,white,15,HAT_PATH)
-        self.infobox_sword = InfoBox((470,650),(200,40),gray,"ATTACKERS",self.player_attacker_units_string,white,15,SWORD_PATH)
+        # Positions are relative to screen dimensions for resolution scaling
+        info_y = screen_h - int(70 * sy)
+        info_box_h = int(40 * sy)
+        info_text_size = int(15 * sy)
+        self.infobox_gold = InfoBox((int(50 * sx), info_y),(int(175 * sx), info_box_h),gray,"GOLD",self.player_gold_string,white,info_text_size,GOLD_PATH)
+        self.infobox_hat = InfoBox((int(250 * sx), info_y),(int(200 * sx), info_box_h),gray,"COLLECTORS",self.player_recolector_units_string,white,info_text_size,HAT_PATH)
+        self.infobox_sword = InfoBox((int(470 * sx), info_y),(int(200 * sx), info_box_h),gray,"ATTACKERS",self.player_attacker_units_string,white,info_text_size,SWORD_PATH)
 
         # UI Drag State
         self.is_dragging = False
@@ -74,8 +83,17 @@ class GameScreen:
         # GAME STATE
         self.is_game_over = False
         self.winner_player_id = None
-        self.winner_box = TextBox((240,180),(800,200),(0,159, 12),f"SHARP BLAZE\nVICTORY!",(255,255,255),72)
-        self.game_over_button = Button((465,420),(350,70),(112,112,112),"RETURN TO MENU", (255,255,255),36)
+        # Center the game-over UI relative to screen dimensions
+        go_box_w, go_box_h = int(800 * sx), int(200 * sy)
+        go_box_x = (screen_w - go_box_w) // 2
+        go_box_y = (screen_h - go_box_h) // 2 - int(60 * sy)
+        go_text_size = int(72 * sy)
+        self.winner_box = TextBox((go_box_x, go_box_y),(go_box_w, go_box_h),(0,159, 12),f"SHARP BLAZE\nVICTORY!",(255,255,255),go_text_size)
+        go_btn_w, go_btn_h = int(350 * sx), int(70 * sy)
+        go_btn_x = (screen_w - go_btn_w) // 2
+        go_btn_y = go_box_y + go_box_h + int(40 * sy)
+        go_btn_text_size = int(36 * sy)
+        self.game_over_button = Button((go_btn_x, go_btn_y),(go_btn_w, go_btn_h),(112,112,112),"RETURN TO MENU", (255,255,255),go_btn_text_size)
 
     def reset_state(self):
         # Clear world objects

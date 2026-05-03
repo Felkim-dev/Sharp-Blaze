@@ -14,6 +14,11 @@ class JoinScreen:
         self.screen_manager = screen_manager
         self.screen = screen
 
+        # SCALE FACTORS relative to base resolution 1280x720
+        BASE_W, BASE_H = 1280, 720
+        sx = self.screen.get_width() / BASE_W
+        sy = self.screen.get_height() / BASE_H
+
         # COLORS
         # PRINCIPAL BG
         self.MAINDARK = (19, 23, 34)
@@ -23,14 +28,14 @@ class JoinScreen:
         GRAY = (112, 112, 112)
         RED_ERROR = (204, 5, 35)
 
-        # INPUT BOX SIXE
-        INPUT_WH = (500, 50)
+        # INPUT BOX SIZE (scaled)
+        INPUT_WH = (int(500 * sx), int(50 * sy))
 
-        # BUTTON SIZE
-        BUTTON_WH = (350, 50)
+        # BUTTON SIZE (scaled)
+        BUTTON_WH = (int(350 * sx), int(50 * sy))
 
-        # ERROR TEXT SIZE
-        ERROR_WH = (800,200)
+        # ERROR TEXT SIZE (scaled)
+        ERROR_WH = (int(800 * sx), int(200 * sy))
 
         # TEXT SIZE
         TEXT_SIZE = BUTTON_WH[1] // 2
@@ -45,7 +50,7 @@ class JoinScreen:
         center_x_input = self.screen.get_rect().centerx - (width_input // 2)
 
         init_y = self.screen.get_height() // 3
-        separation_y = 100
+        separation_y = int(100 * sy)
 
         # Button creation
         self.btn_join = Button(
@@ -70,17 +75,16 @@ class JoinScreen:
         )
 
         # ID CREATION
-
-        posx_text_ID = center_x_input - 20
-        posy_text_ID = init_y + 20
+        posx_text_ID = center_x_input - int(20 * sx)
+        posy_text_ID = init_y + int(20 * sy)
         self.text_ID = Text(
             (posx_text_ID, posy_text_ID), "ID: ", INPUT_WH[1] // 2, self.WHITE
         )
 
         # EXIT MAIN MENU BUTTON
         width_screen = self.screen.get_width()
-        button_size = 30
-        margin = 50
+        button_size = int(30 * sy)
+        margin = int(50 * sx)
         # POS CALCULATION
         pos_x = width_screen - button_size - margin
         pos_y = margin
@@ -89,8 +93,9 @@ class JoinScreen:
         self.btn_close = CloseButton(pos_x, pos_y, button_size)
 
         # ERROR
-        error_text_size = 50
-        self.error_box = TextBox((240, init_y + separation_y+100),ERROR_WH,RED_ERROR,"SERVER DOES NOT RESPOND",self.WHITE,error_text_size)
+        error_text_size = int(50 * sy)
+        error_x = (self.screen.get_width() - ERROR_WH[0]) // 2
+        self.error_box = TextBox((error_x, init_y + separation_y + int(100 * sy)),ERROR_WH,RED_ERROR,"SERVER DOES NOT RESPOND",self.WHITE,error_text_size)
         # ERROR CONTROL
         self.show_error = False
         self.error_time_init = 0

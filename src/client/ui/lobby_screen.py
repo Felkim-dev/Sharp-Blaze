@@ -12,6 +12,11 @@ class LobbyScreen:
         self.screen_manager = screen_manager
         self.screen = screen
 
+        # SCALE FACTORS relative to base resolution 1280x720
+        BASE_W, BASE_H = 1280, 720
+        sx = self.screen.get_width() / BASE_W
+        sy = self.screen.get_height() / BASE_H
+
         # COLORS
         # PRINCIPAL BG
         self.MAINDARK = (19, 23, 34)
@@ -20,19 +25,19 @@ class LobbyScreen:
         self.GRAY = (112, 112, 112)
         self.BLACK = (0, 0, 0)
 
-        # PLAYER BOX SIZE
-        TEXT_WH = (300, 50)
+        # PLAYER BOX SIZE (scaled)
+        TEXT_WH = (int(300 * sx), int(50 * sy))
 
-        # BUTTON SIZE
-        BUTTON_WH = (350, 50)
+        # BUTTON SIZE (scaled)
+        BUTTON_WH = (int(350 * sx), int(50 * sy))
 
         # TEXT SIZE
         TEXT_SIZE = BUTTON_WH[1]//2
 
         # EXIT MAIN MENU BUTTON
         width_screen = self.screen.get_width()
-        button_size = 30
-        margin = 50 
+        button_size = int(30 * sy)
+        margin = int(50 * sx)
         # POS CALCULATION
         pos_x = width_screen - button_size - margin
         pos_y = margin  
@@ -50,24 +55,23 @@ class LobbyScreen:
         center_x_text_player1 = self.screen.get_rect().centerx - width_text * 1.5
         center_x_text_player2 = self.screen.get_rect().centerx + width_text//2
 
-        init_y = (self.screen.get_height() // 3) + 50
+        init_y = (self.screen.get_height() // 3) + int(50 * sy)
 
         # Button creation
-        self.btn_Start = Button((center_x_button, init_y+100),BUTTON_WH,self.GRAY,"START GAME",self.BLACK,TEXT_SIZE,)
+        self.btn_Start = Button((center_x_button, init_y + int(100 * sy)),BUTTON_WH,self.GRAY,"START GAME",self.BLACK,TEXT_SIZE,)
 
         # TEXT BOX CREATION
-        size_text_boxes = 25
+        size_text_boxes = int(25 * sy)
         self.textbox_nickname1 = TextBox((center_x_text_player1, init_y),TEXT_WH,self.BLACK,"USER1",self.WHITE,size_text_boxes)
         self.textbox_nickname2 = TextBox((center_x_text_player2, init_y),TEXT_WH,self.BLACK,"USER2",self.WHITE,size_text_boxes)
 
         # Player text CREATION
-
         posx_text_player1 = center_x_text_player1 + width_text//2
-        posy_text_player1 = init_y - 40
+        posy_text_player1 = init_y - int(40 * sy)
         self.text_player1 = Text((posx_text_player1, posy_text_player1), "YOU", TEXT_WH[1] // 2, self.WHITE)
 
         posx_text_player2 = center_x_text_player2 + width_text // 2
-        posy_text_player2 = init_y - 40
+        posy_text_player2 = init_y - int(40 * sy)
         self.text_player2 = Text((posx_text_player2, posy_text_player2), "OPPONENT", TEXT_WH[1] // 2, self.WHITE)
 
     def handle_events(self, events, keys):
