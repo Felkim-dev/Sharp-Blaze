@@ -12,6 +12,9 @@ from ui.game_screen import GameScreen
 #IMPORT NETWORK MANAGER
 from network.network import NetworkManager
 
+#IMPORT AUDIO MANAGER
+from utils.audio import AudioManager
+
 #MAIN CLASS
 class GAME:
 
@@ -36,6 +39,9 @@ class GAME:
         #MAIN SCREEN WHEN THE GAME IS OPENED
         self.current_screen = self.screens["MAIN"]
 
+        # Start the background music loop on launch
+        AudioManager().start_music()
+
     def _build_screens(self):
         """Create (or re-create) all screen objects for the current display size."""
         self.screens = {
@@ -48,6 +54,15 @@ class GAME:
 
     def change_screen(self, screen_name):
         if screen_name in self.screens:
+            audio = AudioManager()
+
+            # Stop music when entering the game, resume when leaving it
+            if screen_name == "GAME":
+                audio.stop_music()
+            elif isinstance(self.current_screen, GameScreen):
+                # We are leaving the GameScreen back to a menu
+                audio.resume_music()
+
             self.current_screen = self.screens[screen_name]
         else:
             print("ERROR: Screen Does not Exists")

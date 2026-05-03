@@ -27,6 +27,11 @@ class AudioManager:
         CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
         AUDIO_DIR = os.path.join(CURRENT_DIR, "..", "assets", "audio")
 
+        # Background music path
+        self._music_path = os.path.join(AUDIO_DIR, "game_music.mp3")
+        self._music_loaded = False  # True once the file has been loaded into mixer.music
+        self._music_playing = False  # True while the music is actively playing (not paused)
+
         # Load all sound effects
         self.sfx_click = self._load(os.path.join(AUDIO_DIR, "click.ogg"))
         self.sfx_dead = self._load(os.path.join(AUDIO_DIR, "dead.wav"))
@@ -82,6 +87,34 @@ class AudioManager:
         """Set music volume from a 0-100 slider value."""
         self.music_volume = max(0.0, min(1.0, volume_percent / 100))
         pygame.mixer.music.set_volume(self.music_volume)
+
+    # -------------------------------------------------------- music playback
+    def start_music(self):
+        """Load and play the background music in an infinite loop.
+        Safe to call multiple times — will not restart if already playing."""
+        if self._music_playing:
+            return
+        try:
+            if not self._music_loaded:
+                pygame.mixer.music.load(self._music_path)
+                self._music_loaded = True
+            pygame.mixer.music.set_volume(self.music_volume)
+            pygame.mixer.music.play(-1)  # -1 = infinite loop
+            self._music_playing = True
+        except Exception as e:
+            print(f"[AUDIO] Could not start music: {e}")
+
+    def stop_music(self):
+        """Pause the background music (keeps position so it can resume)."""
+        if self._music_playing:
+            pygame.mixer.music.pause()
+            self._music_playing = False
+
+    def resume_music(self):
+        """Resume the background music from where it was paused."""
+        if not self._music_playing and self._music_loaded:
+            pygame.mixer.music.unpause()
+            self._music_playing = True
 
     # ------------------------------------------------------------ public API
     def play_click(self):
