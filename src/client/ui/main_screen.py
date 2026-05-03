@@ -176,6 +176,56 @@ class MainScreen:
         res_back_y = options_init_y + separation_y * 4
         self.btn_resolution_back = Button((center_x, res_back_y), BUTTON_WH, self.RED, "Back", self.BLACK, TEXT_SIZE)
 
+        # =====================================================
+        # CREDITS MENU
+        # =====================================================
+
+        # CREDITS TITLE (using Anton font)
+        self.text_credits_title = Text(
+            (self.screen.get_rect().centerx, title_y),
+            "CREDITS", title_size, self.WHITE, TITLE_FONT
+        )
+
+        # CREDITS MESSAGE (using IntroRust font, inside a black box)
+        INTRO_FONT = os.path.join(CURRENT_DIR, "..", "assets", "IntroRust.otf")
+
+        # Box dimensions: 80% of screen width, centered
+        credits_box_w = int(self.screen.get_width() * 0.80)
+        credits_box_h = int(120 * sy)
+        credits_box_x = (self.screen.get_width() - credits_box_w) // 2
+        credits_box_y = init_y
+        self.credits_box_rect = pygame.Rect(credits_box_x, credits_box_y, credits_box_w, credits_box_h)
+
+        # Size the font to fill the box width (fit the longer line)
+        credits_text_1 = "Thanks to the AI Agents used on this game,"
+        credits_text_2 = "and AOE for inspired our work :D"
+        padding_x = int(20 * sx)
+        target_width = credits_box_w - padding_x * 2
+
+        # Find the largest font size where the longest line fits the box
+        credits_font_size = int(30 * sy)
+        test_font = pygame.font.Font(INTRO_FONT, credits_font_size)
+        while test_font.size(credits_text_1)[0] > target_width and credits_font_size > 8:
+            credits_font_size -= 1
+            test_font = pygame.font.Font(INTRO_FONT, credits_font_size)
+
+        self.credits_font = test_font
+        self.credits_surface_1 = self.credits_font.render(credits_text_1, True, self.WHITE)
+        self.credits_surface_2 = self.credits_font.render(credits_text_2, True, self.WHITE)
+
+        # Center both lines vertically inside the box
+        line_h = self.credits_surface_1.get_height()
+        line_gap = int(8 * sy)
+        total_text_h = line_h * 2 + line_gap
+        text_top = credits_box_y + (credits_box_h - total_text_h) // 2
+
+        self.credits_rect_1 = self.credits_surface_1.get_rect(center=(self.screen.get_rect().centerx, text_top + line_h // 2))
+        self.credits_rect_2 = self.credits_surface_2.get_rect(center=(self.screen.get_rect().centerx, text_top + line_h + line_gap + line_h // 2))
+
+        # CREDITS BACK BUTTON
+        credits_back_y = credits_box_y + credits_box_h + int(30 * sy)
+        self.btn_credits_back = Button((center_x, credits_back_y), BUTTON_WH, self.RED, "Back", self.BLACK, TEXT_SIZE)
+
         # Create a list of background shapes (e.g., 25 floating shapes)
         self.screen_width = screen.get_width()
         self.screen_height = screen.get_height()
@@ -222,6 +272,12 @@ class MainScreen:
                             AudioManager().play_click()
                             self.menu_state = "OPTIONS"
 
+                    elif self.menu_state == "CREDITS":
+                        # ---- CREDITS MENU EVENT HANDLING ----
+                        if self.btn_credits_back.button_rectangle.collidepoint(mouse_pos):
+                            AudioManager().play_click()
+                            self.menu_state = "OPTIONS"
+
                     elif self.menu_state == "OPTIONS":
                         # ---- OPTIONS MENU EVENT HANDLING ----
 
@@ -235,7 +291,7 @@ class MainScreen:
 
                         elif self.btn_credits.button_rectangle.collidepoint(mouse_pos):
                             AudioManager().play_click()
-                            print("Abriendo CREDITS...")
+                            self.menu_state = "CREDITS"
 
                         elif self.btn_back.button_rectangle.collidepoint(mouse_pos):
                             AudioManager().play_click()
@@ -279,6 +335,9 @@ class MainScreen:
                     for btn in self.res_buttons:
                         btn.check_hover(mouse_pos)
                     self.btn_resolution_back.check_hover(mouse_pos)
+                elif self.menu_state == "CREDITS":
+                    # HOVER DETECTION FOR CREDITS BACK BUTTON
+                    self.btn_credits_back.check_hover(mouse_pos)
                 else:
                     # HOVER DETECTION FOR MAIN MENU BUTTONS
                     self.btn_join.check_hover(mouse_pos)
@@ -340,6 +399,20 @@ class MainScreen:
             self.btn_resolution.draw(self.screen)
             self.btn_credits.draw(self.screen)
             self.btn_back.draw(self.screen)
+
+        elif self.menu_state == "CREDITS":
+            # ---- CREDITS MENU DRAW ----
+            self.text_credits_title.draw(self.screen)
+
+            # Black box behind text
+            pygame.draw.rect(self.screen, self.BLACK, self.credits_box_rect)
+            pygame.draw.rect(self.screen, self.WHITE, self.credits_box_rect, 3)
+
+            # Text lines
+            self.screen.blit(self.credits_surface_1, self.credits_rect_1)
+            self.screen.blit(self.credits_surface_2, self.credits_rect_2)
+
+            self.btn_credits_back.draw(self.screen)
         else:
             # ---- MAIN MENU DRAW ----
             self.btn_join.draw(self.screen)
