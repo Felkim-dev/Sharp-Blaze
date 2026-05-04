@@ -22,7 +22,7 @@ namespace
     constexpr int kSmallStructureFootprintSize = 2;
 
     constexpr float kCollectorCollisionRadius = 25.0f;
-    constexpr float kBaseCollisionRadius = 150.0f;
+    constexpr float kBaseCollisionRadius = 250.0f;
 
     float distanceSquared(float x1, float y1, float x2, float y2)
     {
@@ -673,7 +673,7 @@ void GameEngine::advanceMovement(int deltaMs)
     {
         const auto [worldX, worldY] = cellCenterToWorld(move.to);
         session->upsertUnitPosition(move.entityId, worldX, worldY);
-        movementCooldownRemainingMs[move.entityId] = 80; // Match 10 pixels/frame in client (~83ms per cell)
+        movementCooldownRemainingMs[move.entityId] = 83; // Match 10 pixels/frame in client (~83ms per cell)
 
         auto routeIt = movementRoutes.find(move.entityId);
         if (routeIt == movementRoutes.end())
