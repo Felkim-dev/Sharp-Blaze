@@ -1,5 +1,0 @@
-Bryant, B., & Saiedian, H. (2021). An evaluation of videogame network architecture performance and security. Computer Networks, 192, 108128. https://doi.org/10.1016/j.comnet.2021.108128
-Chen, Y., & Rey, W. P. (2025). Hybrid network architecture for low-latency and secure digital game development. Proceedings of the 11th International Conference on Communication and Information Processing (ICCIP 2025), 297–303. https://doi.org/10.1145/3784833.3784875
-OpenAI et al. (2019). Dota 2 with large scale deep reinforcement learning. arXiv preprint arXiv:1912.06680.
-Prather, J., Nix, R., & Jessup, R. (2017). Trust management for cheating detection in distributed massively multiplayer online games. IEEE.
-Tošić, A., & Vičič, J. (2021). A decentralized authoritative multiplayer architecture for games on the edge. Computing and Informatics, 40(3), 522–542. https://doi.org/10.31577/cai_2021_3_522

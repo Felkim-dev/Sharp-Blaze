@@ -352,10 +352,6 @@ void GlobalUDPDispatcher::loopEmision() {
                     {
                         std::cout << "se envio algo pero no mide 12" << std::endl;
                     }
-                    if (sentBytes == 12)
-                    {
-                        std::cout << "Si envio algo" << std::endl;
-                    }
                     if (sentBytes < 0)
                     {
                         const int err = net::GetLastError();
