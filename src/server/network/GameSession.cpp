@@ -1132,8 +1132,8 @@ void GameSession::initializeGameState()
 
 	//un recolector por cada jugador en estado idle
 	collectors.clear();
-	collectors[3000] = CollectorUnit{3000, player1, games_types::CollectorState::Idle, 380.0f, 4550.0f, -1, 0, 200, 1000, 500, 0, collectorHp, collectorHp};
-	collectors[8000] = CollectorUnit{8000, player2, games_types::CollectorState::Idle, 4620.0f, 450.0f, -1, 0, 200, 1000, 500, 0, collectorHp, collectorHp};
+	collectors[3000] = CollectorUnit{3000, player1, games_types::CollectorState::Idle, 400.0f, 4550.0f, -1, 0, 200, 1000, 500, 0, collectorHp, collectorHp};
+	collectors[8000] = CollectorUnit{8000, player2, games_types::CollectorState::Idle, 4500.0f, 450.0f, -1, 0, 200, 1000, 500, 0, collectorHp, collectorHp};
 	entityCurrentHp[3000] = collectorHp;
 	entityCurrentHp[8000] = collectorHp;
 	entityMaxHp[3000] = collectorHp;
@@ -1147,9 +1147,9 @@ void GameSession::initializeGameState()
 	resources[10003] = ResourceNode{10003, games_types::ResourceType::Gold, 1500.0f, 1500.0f, 60.0f, 4000, 25};
 
 	//atacantes jugador 1
-	units[1000] = UnitPosition{1000, 400.0f, 4600.0f};
-	units[1001] = UnitPosition{1001, 500.0f, 4500.0f};
-	units[1002] = UnitPosition{1002, 600.0f, 4400.0f};
+	units[1000] = UnitPosition{1000, 600.0f, 4600.0f};
+	units[1001] = UnitPosition{1001, 600.0f, 4700.0f};
+	units[1002] = UnitPosition{1002, 600.0f, 4800.0f};
 	entityCurrentHp[1000] = attackerHp;
 	entityCurrentHp[1001] = attackerHp;
 	entityCurrentHp[1002] = attackerHp;
@@ -1157,12 +1157,12 @@ void GameSession::initializeGameState()
 	entityMaxHp[1001] = attackerHp;
 	entityMaxHp[1002] = attackerHp;
 	//recolector inicial jugador 1
-	units[3000] = UnitPosition{3000, 380.0f, 4550.0f};
+	units[3000] = UnitPosition{3000, 700.0f, 4700.0f};
 	
 	//atacantes jugador 2
-	units[6000] = UnitPosition{6000, 4600.0f, 400.0f};
-	units[6001] = UnitPosition{6001, 4500.0f, 500.0f};
-	units[6002] = UnitPosition{6002, 4400.0f, 600.0f};
+	units[6000] = UnitPosition{6000, 4500.0f, 500.0f};
+	units[6001] = UnitPosition{6001, 4500.0f, 600.0f};
+	units[6002] = UnitPosition{6002, 4500.0f, 700.0f};
 	entityCurrentHp[6000] = attackerHp;
 	entityCurrentHp[6001] = attackerHp;
 	entityCurrentHp[6002] = attackerHp;
@@ -1171,7 +1171,7 @@ void GameSession::initializeGameState()
 	entityMaxHp[6002] = attackerHp;
 	
 	//recolector inicial jugador 2
-	units[8000] = UnitPosition{8000, 4620.0f, 450.0f};
+	units[8000] = UnitPosition{8000, 4400.0f, 600.0f};
 
 	//por ahora una unica tienda estatica en el mapa
 	shops[11000] = ShopUnit{11000, 2500.0f, 2500.0f, 120.0f};
