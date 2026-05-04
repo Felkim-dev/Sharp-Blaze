@@ -1,5 +1,6 @@
 from typing import Dict, Any, List, Tuple
 import math
+from utils.json import JSON_Manager
 
 
 class UnitCommander:
@@ -38,12 +39,11 @@ class UnitCommander:
             self.collectors_range = range(8000, 10000)
             self.player_base = (4700, 300)
         
-        # Known mining locations (approximate, from map layout)
         self.mining_locations = [
-            (1000, 1000),  # Top-left mines
-            (4000, 1000),  # Top-right mines
-            (1000, 4000),  # Bottom-left mines
-            (4000, 4000),  # Center mines
+            (3500, 3500),  # Center mines (Resource 10000)
+            (2100, 2900),  # Upper-left mines (Resource 10001)
+            (2900, 2100),  # Upper-left mines (Resource 10002)
+            (1500, 1500),  # Upper-left corner mines (Resource 10003)
         ]
         
         # Track recently issued orders (prevent duplicates)
@@ -107,39 +107,35 @@ class UnitCommander:
         """
         Create command to build an attacker unit
         
+        Uses JSON_Manager.get_unit_attacker() to generate TCP-compatible command
+        
         Returns:
-            Command dict or None if not possible
+            Command dict (TCP protocol format) or None if not possible
         """
         # Check if we have available unit slots
         if len(self.game_world.units) >= 50:  # Max units per player
             return None
         
-        # Use JSON_Manager to generate command
-        # For now, return the structure expected by network.py
-        # The actual JSON encoding happens in network.py
-        
-        command = {
-            "type": "build_unit",
-            "unit_type": "attacker",
-            "player_id": self.player_id
-        }
+        # Use JSON_Manager to generate proper TCP command
+        # Returns: {"type": "BUY_UNIT", "payload": {"unit_type": "Attacker", "quantity": 1}}
+        command = JSON_Manager.get_unit_attacker()
         return command
 
     def _create_build_collector_command(self) -> Dict[str, Any]:
         """
         Create command to build a collector unit
         
+        Uses JSON_Manager.get_unit_recolectors() to generate TCP-compatible command
+        
         Returns:
-            Command dict or None if not possible
+            Command dict (TCP protocol format) or None if not possible
         """
         if len(self.game_world.units) >= 50:
             return None
         
-        command = {
-            "type": "build_unit",
-            "unit_type": "collector",
-            "player_id": self.player_id
-        }
+        # Use JSON_Manager to generate proper TCP command
+        # Returns: {"type": "BUY_UNIT", "payload": {"unit_type": "Collector", "quantity": 1}}
+        command = JSON_Manager.get_unit_recolectors()
         return command
 
     def _generate_movement_orders(self, priority: str, aggression: float) -> List[Dict[str, Any]]:
@@ -152,11 +148,11 @@ class UnitCommander:
         - "attack": Move attackers toward enemy base
         
         Args:
-            priority: Strategic priority
+            priority: Strategic priority ("attack", "defend", "expand")
             aggression: Aggression level [0, 1]
         
         Returns:
-            List of move commands
+            List of move commands (TCP protocol format via JSON_Manager)
         """
         commands = []
         
@@ -175,7 +171,7 @@ class UnitCommander:
                 collectors.append((unit_id, unit))
         
         # ====================================
-        # Move collectors (always expand)
+        # Move collectors (always toward mines for resource gathering)
         # ====================================
         
         for unit_id, unit in collectors:
@@ -280,35 +276,34 @@ class UnitCommander:
         """
         Create a move command for a unit
         
+        Uses JSON_Manager.get_moveorder() to generate TCP-compatible command
+        
         Args:
             unit_id: ID of unit to move
-            target_x, target_y: Target position
+            target_x, target_y: Target position (world coordinates)
         
         Returns:
-            Command dict
+            Command dict (TCP protocol format)
+            Format: {"type": "MOVE_ORDER", "payload": {"unit_id": ..., "target_x": ..., "target_y": ...}}
         """
-        command = {
-            "type": "move",
-            "unit_id": unit_id,
-            "target_x": int(target_x),
-            "target_y": int(target_y)
-        }
+        # Use JSON_Manager to generate proper TCP command
+        command = JSON_Manager.get_moveorder(unit_id, int(target_x), int(target_y))
         return command
 
     def _create_attack_command(self, attacker_id: int, target_id: int) -> Dict[str, Any]:
         """
         Create an attack command
         
+        Uses JSON_Manager.attack() to generate TCP-compatible command
+        
         Args:
             attacker_id: ID of attacking unit
             target_id: ID of target unit
         
         Returns:
-            Command dict
+            Command dict (TCP protocol format)
+            Format: {"type": "ATTACK", "payload": {"attacker_id": ..., "target_id": ...}}
         """
-        command = {
-            "type": "attack",
-            "attacker_id": attacker_id,
-            "target_id": target_id
-        }
+        # Use JSON_Manager to generate proper TCP command
+        command = JSON_Manager.attack(target_id, attacker_id)
         return command

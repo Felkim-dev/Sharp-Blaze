@@ -121,7 +121,7 @@ class BotAI:
         Send commands to server via network
         
         Args:
-            commands: List of command dicts from UnitCommander
+            commands: List of command dicts from UnitCommander (already formatted by JSON_Manager)
         """
         if not commands:
             return
@@ -130,48 +130,60 @@ class BotAI:
             cmd_type = cmd.get("type")
             
             try:
-                if cmd_type == "build_unit":
+                if cmd_type == "BUY_UNIT":
                     self._send_build_command(cmd)
-                elif cmd_type == "move":
+                elif cmd_type == "MOVE_ORDER":
                     self._send_move_command(cmd)
-                elif cmd_type == "attack":
+                elif cmd_type == "ATTACK":
                     self._send_attack_command(cmd)
+                else:
+                    print(f"Warning: Unknown command type '{cmd_type}'")
             except Exception as e:
                 print(f"Error sending command {cmd_type}: {e}")
 
     def _send_build_command(self, cmd: Dict[str, Any]) -> None:
-        """Send build unit command"""
-        unit_type = cmd.get("unit_type")
+        """
+        Send build unit command via network
         
-        # Use JSON_Manager to format command
-        # This is a placeholder - actual implementation depends on JSON_Manager
-        if unit_type == "attacker":
-            # json_cmd = JSON_Manager.get_unit_attacker()
-            pass
-        elif unit_type == "collector":
-            # json_cmd = JSON_Manager.get_unit_recolectors()
-            pass
-        
-        # self.network.send_json(json_cmd)
+        Args:
+            cmd: Command dict from JSON_Manager.get_unit_attacker() or get_unit_recolectors()
+                Format: {"type": "BUY_UNIT", "payload": {"unit_type": "Attacker", "quantity": 1}}
+        """
+        try:
+            self.network.send_json(cmd)
+            print(f"[BotAI] Sent build command: {cmd.get('payload', {}).get('unit_type')}")
+        except Exception as e:
+            print(f"[BotAI] Error sending build command: {e}")
 
     def _send_move_command(self, cmd: Dict[str, Any]) -> None:
-        """Send move command"""
-        unit_id = cmd.get("unit_id")
-        target_x = cmd.get("target_x")
-        target_y = cmd.get("target_y")
+        """
+        Send move order command via network
         
-        # Use JSON_Manager to format command
-        # json_cmd = JSON_Manager.get_moveorder(unit_id, target_x, target_y)
-        # self.network.send_json(json_cmd)
+        Args:
+            cmd: Command dict from JSON_Manager.get_moveorder()
+                Format: {"type": "MOVE_ORDER", "payload": {"unit_id": ..., "target_x": ..., "target_y": ...}}
+        """
+        try:
+            self.network.send_json(cmd)
+            unit_id = cmd.get("payload", {}).get("unit_id")
+            print(f"[BotAI] Sent move command for unit {unit_id}")
+        except Exception as e:
+            print(f"[BotAI] Error sending move command: {e}")
 
     def _send_attack_command(self, cmd: Dict[str, Any]) -> None:
-        """Send attack command"""
-        attacker_id = cmd.get("attacker_id")
-        target_id = cmd.get("target_id")
+        """
+        Send attack command via network
         
-        # Use JSON_Manager to format command
-        # json_cmd = JSON_Manager.attack(target_id, attacker_id)
-        # self.network.send_json(json_cmd)
+        Args:
+            cmd: Command dict from JSON_Manager.attack()
+                Format: {"type": "ATTACK", "payload": {"attacker_id": ..., "target_id": ...}}
+        """
+        try:
+            self.network.send_json(cmd)
+            payload = cmd.get("payload", {})
+            print(f"[BotAI] Sent attack command: attacker {payload.get('attacker_id')} → target {payload.get('target_id')}")
+        except Exception as e:
+            print(f"[BotAI] Error sending attack command: {e}")
 
     def get_stats(self) -> Dict[str, Any]:
         """
