@@ -12,6 +12,9 @@ from ui.game_screen import GameScreen
 #IMPORT NETWORK MANAGER
 from network.network import NetworkManager
 
+#IMPORT AUDIO MANAGER
+from utils.audio import AudioManager
+
 #MAIN CLASS
 class GAME:
 
@@ -31,6 +34,16 @@ class GAME:
         self.network = NetworkManager()
 
         #DICTIONARY OF THE VALID SCREENS
+        self._build_screens()
+
+        #MAIN SCREEN WHEN THE GAME IS OPENED
+        self.current_screen = self.screens["MAIN"]
+
+        # Start the background music loop on launch
+        AudioManager().start_music()
+
+    def _build_screens(self):
+        """Create (or re-create) all screen objects for the current display size."""
         self.screens = {
             "MAIN": MainScreen(self, self.screen),
             "JOIN": JoinScreen(self, self.screen),
@@ -39,14 +52,59 @@ class GAME:
             "GAME": GameScreen(self, self.screen),
         }
 
-        #MAIN SCREEN WHEN THE GAME IS OPENED
-        self.current_screen = self.screens["MAIN"]
-
     def change_screen(self, screen_name):
         if screen_name in self.screens:
+            audio = AudioManager()
+
+            # Stop music when entering the game, resume when leaving it
+            if screen_name == "GAME":
+                audio.stop_music()
+            elif isinstance(self.current_screen, GameScreen):
+                # We are leaving the GameScreen back to a menu
+                audio.resume_music()
+
             self.current_screen = self.screens[screen_name]
         else:
             print("ERROR: Screen Does not Exists")
+
+    def change_resolution(self, width, height):
+        """Resize the game window and rebuild all screens for the new resolution."""
+        # Preserve fullscreen state
+        is_fullscreen = bool(self.screen.get_flags() & pygame.FULLSCREEN)
+        flags = pygame.FULLSCREEN if is_fullscreen else 0
+        self.screen = pygame.display.set_mode((width, height), flags)
+        pygame.display.set_caption("Sharp Blaze")
+
+        # Re-create every screen so all UI elements recalculate positions & sizes
+        self._build_screens()
+
+        # Land the user back on the Resolution sub-menu so they see the change
+        main_screen = self.screens["MAIN"]
+        main_screen.menu_state = "RESOLUTION"
+        self.current_screen = main_screen
+
+    def toggle_fullscreen(self):
+        """Toggle between fullscreen and windowed mode, keeping the current resolution."""
+        current_w = self.screen.get_width()
+        current_h = self.screen.get_height()
+        is_fullscreen = bool(self.screen.get_flags() & pygame.FULLSCREEN)
+
+        if is_fullscreen:
+            # Switch to windowed
+            self.screen = pygame.display.set_mode((current_w, current_h))
+        else:
+            # Switch to fullscreen
+            self.screen = pygame.display.set_mode((current_w, current_h), pygame.FULLSCREEN)
+
+        pygame.display.set_caption("Sharp Blaze")
+
+        # Re-create every screen for the new display mode
+        self._build_screens()
+
+        # Stay on the Resolution sub-menu
+        main_screen = self.screens["MAIN"]
+        main_screen.menu_state = "RESOLUTION"
+        self.current_screen = main_screen
 
     def run(self):
         #MAIN LOOP

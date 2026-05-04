@@ -1,5 +1,6 @@
 import pygame
 from ui.component import Button, CloseButton,TextBox
+from utils.audio import AudioManager
 
 class ConnectingScreen:
     def __init__(self, screen_manager, screen):
@@ -7,6 +8,11 @@ class ConnectingScreen:
         # SCREEN FROM THE MAIN GAME LOOP
         self.screen_manager = screen_manager
         self.screen = screen
+
+        # SCALE FACTORS relative to base resolution 1280x720
+        BASE_W, BASE_H = 1280, 720
+        sx = self.screen.get_width() / BASE_W
+        sy = self.screen.get_height() / BASE_H
 
         # COLORS
         # PRINCIPAL BG
@@ -17,11 +23,11 @@ class ConnectingScreen:
         self.RED = (204, 5, 35)
         self.BLACK = (0, 0, 0)
 
-        # TEXT BOX SIZE
-        TEXTBOX_WH = (500, 50)
+        # TEXT BOX SIZE (scaled)
+        TEXTBOX_WH = (int(500 * sx), int(50 * sy))
 
-        # BUTTON SIZE
-        BUTTON_WH = (350, 50)
+        # BUTTON SIZE (scaled)
+        BUTTON_WH = (int(350 * sx), int(50 * sy))
 
         # TEXT SIZE
         TEXT_SIZE = BUTTON_WH[1] // 2
@@ -36,7 +42,7 @@ class ConnectingScreen:
         center_x_input = self.screen.get_rect().centerx - (width_input // 2)
 
         init_y = self.screen.get_height() // 3
-        separation_y = 100
+        separation_y = int(100 * sy)
 
         # Button creation
         self.btn_cancel = Button(
@@ -50,7 +56,7 @@ class ConnectingScreen:
 
         # TEXT BOX
         # TEXT BOX CREATION
-        size_text_boxes = 25
+        size_text_boxes = int(25 * sy)
         self.textbox_connecting = TextBox(
             (center_x_input, init_y),
             TEXTBOX_WH,
@@ -62,8 +68,8 @@ class ConnectingScreen:
 
         # EXIT MAIN MENU BUTTON
         width_screen = self.screen.get_width()
-        button_size = 30
-        margin = 50
+        button_size = int(30 * sy)
+        margin = int(50 * sx)
         # POS CALCULATION
         pos_x = width_screen - button_size - margin
         pos_y = margin
@@ -75,16 +81,18 @@ class ConnectingScreen:
         """where screen manages the events of their buttons and input boxes"""
         for event in events:
             if self.btn_close.handle_event(event):
+                AudioManager().play_click()
                 self.screen_manager.change_screen("MAIN")
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     mouse_pos = event.pos
 
-                # Comprobation that the input box is clicked
-                if self.btn_cancel.button_rectangle.collidepoint(mouse_pos):
-                    self.screen_manager.network.desconectar()
-                    self.screen_manager.change_screen("JOIN")
+                    # Comprobation that the button is clicked
+                    if self.btn_cancel.button_rectangle.collidepoint(mouse_pos):
+                        AudioManager().play_click()
+                        self.screen_manager.network.desconectar()
+                        self.screen_manager.change_screen("JOIN")
 
             elif event.type == pygame.MOUSEMOTION:
 
