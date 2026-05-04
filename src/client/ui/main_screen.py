@@ -307,6 +307,7 @@ class MainScreen:
                         elif self.btn_bot.button_rectangle.collidepoint(mouse_pos):
                             AudioManager().play_click()
                             print("Iniciando partida BOT MATCH...")
+                            self.screen_manager.change_screen("BOT_DIFFICULTY")
 
                         elif self.btn_options.button_rectangle.collidepoint(mouse_pos):
                             AudioManager().play_click()

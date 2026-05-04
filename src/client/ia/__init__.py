@@ -1,29 +1,48 @@
 """
 Sharp-Blaze Bot AI Module
+=========================
 
-Core Components:
-- GameStateAnalyzer: Metrics calculation (threat, resources, position)
-- DecisionEngine: Simplex optimization for strategic decisions
-- UnitCommander: Command generation (build, move, attack)
-- BotAI: Main orchestrator that coordinates everything
-- BotNetworkClient: Headless TCP/UDP client for the bot (no Pygame)
-- BotMatchSpawner: Spawns Docker game server for bot matches (no broker)
+Organized by responsibility:
+
+ia/core/   — AI decision logic ("what the bot thinks")
+    BotAI, DecisionEngine, GameStateAnalyzer, UnitCommander,
+    GameConfigLoader, BotConfig
+
+ia/infra/  — Infrastructure ("how the bot communicates")
+    BotNetworkClient, BotMatchSpawner
+
+This __init__.py re-exports everything so external code can do:
+    from ia import BotAI, BotNetworkClient
+without knowing the internal package structure.
 """
 
-from .game_state_analyzer import GameStateAnalyzer
-from .decision_engine import DecisionEngine
-from .unit_commander import UnitCommander
-from .bot_ai import BotAI
-from .game_config_loader import GameConfigLoader
-from .bot_network_client import BotNetworkClient
-from .bot_match_spawner import BotMatchSpawner
+# ── Core: AI brain ──
+from .core import (
+    BotAI,
+    DecisionEngine,
+    GameStateAnalyzer,
+    UnitCommander,
+    GameConfigLoader,
+    BotConfig,
+)
+
+# ── Infrastructure: networking & Docker ──
+from .infra import (
+    BotNetworkClient,
+    BotMatchSpawner,
+    BotMatchController,
+)
 
 __all__ = [
-    "GameStateAnalyzer",
-    "DecisionEngine",
-    "UnitCommander",
+    # Core
     "BotAI",
+    "DecisionEngine",
+    "GameStateAnalyzer",
+    "UnitCommander",
     "GameConfigLoader",
+    "BotConfig",
+    # Infra
     "BotNetworkClient",
     "BotMatchSpawner",
+    "BotMatchController",
 ]

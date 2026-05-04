@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Tuple
 from scipy.optimize import linprog
 import numpy as np
-from game_config_loader import GameConfigLoader
+from .game_config_loader import GameConfigLoader
 
 class DecisionEngine:
     """

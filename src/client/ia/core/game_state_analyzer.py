@@ -1,6 +1,6 @@
 from typing import Dict, Any
 import math
-from game_config_loader import GameConfigLoader
+from .game_config_loader import GameConfigLoader
 
 class GameStateAnalyzer:
     """

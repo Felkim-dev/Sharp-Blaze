@@ -39,7 +39,7 @@ class GameConfigLoader:
             # Path resolution: look in src/config/ folder
             config_path = os.path.join(
                 os.path.dirname(__file__),
-                "..", "..",
+                "..", "..", "..",
                 "config",
                 filename
             )
