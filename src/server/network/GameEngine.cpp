@@ -905,13 +905,13 @@ GameEngine::PurchaseResult GameEngine::processUnitPurchase(
         return result;
     }
 
-    //       const float angleStep = 0.55f;
-    //const float radius = 45.0f;
-    //const float angle = static_cast<float>(unitId % 11) * angleStep;
-    //const float spawnX = basePos.x + radius * std::cos(angle);
-    const float spawnX = 75.0;
-    //const float spawnY = basePos.y + radius * std::sin(angle);
-    const float spawnY = 75.0;
+    const float angleStep = 0.55f;
+    const float radius = 250.0f;
+    const float angle = static_cast<float>(unitId % 11) * angleStep;
+    const float spawnX = basePos.x + radius * std::cos(angle);
+    const float spawnY = basePos.y + radius * std::sin(angle);
+    // const float spawnX = 75.0;
+    // const float spawnY = 75.0;
 
     session->upsertUnitPosition(unitId, spawnX, spawnY);
     session->registerSpawnedUnit(unitId, playerId, unitType);
