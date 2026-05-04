@@ -26,6 +26,7 @@ ENV/
 .env
 .pytest_cache/
 .mypy_cache/
+sharp_blaze_venv/
 
 # ==========================================
 # Docker & Infrastructure
@@ -55,3 +56,4 @@ example.json
 # Testing
 # ==========================================
 test_connection.py
+plan_botImplementation.md
