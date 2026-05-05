@@ -22,7 +22,7 @@ namespace
     constexpr int kSmallStructureFootprintSize = 2;
 
     constexpr float kCollectorCollisionRadius = 25.0f;
-    constexpr float kBaseCollisionRadius = 150.0f;
+    constexpr float kBaseCollisionRadius = 250.0f;
 
     float distanceSquared(float x1, float y1, float x2, float y2)
     {
@@ -673,7 +673,7 @@ void GameEngine::advanceMovement(int deltaMs)
     {
         const auto [worldX, worldY] = cellCenterToWorld(move.to);
         session->upsertUnitPosition(move.entityId, worldX, worldY);
-        movementCooldownRemainingMs[move.entityId] = 80; // Match 10 pixels/frame in client (~83ms per cell)
+        movementCooldownRemainingMs[move.entityId] = 83; // Match 10 pixels/frame in client (~83ms per cell)
 
         auto routeIt = movementRoutes.find(move.entityId);
         if (routeIt == movementRoutes.end())
@@ -905,13 +905,13 @@ GameEngine::PurchaseResult GameEngine::processUnitPurchase(
         return result;
     }
 
-    //       const float angleStep = 0.55f;
-    //const float radius = 45.0f;
-    //const float angle = static_cast<float>(unitId % 11) * angleStep;
-    //const float spawnX = basePos.x + radius * std::cos(angle);
-    const float spawnX = 75.0;
-    //const float spawnY = basePos.y + radius * std::sin(angle);
-    const float spawnY = 75.0;
+    const float angleStep = 0.55f;
+    const float radius = 250.0f;
+    const float angle = static_cast<float>(unitId % 11) * angleStep;
+    const float spawnX = basePos.x + radius * std::cos(angle);
+    const float spawnY = basePos.y + radius * std::sin(angle);
+    // const float spawnX = 75.0;
+    // const float spawnY = 75.0;
 
     session->upsertUnitPosition(unitId, spawnX, spawnY);
     session->registerSpawnedUnit(unitId, playerId, unitType);
