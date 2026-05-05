@@ -85,7 +85,7 @@ class NetworkManager:
 
             max_retries = 20
             for attempt in range(max_retries):
-                self.client_udp.sendto(hello_message,(self.server_ip,self.udp_port_server))
+                self.client_udp.sendto(self._udp_hello_msg,(self.server_ip,self.udp_port_server))
                 print(f"UDP_HELLO sent(attempt: {attempt+1}) Waiting for positions...")
                 time.sleep(0.1)
                 

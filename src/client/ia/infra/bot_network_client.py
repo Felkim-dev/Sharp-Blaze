@@ -63,6 +63,7 @@ class BotNetworkClient:
         # Bind to port 0 → OS picks a free ephemeral port.
         # This avoids colliding with the human player's UDP socket.
         self.client_udp: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.client_udp.settimeout(1.0)  # Timeout so recvfrom() doesn't block forever
         self.client_udp.bind(("0.0.0.0", 0))
 
         self.server_ip: Optional[str] = None
@@ -332,6 +333,9 @@ class BotNetworkClient:
             world_x = (grid_x * cell_size) + (cell_size // 2)
             world_y = (grid_y * cell_size) + (cell_size // 2)
         """
+        last_hello_time = time.time()
+        hello_retry_interval = 2.0  # Retry Hello every 2s until confirmed
+
         while self.is_udp_listening:
             try:
                 raw_data, addr = self.client_udp.recvfrom(1024)
@@ -346,13 +350,33 @@ class BotNetworkClient:
                         self.latest_positions[entity_id] = []
 
                     self.latest_positions[entity_id].append((world_x, world_y))
-                    self.udp_endpoint_registered = True
 
+                    if not self.udp_endpoint_registered:
+                        self.udp_endpoint_registered = True
+                        print("[BotNet] UDP endpoint confirmed (received packet from server).")
+
+            except socket.timeout:
+                # Retry hello if we haven't gotten any position data yet
+                if not self.udp_endpoint_registered and self.udp_hello_message is not None:
+                    now = time.time()
+                    if now - last_hello_time >= hello_retry_interval:
+                        try:
+                            self.client_udp.sendto(
+                                self.udp_hello_message,
+                                (self.server_ip, self.udp_port_server)
+                            )
+                            last_hello_time = now
+                            print("[BotNet] UDP retrying Hello (no positions received yet)")
+                        except Exception as e:
+                            print(f"[BotNet] UDP hello retry failed: {e}")
+                continue
             except OSError:
                 # Socket was closed (during disconnect)
                 break
             except Exception as e:
                 print(f"[BotNet] UDP recv error: {e}")
+
+        print("[BotNet] UDP listener thread exited cleanly.")
 
     # ────────────────────────────────────────────────────────────
     #  UDP — Keepalive Thread
