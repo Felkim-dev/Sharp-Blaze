@@ -41,9 +41,13 @@ class DockerMatchSpawner(MatchSpawner):
             "SHARP_BLAZE_UDP_PORT": str(self._udp_port),
         }
 
+        # Explicitly bind to the specific host IP (self._ip) rather than 0.0.0.0.
+        # This is critical for UDP over Tailscale/VPNs: if we bind to 0.0.0.0,
+        # docker-proxy may reply using the host's default interface IP instead
+        # of the VPN IP. The client's socket will drop the mismatched source IP.
         ports = {
-            f"{self._tcp_port}/tcp": None,
-            f"{self._udp_port}/udp": None,
+            f"{self._tcp_port}/tcp": (self._ip,),
+            f"{self._udp_port}/udp": (self._ip,),
         }
 
         kwargs = {
