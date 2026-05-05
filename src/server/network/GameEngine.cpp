@@ -8,6 +8,7 @@
 #include <set>
 #include <utility>
 #include <vector>
+#include <unordered_set>
 
 #include "GameSession.h"
 #include "PathFinder.h"
@@ -305,6 +306,9 @@ void GameEngine::commandQueueProcess()
 
     std::vector<games_types::PlayerCommand> pendingMoveCommands;
 
+    // Deduplicate attack commands per attacker within the same processing cycle.
+    std::unordered_set<int> seenAttackers;
+
     while (!pendingCommands.empty())
     {
         const games_types::PlayerCommand cmd = pendingCommands.front();
@@ -323,6 +327,19 @@ void GameEngine::commandQueueProcess()
 
         if (cmd.type == games_types::CommandType::AttackUnit)
         {
+            // If we've already seen an attack command for this attacker in the
+            // current batch, ignore subsequent ones to avoid "burst" effects
+            // when the unit later becomes able to attack.
+            const int attackerId = cmd.attack.attackerId;
+            if (attackerId > 0)
+            {
+                if (seenAttackers.find(attackerId) != seenAttackers.end())
+                {
+                    continue;
+                }
+                seenAttackers.insert(attackerId);
+            }
+
             processAttackCommand(cmd);
             continue;
         }
