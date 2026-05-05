@@ -9,7 +9,7 @@ services:
       BROKER_GAME_IMAGE: sharp-blaze-server:latest
       BROKER_GAME_TCP_PORT: 5555
       BROKER_GAME_UDP_PORT: 5556
-      BROKER_GAME_HOST_IP: localhost #agregar ip de la maquina que esta hosteando, sino no sirve
+      BROKER_GAME_HOST_IP: ${SERVER_IP:-127.0.0.1} #agregar ip de la maquina en el archivo .env (ej SERVER_IP=100.x.x.x)
     ports:
       - "6000:6000"
     volumes:
