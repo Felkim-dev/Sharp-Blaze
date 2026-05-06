@@ -71,6 +71,7 @@ class NetworkManager:
 
         print(f"Session_id {local_session_id}, player_id {local_player_id}, checksum {checksum}")
         print(f"Connecting to UDP server: {self.server_ip}:{self.udp_port_server}")
+        print(f"UDP socket bound to: {self.client_udp.getsockname()}")
         try:
             self.client_udp.sendto(self._udp_hello_msg, self._udp_hello_target)
             
@@ -79,6 +80,7 @@ class NetworkManager:
             self.udp_player_id = player_id
             
             print("UDP Channel open. Waiting for positions")
+            print("Starting UDP listener thread...")
 
             self.start_udp_thread()
 
@@ -158,14 +160,18 @@ class NetworkManager:
 
     def _udp_listen_loop(self):
         """Bucle infinito del hilo secundario. Desempaqueta y guarda."""
+        print(f"[UDP] Listener starting, listening on {self.client_udp.getsockname()}")
         last_hello_time = time.time()
         hello_retry_interval = 2.0  # Retry Hello every 2 seconds until confirmed
+        packet_count = 0
 
         while self.is_udp_listening:
             try:
                 # Este hilo se quedará esperando aquí hasta que llegue un paquete
                 # Socket has a 1-second timeout so we periodically check is_udp_listening
                 raw_data, origin_directions = self.client_udp.recvfrom(1024)
+                packet_count += 1
+                #print(f"[UDP] Packet #{packet_count} received from {origin_directions}, size={len(raw_data)} bytes")
 
                 # Asumiendo tu paquete de 12 bytes (<iff)
                 if len(raw_data) == 12:
@@ -192,9 +198,9 @@ class NetworkManager:
                     now = time.time()
                     if now - last_hello_time >= hello_retry_interval:
                         try:
-                            self.client_udp.sendto(self._udp_hello_msg, self._udp_hello_target)
+                            bytes_sent = self.client_udp.sendto(self._udp_hello_msg, self._udp_hello_target)
                             last_hello_time = now
-                            print(f"[UDP] Retrying Hello (no positions received yet)")
+                            print(f"[UDP] Retrying Hello to {self._udp_hello_target} (no positions received yet, session={self.udp_session_id}, player={self.udp_player_id}, bytes_sent={bytes_sent})")
                         except Exception as e:
                             print(f"[UDP] Hello retry failed: {e}")
                 continue

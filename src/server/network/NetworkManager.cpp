@@ -11,6 +11,7 @@
 #include "NetworkManager.h"
 #include "clientProtocol.h"
 #include "platform_socket.h"
+#include "udpDispatcher.h"
 
 bool NetworkManager::sendText(SOCKET socket, const std::string& text)
 {
@@ -141,14 +142,14 @@ void NetworkManager::handleReadyNoLock(SOCKET socket, const int &sessionId)
     const int p1InternalPlayerId = g_players.count(players.first) ? g_players[players.first].internalPlayerId : 0;
     const int p2InternalPlayerId = g_players.count(players.second) ? g_players[players.second].internalPlayerId : 0;
 
-    // // REGISTRO UDP TEMPRANO: antes de enviar START_GAME
-    // // Garantiza que cuando el cliente mande UDP_HELLO, la sesión ya existe
-    // GlobalUDPDispatcher::getInstance().onSessionStarted(
-    //     effectiveSessionId,
-    //     p1InternalPlayerId,
-    //     p2InternalPlayerId,
-    //     session);
-    //std::cout << "[UDP] Session registered early for UDP handshake: " << effectiveSessionId << std::endl;
+    // REGISTRO UDP TEMPRANO: antes de enviar START_GAME
+    // Garantiza que cuando el cliente mande UDP_HELLO, la sesión ya existe
+    GlobalUDPDispatcher::getInstance().onSessionStarted(
+        effectiveSessionId,
+        p1InternalPlayerId,
+        p2InternalPlayerId,
+        session);
+    std::cout << "[UDP] Session registered early for UDP handshake: " << effectiveSessionId << std::endl;
 
     const std::uint16_t udpPort = 5556;
     const std::string startMsgP1 = client_protocol::BuildMatchStartResponse(

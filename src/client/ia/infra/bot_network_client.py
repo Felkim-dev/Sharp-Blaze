@@ -280,13 +280,18 @@ class BotNetworkClient:
 
         print(f"[BotNet] UDP init: session={session_id}, player={player_id}, "
               f"checksum={checksum}, target={ip}:{udp_port}")
+        print(f"[BotNet] UDP socket bound to: {self.client_udp.getsockname()}")
 
         try:
             # Start listener thread
+            print("[BotNet] Starting UDP listener thread...")
             self._start_udp_listener()
+            print("[BotNet] UDP listener thread started")
 
             # Start keepalive thread (use helper to ensure single-start)
+            print("[BotNet] Starting UDP keepalive thread...")
             self.start_udp_keepalive()
+            print("[BotNet] UDP keepalive thread started")
 
             # Send hello with retries until server acknowledges
             max_retries = 20
@@ -327,12 +332,16 @@ class BotNetworkClient:
             world_x = (grid_x * cell_size) + (cell_size // 2)
             world_y = (grid_y * cell_size) + (cell_size // 2)
         """
+        print(f"[BotNet] UDP listener starting, listening on {self.client_udp.getsockname()}")
         last_hello_time = time.time()
         hello_retry_interval = 2.0  # Retry Hello every 2s until confirmed
+        packet_count = 0
 
         while self.is_udp_listening:
             try:
                 raw_data, addr = self.client_udp.recvfrom(1024)
+                packet_count += 1
+                #print(f"[BotNet] UDP packet #{packet_count} received from {addr}, size={len(raw_data)} bytes")
 
                 if len(raw_data) == 12:
                     entity_id, grid_x, grid_y = struct.unpack("<iff", raw_data)
@@ -355,12 +364,14 @@ class BotNetworkClient:
                     now = time.time()
                     if now - last_hello_time >= hello_retry_interval:
                         try:
-                            self.client_udp.sendto(
+                            bytes_sent = self.client_udp.sendto(
                                 self.udp_hello_message,
                                 (self.server_ip, self.udp_port_server)
                             )
                             last_hello_time = now
-                            print("[BotNet] UDP retrying Hello (no positions received yet)")
+                            print(f"[BotNet] UDP retrying Hello to {self.server_ip}:{self.udp_port_server} "
+                                  f"(no positions received yet, session={self.udp_session_id}, player={self.udp_player_id}, "
+                                  f"bytes_sent={bytes_sent})")
                         except Exception as e:
                             print(f"[BotNet] UDP hello retry failed: {e}")
                 continue
