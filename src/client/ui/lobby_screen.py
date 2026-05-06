@@ -114,6 +114,34 @@ class LobbyScreen:
                             session_id = getattr(self, 'session_id', None)
                             self.screen_manager.network.send_json(JSON_Manager.get_startgame(session_id))
 
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                if self.textbox_nickname2.text != "WAITING...":
+                    AudioManager().play_click()
+                    if Config.OFFLINE_DEBUG_MODE:
+                        units = {
+                        1000: (450, 4550),
+                        1001: (550, 4450),
+                        3002: (350, 4450),
+                        6000: (4550,450),
+                        6001: (4450,550),
+                        8002: (4650,550)
+                            }
+
+                        structures = {
+                            100: (300, 4700),
+                            5000: (4700, 300),
+                            11000: (2500, 2500),
+                            10000: (2000, 1000),
+                            10001: (1000, 2000),
+                        }
+
+                        game_screen = self.screen_manager.screens["GAME"]
+                        game_screen.load_initial_state(units,structures)
+                        self.screen_manager.change_screen("GAME")
+                    else:
+                        session_id = getattr(self, 'session_id', None)
+                        self.screen_manager.network.send_json(JSON_Manager.get_startgame(session_id))
+
             if self.btn_close.handle_event(event):
                 AudioManager().play_click()
                 self.screen_manager.network.disconnect()

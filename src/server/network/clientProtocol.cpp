@@ -362,6 +362,25 @@ std::string client_protocol::BuildGameOverResponse(int sessionId, int playerId)
     return response.dump() + '\n';
 }
 
+std::string client_protocol::BuildPauseBroadcast(int pausedByPlayerId)
+{
+    json message;
+    message["type"] = "GAME_PAUSED";
+    message["payload"]["paused_by"] = pausedByPlayerId;
+    return message.dump() + '\n';
+}
+
+std::string client_protocol::BuildGameOverWithReasonResponse(
+    const std::string& sessionId, int winnerPlayerId, const std::string& reason)
+{
+    json message;
+    message["type"] = "GAME_OVER";
+    message["payload"]["session_id"] = sessionId;
+    message["payload"]["winner_player_id"] = winnerPlayerId;
+    message["payload"]["reason"] = reason;
+    return message.dump() + '\n';
+}
+
 //framing del buffer por delimitador "\n"
 //Recibe bytes crudos de recv, acumula en el carrybuffer y extrae los mensajes completos en outMessages.
 
@@ -728,6 +747,40 @@ bool client_protocol::MessageProtocol(
         outMessage.deposit.collectorId = payload["collector_id"].get<int>();
         outMessage.deposit.resourceType = resourceType;
         outMessage.deposit.amount = amount;
+        responseToSend = BuildOkResponse();
+        return true;
+    }
+
+    if (type == "PAUSE_GAME")
+    {
+        if (!data.contains("payload") || !data["payload"].is_object())
+        {
+            responseToSend = BuildErrorResponse("missing_or_invalid_payload");
+            return false;
+        }
+
+        const json& payload = data["payload"];
+        bool paused = false;
+        if (payload.contains("paused") && payload["paused"].is_boolean())
+        {
+            paused = payload["paused"].get<bool>();
+        }
+        int pausedByPlayerId = -1;
+        if (payload.contains("paused_by") && payload["paused_by"].is_number_integer())
+        {
+            pausedByPlayerId = payload["paused_by"].get<int>();
+        }
+
+        outMessage.type = ParsedMessageType::PauseGame;
+        outMessage.pauseGame.paused = paused;
+        outMessage.pauseGame.pausedByPlayerId = pausedByPlayerId;
+        responseToSend = BuildOkResponse();
+        return true;
+    }
+
+    if (type == "SURRENDER")
+    {
+        outMessage.type = ParsedMessageType::Surrender;
         responseToSend = BuildOkResponse();
         return true;
     }

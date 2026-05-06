@@ -44,6 +44,18 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
 
         if (engine)
         {
+            // Pause check: skip all game logic while paused but keep thread alive
+            if (engine->isPaused())
+            {
+                const auto tickEnd = std::chrono::steady_clock::now();
+                const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tickEnd - tickStart);
+                if (elapsed < std::chrono::milliseconds(kTickMs))
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(kTickMs) - elapsed);
+                }
+                continue;
+            }
+
             engine->commandQueueProcess();
             engine->advanceMovement(kTickMs);
             engine->advanceCollectors(kTickMs);
@@ -449,4 +461,16 @@ bool SessionOrchestrator::getPlayers(const int& sessionId, std::pair<SOCKET, SOC
 
     players = {it->second.p1, it->second.p2};
     return true;
+}
+
+SessionOrchestrator::SessionRecord* SessionOrchestrator::findSessionRecord(int sessionId)
+{
+    std::lock_guard<std::mutex> lock(mtx);
+
+    auto it = sessionsById.find(sessionId);
+    if (it == sessionsById.end())
+    {
+        return nullptr;
+    }
+    return &it->second;
 }
