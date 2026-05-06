@@ -85,6 +85,7 @@ class GameScreen:
         self.is_game_over = False
         self.winner_player_id = None
         self.is_paused = False
+        self.pause_initiator = False
         # Phase 1: visual only, game continues running underneath
         # Pause overlay created lazily on first ESC press
         self.pause_overlay = None
@@ -113,6 +114,7 @@ class GameScreen:
         self.is_shop_open = False
         self.is_dragging = False
         self.is_paused = False
+        self.pause_initiator = False
         self.pause_overlay = None
         
         # Reset camera
@@ -155,6 +157,7 @@ class GameScreen:
         self.infobox_hat.update_text(str(self.player_recolector_units))
 
     def trigger_game_over(self, winner_name):
+        AudioManager().resume_music()
         self.is_game_over = True
         self.winner_player_id = winner_name
 
@@ -176,24 +179,36 @@ class GameScreen:
             # ESC toggle: open/close the pause menu
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 if self.is_game_over:
-                    # Game over takes priority over pause
-                    pass
+                    pass  # Game over takes priority over pause
                 elif self.pause_overlay and self.pause_overlay.state == "SURRENDER_CONFIRM":
                     # ESC during surrender confirmation closes dialog only
                     self.pause_overlay.state = "MAIN"
-                elif self.is_paused:
-                    # Close the pause menu
+                elif self.pause_overlay and self.pause_overlay.state == "VOLUME":
+                    # ESC during volume submenu returns to main
+                    self.pause_overlay.state = "MAIN"
+                elif self.is_paused and self.pause_initiator:
+                    # Only the initiator can close the pause menu (resume)
                     self.is_paused = False
+                    self.pause_initiator = False
                     if self.pause_overlay:
                         self.pause_overlay.state = None
-                else:
-                    # Open the pause menu (lazy overlay creation)
+                    AudioManager().resume_music()
+                    if not Config.OFFLINE_DEBUG_MODE:
+                        self.screen_manager.network.send_json(JSON_Manager.get_pause_game(False))
+                elif not self.is_paused:
+                    # Open the pause menu (send PAUSE to server)
                     self.is_paused = True
+                    self.pause_initiator = True
                     if self.pause_overlay is None:
                         self.pause_overlay = PauseOverlay(self.screen, self.screen_manager, AudioManager())
                     else:
                         self.pause_overlay.state = "MAIN"
+                    self.pause_overlay.is_initiator = True
                     AudioManager().play_click()
+                    AudioManager().stop_music()
+                    if not Config.OFFLINE_DEBUG_MODE:
+                        self.screen_manager.network.send_json(JSON_Manager.get_pause_game(True))
+                # else: non-initiator ESC is silently ignored (can't resume)
 
             if self.is_game_over:
                 # Si el juego terminó, SOLO escuchamos clics izquierdos para el botón
@@ -218,9 +233,12 @@ class GameScreen:
                     self.is_paused = False
                     self.pause_overlay.state = None
                 elif action == "surrender_confirm":
-                    print("[PAUSE] Surrender confirmed — would end game in Phase 2")
+                    if not Config.OFFLINE_DEBUG_MODE:
+                        self.screen_manager.network.send_json(JSON_Manager.get_surrender())
                     self.is_paused = False
-                    self.pause_overlay.state = None
+                    self.pause_initiator = False
+                    if self.pause_overlay:
+                        self.pause_overlay.state = None
                 continue
 
             # Detect Mouse Button Press
@@ -338,7 +356,24 @@ class GameScreen:
 
                 print(data)
 
-                if data.get("type") == "SHOP_AUTORIZATION":
+                if data.get("type") == "GAME_PAUSED":
+                    paused_by = data["payload"].get("paused_by", -1)
+                    self.is_paused = True
+                    self.pause_initiator = (paused_by == self.player_Id)
+                    if self.pause_overlay is None:
+                        self.pause_overlay = PauseOverlay(self.screen, self.screen_manager, AudioManager())
+                    self.pause_overlay.state = "MAIN"
+                    self.pause_overlay.is_initiator = self.pause_initiator
+                    AudioManager().stop_music()
+
+                elif data.get("type") == "GAME_RESUMED":
+                    self.is_paused = False
+                    self.pause_initiator = False
+                    if self.pause_overlay:
+                        self.pause_overlay.state = None
+                    AudioManager().resume_music()
+
+                elif data.get("type") == "SHOP_AUTORIZATION":
                     self.shop_autorization = ["payload"]["authorized"]
 
                 elif data.get("type") == "BUY_UNIT_RESULT":
@@ -438,6 +473,9 @@ class GameScreen:
             # DEBUG MODE
             if self.player_gold > 100:
                 self.shop_autorization = True
+
+        if self.is_paused:
+            return
 
         keys = pygame.key.get_pressed()
 

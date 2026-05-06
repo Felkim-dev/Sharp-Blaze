@@ -91,3 +91,19 @@ class JSON_Manager:
         }
         
         return attack_payload
+
+    @staticmethod
+    def get_pause_game(paused: bool):
+        return {
+            "type": "PAUSE_GAME",
+            "payload": {
+                "paused": paused
+            }
+        }
+
+    @staticmethod
+    def get_surrender():
+        return {
+            "type": "SURRENDER",
+            "payload": {}
+        }

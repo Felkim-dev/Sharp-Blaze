@@ -619,6 +619,115 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         "{\"type\":\"DEPOSIT_RESOURCE_RESULT\",\"status\":\"ignored\",\"reason\":\"server_authoritative_fsm\"}\n";
                     sendText(clientSocket, depositAck);
                 }
+                else if (parsed.type == client_protocol::ParsedMessageType::PauseGame)
+                {
+                    std::lock_guard<std::mutex> lock(g_matchMutex);
+                    if (!g_players.count(clientSocket))
+                    {
+                        continue;
+                    }
+
+                    int sessionId = g_players[clientSocket].sessionId;
+                    int internalPlayerId = g_players[clientSocket].internalPlayerId;
+
+                    auto* record = sessionOrchestrator.findSessionRecord(sessionId);
+                    if (!record || !record->engine)
+                    {
+                        continue;
+                    }
+
+                    bool wantsPause = parsed.pauseGame.paused;
+
+                    if (wantsPause)
+                    {
+                        if (record->engine->isPaused())
+                        {
+                            continue;
+                        }
+
+                        record->engine->setPaused(true);
+                        record->pausedByPlayerId = internalPlayerId;
+
+                        std::pair<SOCKET, SOCKET> players{};
+                        if (sessionOrchestrator.getPlayers(sessionId, players))
+                        {
+                            const std::string pausedMsg = client_protocol::BuildPauseBroadcast(internalPlayerId);
+                            sendText(players.first, pausedMsg);
+                            if (players.second != players.first)
+                            {
+                                sendText(players.second, pausedMsg);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (!record->engine->isPaused())
+                        {
+                            continue;
+                        }
+
+                        if (record->pausedByPlayerId != internalPlayerId)
+                        {
+                            continue;
+                        }
+
+                        record->engine->setPaused(false);
+                        record->pausedByPlayerId = -1;
+
+                        std::pair<SOCKET, SOCKET> players{};
+                        if (sessionOrchestrator.getPlayers(sessionId, players))
+                        {
+                            const std::string resumedMsg = "{\"type\":\"GAME_RESUMED\",\"payload\":{}}\n";
+                            sendText(players.first, resumedMsg);
+                            if (players.second != players.first)
+                            {
+                                sendText(players.second, resumedMsg);
+                            }
+                        }
+                    }
+                }
+                else if (parsed.type == client_protocol::ParsedMessageType::Surrender)
+                {
+                    std::lock_guard<std::mutex> lock(g_matchMutex);
+                    if (!g_players.count(clientSocket))
+                    {
+                        continue;
+                    }
+
+                    int sessionId = g_players[clientSocket].sessionId;
+                    int internalPlayerId = g_players[clientSocket].internalPlayerId;
+
+                    std::pair<SOCKET, SOCKET> players{};
+                    if (!sessionOrchestrator.getPlayers(sessionId, players))
+                    {
+                        continue;
+                    }
+
+                    int winnerPlayerId;
+                    if (internalPlayerId == 1)
+                    {
+                        winnerPlayerId = 2;
+                    }
+                    else
+                    {
+                        winnerPlayerId = 1;
+                    }
+
+                    const std::string gameOverMsg = client_protocol::BuildGameOverWithReasonResponse(
+                        std::to_string(sessionId), winnerPlayerId, "surrender");
+
+                    sendText(players.first, gameOverMsg);
+                    if (players.second != players.first)
+                    {
+                        sendText(players.second, gameOverMsg);
+                    }
+
+                    auto* record = sessionOrchestrator.findSessionRecord(sessionId);
+                    if (record && record->simulationRunning)
+                    {
+                        record->simulationRunning->store(false);
+                    }
+                }
             }
         }
         else if (bytesReceived == 0)

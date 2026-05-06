@@ -25,6 +25,7 @@ class PauseOverlay:
         sy = self.screen.get_height() / BASE_H
 
         self.state = "MAIN"  # "MAIN", "VOLUME", "SURRENDER_CONFIRM"
+        self.is_initiator = True  # True if this player initiated the pause
 
         # Panel dimensions and position (centered on screen)
         panel_width = int(600 * sx)
@@ -53,6 +54,7 @@ class PauseOverlay:
         title_pos = (panel_x + panel_width // 2, panel_y + int(50 * sy))
         title_size = int(70 * sy)
         self.title = Text(title_pos, "Pause", title_size, (255, 255, 255), TITLE_FONT)
+        self.title_foreign = Text(title_pos, "JUEGO PAUSADO", title_size, (255, 255, 255), TITLE_FONT)
 
         self.cross_btn = CloseButton(
             panel_x + panel_width - int(50 * sx),
@@ -177,7 +179,10 @@ class PauseOverlay:
 
         if self.state == "MAIN":
             screen.blit(self.temp_surface, (self.panel_x, self.panel_y))
-            self.title.draw(screen)
+            if self.is_initiator:
+                self.title.draw(screen)
+            else:
+                self.title_foreign.draw(screen)
             self.cross_btn.draw(screen)
             mouse_pos = pygame.mouse.get_pos()
             self.btn_volume.check_hover(mouse_pos)
@@ -237,7 +242,10 @@ class PauseOverlay:
     def _draw_surrender_confirm(self, screen):
         """Draw the surrender confirmation dialog."""
         screen.blit(self.temp_surface, (self.panel_x, self.panel_y))
-        self.title.draw(screen)
+        if self.is_initiator:
+            self.title.draw(screen)
+        else:
+            self.title_foreign.draw(screen)
         self.text_confirm.draw(screen)
         mouse_pos = pygame.mouse.get_pos()
         self.btn_si.check_hover(mouse_pos)
