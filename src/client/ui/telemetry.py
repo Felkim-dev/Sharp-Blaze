@@ -6,55 +6,61 @@ COMPONENTS_FONT = os.path.join(CURRENT_DIR, "..", "assets", "IntroRust.otf")
 
 class TelemetryPanel:
     def __init__(self, screen_width, screen_height):
-        # SCALE FACTORS relative to base resolution 1280x720
         BASE_W, BASE_H = 1280, 720
         sx = screen_width / BASE_W
         sy = screen_height / BASE_H
 
-        # 1. Panel Dimensions and Position (Top Right Corner, scaled)
-        self.width = int(180 * sx)
-        self.height = int(60 * sy)
+        self.width = int(220 * sx)
+        self.height = int(110 * sy)
         self.x = screen_width - self.width - int(20 * sx)
         self.y = int(20 * sy)
 
-        # 2. Pygame Font setup (scaled)
         pygame.font.init()
-        font_size = int(16 * sy)
+        font_size = int(14 * sy)
         self.font = pygame.font.Font(COMPONENTS_FONT, font_size)
 
-        # 3. Create a semi-transparent dark surface
         self.bg_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-        self.bg_surface.fill((40, 40, 45, 200))  # RGBA: Dark grey with 200/255 opacity
+        self.bg_surface.fill((40, 40, 45, 200))
 
-        # 4. Networking Variables
         self.rtt_ms = 0
         self.last_ping_time = 0
 
-        # Store padding for text placement (scaled)
-        self.pad_x = int(15 * sx)
-        self.pad_y1 = int(10 * sy)
-        self.pad_y2 = int(30 * sy)
+        self.pad_x = int(12 * sx)
+        self.line_height = int(22 * sy)
+        self.pad_y_start = int(8 * sy)
 
     def draw(self, screen, clock, network_manager):
-        """Draws the telemetry panel on the screen."""
-
-        # A. Paste the semi-transparent background
         screen.blit(self.bg_surface, (self.x, self.y))
 
-        # B. Get current FPS from Pygame's clock
         current_fps = int(clock.get_fps())
 
-        # C. Read the latest RTT from the network manager (if implemented)
-        # Assuming your NetworkManager has a property 'current_rtt'
         if hasattr(network_manager, "current_rtt"):
             self.rtt_ms = int(network_manager.current_rtt)
 
-        # D. Render the text strings
-        text_color = (200, 200, 200)  # Light grey
+        udp_rate = getattr(network_manager, "udp_rate", 0)
+        udp_loss = getattr(network_manager, "udp_loss_rate", 0)
+        tcp_sent = getattr(network_manager, "tcp_messages_sent", 0)
+        tcp_recv = getattr(network_manager, "tcp_messages_received", 0)
 
-        latency_text = self.font.render(f"LATENCY: {self.rtt_ms}MS", True, text_color)
-        fps_text = self.font.render(f"FPS: {current_fps}", True, text_color)
+        text_color = (200, 200, 200)
+        gold_color = (255, 215, 0)
+        warn_color = (255, 80, 80)
 
-        # E. Draw the text inside the panel box
-        screen.blit(latency_text, (self.x + self.pad_x, self.y + self.pad_y1))
-        screen.blit(fps_text, (self.x + self.pad_x, self.y + self.pad_y2))
+        rtt_display = self.rtt_ms
+        rtt_color = text_color
+        if rtt_display > 100:
+            rtt_color = gold_color
+        if rtt_display > 200:
+            rtt_color = warn_color
+
+        lines = [
+            (f"FPS: {current_fps}", text_color),
+            (f"LATENCY: {rtt_display}ms", rtt_color),
+            (f"UDP  RX:{udp_rate}/s  LOSS:{udp_loss}/s", text_color),
+            (f"TCP  OUT:{tcp_sent}  IN:{tcp_recv}", text_color),
+        ]
+
+        for i, (text_str, color) in enumerate(lines):
+            text_surface = self.font.render(text_str, True, color)
+            y_pos = self.y + self.pad_y_start + (i * self.line_height)
+            screen.blit(text_surface, (self.x + self.pad_x, y_pos))

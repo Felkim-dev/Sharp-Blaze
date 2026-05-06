@@ -14,6 +14,20 @@ class NetworkManager:
         """INITIAL STATES"""
 
         self.current_rtt = 0
+        self.rtt_ema = 0
+        self.rtt_alpha = 0.3
+        self._last_tcp_send_time = 0
+        self.tcp_messages_sent = 0
+        self.tcp_messages_received = 0
+
+        self.udp_packets_received = 0
+        self.udp_timeouts = 0
+        self.udp_window_start = time.time()
+        self.udp_window_packets = 0
+        self.udp_rate = 0
+        self.udp_loss_window = 0
+        self.udp_loss_rate = 0
+
         self.cell_size = 50
         # -------------------- TCP INTIAL STATES -------------------
         self.client_tcp = None
@@ -39,6 +53,9 @@ class NetworkManager:
         self.udp_session_id = None
         self.udp_player_id = None
         self.is_udp_keep_alive_running = False
+
+        self.is_ping_running = False
+        self._ping_start_time = 0
 
     # --------------------------- UDP Methods -------------------------------------
     def init_udp_connection(self,session_id,player_id):
@@ -94,6 +111,23 @@ class NetworkManager:
             thread = threading.Thread(target=self._udp_keep_alive_loop, daemon=True)
             thread.start()
 
+    def start_ping_thread(self):
+        if not self.is_ping_running:
+            self.is_ping_running = True
+            thread = threading.Thread(target=self._ping_loop, daemon=True)
+            thread.start()
+
+    def _ping_loop(self):
+        while self.is_ping_running:
+            try:
+                if self.connected and self.client_tcp:
+                    ping_msg = json.dumps({"type": "PING", "payload": {}}) + "\n"
+                    self.client_tcp.send(ping_msg.encode("utf-8"))
+                    self._ping_start_time = time.time()
+                time.sleep(0.5)
+            except Exception:
+                break
+
     def _udp_keep_alive_loop(self):
         """Periodic UDP_HELLO rebroadcast to ensure server has our endpoint registered"""
         while self.is_udp_keep_alive_running:
@@ -124,8 +158,16 @@ class NetworkManager:
                 # Este hilo se quedará esperando aquí hasta que llegue un paquete
                 # Socket has a 1-second timeout so we periodically check is_udp_listening
                 raw_data, origin_directions = self.client_udp.recvfrom(1024)
+                self.udp_packets_received += 1
+                self.udp_window_packets += 1
+                now = time.time()
+                if now - self.udp_window_start >= 1.0:
+                    self.udp_rate = min(100, self.udp_window_packets)
+                    self.udp_loss_rate = min(100, self.udp_loss_window)
+                    self.udp_window_packets = 0
+                    self.udp_loss_window = 0
+                    self.udp_window_start = now
 
-                # Asumiendo tu paquete de 12 bytes (<iff)
                 if len(raw_data) == 12:
                     entity_id, indx_x, indx_y = struct.unpack("<iff", raw_data)
 
@@ -144,7 +186,15 @@ class NetworkManager:
                     self.latest_positions[entity_id].append((x, y))
 
             except socket.timeout:
-                # Retry Hello if we haven't received any position data yet
+                self.udp_timeouts += 1
+                self.udp_loss_window += 1
+                now = time.time()
+                if now - self.udp_window_start >= 1.0:
+                    self.udp_rate = min(100, self.udp_window_packets)
+                    self.udp_loss_rate = min(100, self.udp_loss_window)
+                    self.udp_window_packets = 0
+                    self.udp_loss_window = 0
+                    self.udp_window_start = now
                 if not self._udp_hello_confirmed and hasattr(self, '_udp_hello_msg'):
                     now = time.time()
                     if now - last_hello_time >= hello_retry_interval:
@@ -252,6 +302,7 @@ class NetworkManager:
 
             self.connected = True
             self.connection_status = "IDLE"
+            self.start_ping_thread()
 
         except socket.timeout:
             print("Timeout.")
@@ -279,13 +330,27 @@ class NetworkManager:
             try:
                 message = json.dumps(data_dictionary) + "\n"
                 self.client_tcp.send(message.encode("utf-8"))
+                self.tcp_messages_sent += 1
+                self._last_tcp_send_time = time.time()
                 print(f"Mensaje de salida TCP: {message}")
             except Exception as e:
                 print(f"Error in: {e}")
 
+    def _update_rtt(self):
+        if self._ping_start_time > 0:
+            rtt = (time.time() - self._ping_start_time) * 1000
+            self._ping_start_time = 0
+            if self.rtt_ema == 0:
+                self.rtt_ema = rtt
+            else:
+                self.rtt_ema = self.rtt_alpha * rtt + (1 - self.rtt_alpha) * self.rtt_ema
+            self.current_rtt = self.rtt_ema
+
     def receive_json(self):
 
         if self.pending_messages:
+            self.tcp_messages_received += 1
+            self._update_rtt()
             return self.pending_messages.pop(0)
 
         if self.connected:
@@ -295,27 +360,28 @@ class NetworkManager:
                     print("[NETWORK] Servidor TCP cerró la conexión.")
                     self._close_tcp_socket()
                     return {"type": "DISCONNECTED"}
-                print(f"Mensaje de entrada TCP: {data}")
                 if data:
                     self.receive_buffer += data
                     if "\n" in self.receive_buffer:
                         partes = self.receive_buffer.split("\n")
                         self.receive_buffer = partes.pop()
 
-                        # Ahora 'partes' solo tiene paquetes JSON completos y perfectos
                         for json_packet in partes:
-                            if json_packet.strip():  # Ignorar líneas en blanco
+                            if json_packet.strip():
                                 try:
-                                    # Convertimos a diccionario y lo formamos en la fila
                                     json_valido = json.loads(json_packet)
+                                    if json_valido.get("type") == "OK":
+                                        self._update_rtt()
+                                        continue
                                     self.pending_messages.append(json_valido)
                                 except json.JSONDecodeError as e:
                                     print(
                                         f"Error encountered while reading JSON: {json_packet} -> {e}"
                                     )
 
-                        # Si logramos procesar algo, devolvemos el primer mensaje de la fila
                         if self.pending_messages:
+                            self.tcp_messages_received += 1
+                            self._update_rtt()
                             return self.pending_messages.pop(0)
             except BlockingIOError:
                 pass
@@ -327,9 +393,9 @@ class NetworkManager:
         return None
 
     def disconnect(self):
-        # 1. Signal the UDP thread to stop
         self.is_udp_listening = False
         self.is_udp_keep_alive_running = False
+        self.is_ping_running = False
         self.udp_session_id = None
         self.udp_player_id = None
 
@@ -358,6 +424,18 @@ class NetworkManager:
         self.udp_port_server = None
         self.latest_positions.clear()
         self.current_rtt = 0
+        self.rtt_ema = 0
+        self._last_tcp_send_time = 0
+        self._ping_start_time = 0
+        self.udp_packets_received = 0
+        self.udp_timeouts = 0
+        self.udp_window_start = time.time()
+        self.udp_window_packets = 0
+        self.udp_rate = 0
+        self.udp_loss_window = 0
+        self.udp_loss_rate = 0
+        self.tcp_messages_sent = 0
+        self.tcp_messages_received = 0
         print("Disconnection complete and network restarted.")
 
     def calculate_rtt(self, sent_timestamp):
