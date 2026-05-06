@@ -12,21 +12,13 @@ services:
       BROKER_GAME_IMAGE: sharp-blaze-server:latest
       BROKER_GAME_TCP_PORT: 5555
       BROKER_GAME_UDP_PORT: 5556
-      
-      # ⚠️ IMPORTANTE: Cambiar esto a la IP Tailscale de esta máquina
-      # Ejemplo: 100.64.x.x (IP asignada por Tailscale)
-      # Esta es la dirección que el broker le retorna a los clientes
-      BROKER_GAME_HOST_IP: ${SERVER_IP:-127.0.0.1}
-      
-      # Red Docker para comunicación interna servidor-broker
-      #BROKER_GAME_NETWORK: sharp-blaze-network
+      BROKER_GAME_HOST_IP: ${SERVER_IP:-127.0.0.1} #agregar ip de la maquina en el archivo .env (ej SERVER_IP=100.x.x.x)
+
     ports:
       # Exponer broker en puerto 6000 (Tailscale lo hace accesible)
       - "6000:6000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    #networks:
-    #  - sharp-blaze-network
 
   game-server-image:
     build:
@@ -35,7 +27,3 @@ services:
     image: sharp-blaze-server:latest
     profiles:
       - build-only
-
-# networks:
-#   sharp-blaze-network:
-#     driver: bridge
