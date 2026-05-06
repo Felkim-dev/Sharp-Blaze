@@ -149,6 +149,10 @@ class JoinScreen:
                         if char.isalnum():
                             self.inputbox_nickname.user_input += char
 
+                    # Backspace: delete one character at a time (per keypress)
+                    if event.key == pygame.K_BACKSPACE:
+                        self.inputbox_nickname.user_input = self.inputbox_nickname.user_input[:-1]
+
                 # Enter key handling: trigger JOIN action
                 if event.key == pygame.K_RETURN and len(self.inputbox_nickname.user_input) > 3:
                     if not Config.OFFLINE_DEBUG_MODE:
@@ -162,10 +166,6 @@ class JoinScreen:
                 mouse_pos = event.pos
 
                 self.btn_join.check_hover(mouse_pos)
-
-        # Deleting of characters of the string
-        if keys[pygame.K_BACKSPACE]:
-            self.inputbox_nickname.user_input = self.inputbox_nickname.user_input[:-1]
 
     def update(self):
         state = self.screen_manager.network.connection_status
