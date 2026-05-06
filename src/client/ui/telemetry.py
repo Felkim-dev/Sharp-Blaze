@@ -56,7 +56,7 @@ class TelemetryPanel:
         lines = [
             (f"FPS: {current_fps}", text_color),
             (f"LATENCY: {rtt_display}ms", rtt_color),
-            (f"UDP  OK:{udp_rate}%  LOSS:{udp_loss}%", text_color),
+            (f"UDP  RX:{udp_rate}/s  LOSS:{udp_loss}/s", text_color),
             (f"TCP  OUT:{tcp_sent}  IN:{tcp_recv}", text_color),
         ]
 
