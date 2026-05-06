@@ -261,7 +261,10 @@ class TestGameStateAnalyzer(unittest.TestCase):
             "enemy_collectors",
             "current_gold",
             "total_bot_units",
-            "total_enemy_units"
+            "total_enemy_units",
+            "game_phase",
+            "elapsed_seconds",
+            "opponent_play_style"
         ]
         
         for key in required_keys:
@@ -312,6 +315,136 @@ class TestGameStateAnalyzer(unittest.TestCase):
         self.assertEqual(result["bot_attackers"], 3)
         self.assertEqual(result["bot_collectors"], 2)
         self.assertEqual(result["total_bot_units"], 5)
+
+    # ==============================
+    # TEST 6: _calculate_game_phase
+    # ==============================
+    
+    def test_game_phase_early_by_time(self):
+        """
+        TEST 6.1: Game phase is 'early' in first 30 seconds
+        """
+        phase = self.analyzer._calculate_game_phase(
+            elapsed_seconds=10,
+            total_units=15,  # Enough units normally, but time overrides
+            initial_gold=500,
+            current_gold=300
+        )
+        self.assertEqual(phase, "early")
+
+    def test_game_phase_early_by_unit_count(self):
+        """
+        TEST 6.2: Game phase is 'early' with fewer than 8 units
+        """
+        phase = self.analyzer._calculate_game_phase(
+            elapsed_seconds=50,  # Late time normally
+            total_units=5,       # But few units = early
+            initial_gold=500,
+            current_gold=200
+        )
+        self.assertEqual(phase, "early")
+
+    def test_game_phase_mid(self):
+        """
+        TEST 6.3: Game phase is 'mid' in 30-90 second window with 8-20 units
+        """
+        phase = self.analyzer._calculate_game_phase(
+            elapsed_seconds=45,
+            total_units=12,
+            initial_gold=500,
+            current_gold=200
+        )
+        self.assertEqual(phase, "mid")
+
+    def test_game_phase_late_by_time(self):
+        """
+        TEST 6.4: Game phase is 'late' after 90 seconds
+        """
+        phase = self.analyzer._calculate_game_phase(
+            elapsed_seconds=100,
+            total_units=10,  # Few units normally, but time overrides
+            initial_gold=500,
+            current_gold=100
+        )
+        self.assertEqual(phase, "late")
+
+    def test_game_phase_late_by_unit_count(self):
+        """
+        TEST 6.5: Game phase is 'late' with 20+ units
+        """
+        phase = self.analyzer._calculate_game_phase(
+            elapsed_seconds=50,  # Mid-game time normally
+            total_units=22,      # But many units = late
+            initial_gold=500,
+            current_gold=100
+        )
+        self.assertEqual(phase, "late")
+
+    # ==============================
+    # TEST 7: _detect_opponent_play_style
+    # ==============================
+    
+    def test_opponent_style_rush(self):
+        """
+        TEST 7.1: Opponent detected as 'rush' with many attackers
+        """
+        style = self.analyzer._detect_opponent_play_style(
+            enemy_attackers=7,
+            enemy_collectors=3
+        )
+        self.assertEqual(style, "rush")
+
+    def test_opponent_style_eco(self):
+        """
+        TEST 7.2: Opponent detected as 'eco' with many collectors
+        """
+        style = self.analyzer._detect_opponent_play_style(
+            enemy_attackers=2,
+            enemy_collectors=8
+        )
+        self.assertEqual(style, "eco")
+
+    def test_opponent_style_mixed(self):
+        """
+        TEST 7.3: Opponent detected as 'mixed' with balanced army/economy
+        """
+        style = self.analyzer._detect_opponent_play_style(
+            enemy_attackers=5,
+            enemy_collectors=5
+        )
+        self.assertEqual(style, "mixed")
+
+    def test_opponent_style_empty(self):
+        """
+        TEST 7.4: Opponent defaults to 'mixed' with no units
+        """
+        style = self.analyzer._detect_opponent_play_style(
+            enemy_attackers=0,
+            enemy_collectors=0
+        )
+        self.assertEqual(style, "mixed")
+
+    def test_opponent_style_barely_rush(self):
+        """
+        TEST 7.5: Opponent at boundary (>60% attackers) is 'rush'
+        """
+        style = self.analyzer._detect_opponent_play_style(
+            enemy_attackers=7,
+            enemy_collectors=3
+        )
+        # 7/(7+3) = 0.7 > 0.6 -> rush
+        self.assertEqual(style, "rush")
+
+    def test_opponent_style_barely_eco(self):
+        """
+        TEST 7.6: Opponent at boundary (<40% attackers) is 'eco'
+        """
+        style = self.analyzer._detect_opponent_play_style(
+            enemy_attackers=2,
+            enemy_collectors=8
+        )
+        # 2/(2+8) = 0.2 < 0.4 -> eco
+        self.assertEqual(style, "eco")
 
 
 if __name__ == '__main__':

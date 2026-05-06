@@ -1,5 +1,6 @@
 from typing import Dict, Any
 import math
+import time
 from .game_config_loader import GameConfigLoader
 
 class GameStateAnalyzer:
@@ -39,6 +40,10 @@ class GameStateAnalyzer:
         self.COLLECTOR_HP = self.config.get_unit_hp("collector")
         self.MAX_COLLECTORS = self.config.get_max_collectors_per_decision()
         self.MAX_GOLD = 500  # Initial gold per player (not in combat_stats, game balance constant)
+        
+        # Game start tracking (set on first analyze() call)
+        self.game_start_time = None
+        self.initial_gold_per_player = 500
 
     
 
@@ -224,18 +229,95 @@ class GameStateAnalyzer:
             positional_advantage = (2 * advantage) - 1.0
 
             return positional_advantage
+    
+    def _calculate_game_phase(self, elapsed_seconds: float, total_units: int, initial_gold: int, current_gold: int) -> str:
+        """
+        Determine game phase based on elapsed time, unit count, and resource spent
+        
+        Phases:
+        - "early": First 0-30 seconds, <8 units total
+          Strategy: Build economy, avoid fights, focus on collectors
+        - "mid": 30-90 seconds, 8-20 units total
+          Strategy: Balanced offense/defense, start skirmishing
+        - "late": 90+ seconds, 20+ units total
+          Strategy: Full army deployment, base pressure, decide winner
+        
+        Args:
+            elapsed_seconds: Time since game start
+            total_units: Total bot + enemy units currently alive
+            initial_gold: Starting gold (500)
+            current_gold: Current gold remaining
+        
+        Returns:
+            Phase string: "early", "mid", or "late"
+        """
+        gold_spent = initial_gold - current_gold
+        
+        # Early phase: first 30 seconds OR fewer than 8 units
+        if elapsed_seconds < 30 or total_units < 8:
+            return "early"
+        
+        # Late phase: 90+ seconds OR 20+ units
+        if elapsed_seconds > 90 or total_units >= 20:
+            return "late"
+        
+        # Mid phase: everything in between
+        return "mid"
+    
+    def _detect_opponent_play_style(self, enemy_attackers: int, enemy_collectors: int) -> str:
+        """
+        Detect opponent's economic vs aggressive strategy
+        
+        Strategies:
+        - "rush": Many attackers (>60% of total), few collectors
+          Counter: Build defensive units early, focus on resource accumulation
+        - "eco": Many collectors (>60% of total), few attackers
+          Counter: Build army and attack before they become overwhelming
+        - "mixed": Balanced army and economy
+          Counter: Adapt dynamically
+        
+        Args:
+            enemy_attackers: Number of enemy attacking units
+            enemy_collectors: Number of enemy collecting units
+        
+        Returns:
+            Style string: "rush", "eco", or "mixed"
+        """
+        total = enemy_attackers + enemy_collectors
+        
+        if total == 0:
+            return "mixed"  # No units yet
+        
+        attacker_ratio = enemy_attackers / total
+        
+        if attacker_ratio > 0.6:
+            return "rush"  # Opponent is aggressive
+        elif attacker_ratio < 0.4:  # Collectors are >60%
+            return "eco"    # Opponent is economic
+        else:
+            return "mixed"  # Balanced
 
-    def analyze(self, game_world, current_gold: int) -> Dict[str, Any]:
+    def analyze(self, game_world, current_gold: int, elapsed_time_ms: float = None) -> Dict[str, Any]:
         """
         Comprehensive game state analysis
         
         Args:
             game_world: GameWorld instance
             current_gold: Current gold amount (from GameScreen.player_gold)
+            elapsed_time_ms: Time in milliseconds since game start (optional, for testing)
         
         Returns:
             Dictionary with all strategic metrics for Simplex optimizer
         """
+        # Initialize game start time on first call
+        if self.game_start_time is None:
+            self.game_start_time = time.time() * 1000  # Convert to milliseconds
+        
+        # Calculate elapsed time
+        if elapsed_time_ms is None:
+            elapsed_time_ms = (time.time() * 1000) - self.game_start_time
+        elapsed_seconds = elapsed_time_ms / 1000.0
+        
         threat = self.calculate_threat_level(game_world)
         resource = self.calculate_resource_efficiency(game_world, current_gold)
         position = self.calculate_positional_advantage(game_world)
@@ -258,6 +340,18 @@ class GameStateAnalyzer:
         else:
             army_balance = (bot_power - enemy_power) / max(bot_power, enemy_power)
             army_balance = max(-1.0, min(1.0, army_balance))
+        
+        # Calculate game phase
+        total_units = (bot_attackers + bot_collectors) + (enemy_attackers + enemy_collectors)
+        game_phase = self._calculate_game_phase(
+            elapsed_seconds, 
+            total_units, 
+            self.initial_gold_per_player, 
+            current_gold
+        )
+        
+        # Detect opponent play style
+        opponent_style = self._detect_opponent_play_style(enemy_attackers, enemy_collectors)
 
         state = {
             # Metrics for Simplex objective function
@@ -278,6 +372,11 @@ class GameStateAnalyzer:
             # Raw data for advanced decisions
             "total_bot_units": bot_attackers + bot_collectors,
             "total_enemy_units": enemy_attackers + enemy_collectors,
+            
+            # Game phase and opponent modeling
+            "game_phase": game_phase,
+            "elapsed_seconds": elapsed_seconds,
+            "opponent_play_style": opponent_style,
         }
 
         return state

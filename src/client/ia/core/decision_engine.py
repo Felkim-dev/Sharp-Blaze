@@ -184,17 +184,43 @@ class DecisionEngine:
             aggression = float(np.clip(self.simplex_aggression * 0.5, 0.0, 1.0))
         
         # ====================================
-        # STEP 6: Determine priority
+        # STEP 6: Determine priority (with game phase & opponent adaptation)
         # ====================================
         
-        if threat_level > 0.6 or army_balance < -0.35:
+        game_phase = game_state.get("game_phase", "mid")
+        opponent_style = game_state.get("opponent_play_style", "mixed")
+        
+        # OPPONENT ADAPTATION: Override if enemy is rushing
+        if opponent_style == "rush":
+            # Enemy is aggressive - prioritize defense
             priority = "defend"
-        elif resource_efficiency < 0.4:
-            priority = "expand"
-        elif positional_advantage > 0.3 or army_balance > 0.25:
-            priority = "attack"
-        else:
-            priority = "expand" if collectors_to_build > attackers_to_build else "attack"
+        # GAME PHASE ADAPTATION: Early game focuses on economy
+        elif game_phase == "early":
+            # Early game: prioritize collectors and economy, minimal combat
+            if threat_level > 0.5:
+                priority = "defend"
+            else:
+                priority = "expand"
+        # GAME PHASE: Late game is all-in offense
+        elif game_phase == "late":
+            # Late game: go full offensive
+            if threat_level > 0.7:
+                priority = "defend"  # Only defend if critically threatened
+            else:
+                priority = "attack"
+        # MID GAME: Balanced approach with threat awareness
+        else:  # mid game
+            if threat_level > 0.6 or army_balance < -0.35:
+                priority = "defend"
+            elif opponent_style == "eco" and resource_efficiency > 0.3:
+                # Enemy is eco-focused - attack before they scale up
+                priority = "attack"
+            elif resource_efficiency < 0.4:
+                priority = "expand"
+            elif positional_advantage > 0.3 or army_balance > 0.25:
+                priority = "attack"
+            else:
+                priority = "expand" if collectors_to_build > attackers_to_build else "attack"
         
         # ====================================
         # Return decision
@@ -205,6 +231,8 @@ class DecisionEngine:
             "build_collectors": collectors_to_build,
             "aggression": aggression,
             "priority": priority,
+            "game_phase": game_phase,
+            "opponent_style": opponent_style,
             "optimization_status": "success" if result.success else "fallback"
         }
         
