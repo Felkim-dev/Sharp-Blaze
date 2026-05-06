@@ -24,6 +24,7 @@ class DockerMatchSpawner(MatchSpawner):
         self._udp_port = int(os.environ.get("BROKER_GAME_UDP_PORT", "5556"))
         self._network = os.environ.get("BROKER_GAME_NETWORK")
         self._session_ids = itertools.count(int(os.environ.get("BROKER_SESSION_START", "1")))
+        self._container_prefix = os.environ.get("BROKER_MATCH_PREFIX", "sharp-blaze-match-")
 
     async def spawn(self, left: MatchParticipant, right: MatchParticipant) -> MatchEndpoint:
         return await asyncio.to_thread(self._spawn_blocking, left, right)
@@ -55,7 +56,7 @@ class DockerMatchSpawner(MatchSpawner):
             "detach": True,
             "environment": environment,
             "ports": ports,
-            "name": f"sharp-blaze-match-{session_id}",
+            "name": f"{self._container_prefix}{session_id}",
             "remove": True,
         }
 

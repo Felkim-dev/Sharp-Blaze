@@ -78,10 +78,13 @@ class GAME:
         # Re-create every screen so all UI elements recalculate positions & sizes
         self._build_screens()
 
-        # Land the user back on the Resolution sub-menu so they see the change
-        main_screen = self.screens["MAIN"]
-        main_screen.menu_state = "RESOLUTION"
-        self.current_screen = main_screen
+        # If in-game, stay on the game screen instead of redirecting to main menu
+        if isinstance(self.current_screen, GameScreen):
+            self.current_screen = self.screens["GAME"]
+        else:
+            main_screen = self.screens["MAIN"]
+            main_screen.menu_state = "RESOLUTION"
+            self.current_screen = main_screen
 
     def toggle_fullscreen(self):
         """Toggle between fullscreen and windowed mode, keeping the current resolution."""
@@ -101,10 +104,13 @@ class GAME:
         # Re-create every screen for the new display mode
         self._build_screens()
 
-        # Stay on the Resolution sub-menu
-        main_screen = self.screens["MAIN"]
-        main_screen.menu_state = "RESOLUTION"
-        self.current_screen = main_screen
+        # If in-game, stay on the game screen
+        if isinstance(self.current_screen, GameScreen):
+            self.current_screen = self.screens["GAME"]
+        else:
+            main_screen = self.screens["MAIN"]
+            main_screen.menu_state = "RESOLUTION"
+            self.current_screen = main_screen
 
     def run(self):
         #MAIN LOOP

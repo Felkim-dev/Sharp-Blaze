@@ -6,6 +6,7 @@
 #include <queue>
 #include <string>
 #include <unordered_map>
+#include <atomic>
 #include <vector>
 
 #include "GameTypes.h"
@@ -54,6 +55,8 @@ class GameEngine
 		bool hasShopAuthorization(int playerId) const;
 		PurchaseResult processUnitPurchase(int playerId, games_types::EntityType unitType, int quantity);
 		std::shared_ptr<GameSession> getSession() const { return session; }
+		bool isPaused() const { return isPaused_.load(); }
+		void setPaused(bool paused) { isPaused_.store(paused); }
 
 	private:
 		struct FormationAssignment
@@ -89,4 +92,5 @@ class GameEngine
 		mutable std::mutex mtxCommands;
 		mutable std::mutex mtxCombatEvents;
 		mutable std::mutex mtxAttackResults;
+		std::atomic<bool> isPaused_{false};
 };

@@ -8,6 +8,7 @@ from ui.telemetry import TelemetryPanel
 from ui.component import InfoBox, TextBox, Button
 from entities.projectile import RectangularProjectile
 from ui.shop import Shop
+from ui.pause_overlay import PauseOverlay
 
 from utils.json import JSON_Manager
 from utils.config import Config
@@ -83,6 +84,11 @@ class GameScreen:
         # GAME STATE
         self.is_game_over = False
         self.winner_player_id = None
+        self.is_paused = False
+        self.pause_initiator = False
+        # Phase 1: visual only, game continues running underneath
+        # Pause overlay created lazily on first ESC press
+        self.pause_overlay = None
         # Center the game-over UI relative to screen dimensions
         go_box_w, go_box_h = int(800 * sx), int(200 * sy)
         go_box_x = (screen_w - go_box_w) // 2
@@ -107,6 +113,9 @@ class GameScreen:
         self.winner_player_id = None
         self.is_shop_open = False
         self.is_dragging = False
+        self.is_paused = False
+        self.pause_initiator = False
+        self.pause_overlay = None
         
         # Reset camera
         self.camera.x = 0
@@ -148,6 +157,7 @@ class GameScreen:
         self.infobox_hat.update_text(str(self.player_recolector_units))
 
     def trigger_game_over(self, winner_name):
+        AudioManager().resume_music()
         self.is_game_over = True
         self.winner_player_id = winner_name
 
@@ -166,6 +176,31 @@ class GameScreen:
         """Processes one-time events like mouse clicks."""
         for event in events:
 
+            # ESC toggle: open the pause menu (close only via RESUME button)
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                if self.is_game_over:
+                    pass  # Game over takes priority over pause
+                elif self.pause_overlay and self.pause_overlay.state == "SURRENDER_CONFIRM":
+                    # ESC during surrender confirmation closes dialog only
+                    self.pause_overlay.state = "MAIN"
+                elif self.pause_overlay and self.pause_overlay.state == "VOLUME":
+                    # ESC during volume submenu returns to main
+                    self.pause_overlay.state = "MAIN"
+                elif not self.is_paused:
+                    # Open the pause menu (send PAUSE to server)
+                    self.is_paused = True
+                    self.pause_initiator = True
+                    if self.pause_overlay is None:
+                        self.pause_overlay = PauseOverlay(self.screen, self.screen_manager, AudioManager())
+                    else:
+                        self.pause_overlay.state = "MAIN"
+                    self.pause_overlay.is_initiator = True
+                    AudioManager().play_click()
+                    AudioManager().stop_music()
+                    if not Config.OFFLINE_DEBUG_MODE:
+                        self.screen_manager.network.send_json(JSON_Manager.get_pause_game(True))
+                # else: ESC is ignored while paused (use RESUME button instead)
+
             if self.is_game_over:
                 # Si el juego terminó, SOLO escuchamos clics izquierdos para el botón
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -179,6 +214,27 @@ class GameScreen:
                         self.is_game_over = False
                         self.winner_player_id = None
                         self.screen_manager.change_screen("MAIN")
+                continue
+
+            # Delegate events to pause overlay (initiator only)
+            if self.is_paused:
+                if self.pause_initiator and self.pause_overlay:
+                    action = self.pause_overlay.handle_events([event])
+                    if action == "resume":
+                        self.is_paused = False
+                        self.pause_initiator = False
+                        self.pause_overlay.state = None
+                        AudioManager().resume_music()
+                        if not Config.OFFLINE_DEBUG_MODE:
+                            self.screen_manager.network.send_json(JSON_Manager.get_pause_game(False))
+                    elif action == "surrender_confirm":
+                        if not Config.OFFLINE_DEBUG_MODE:
+                            self.screen_manager.network.send_json(JSON_Manager.get_surrender())
+                        self.is_paused = False
+                        self.pause_initiator = False
+                        if self.pause_overlay:
+                            self.pause_overlay.state = None
+                # Non-initiator: ignore all input during pause
                 continue
 
             # Detect Mouse Button Press
@@ -290,13 +346,36 @@ class GameScreen:
             return
 
         if not Config.OFFLINE_DEBUG_MODE:
-            data = self.screen_manager.network.receive_json()
-
-            if data:
+            while True:
+                data = self.screen_manager.network.receive_json()
+                if not data:
+                    break
 
                 print(data)
 
-                if data.get("type") == "SHOP_AUTORIZATION":
+                if data.get("type") == "GAME_PAUSED":
+                    paused_by = data["payload"].get("paused_by", -1)
+                    self.is_paused = True
+                    self.pause_initiator = (paused_by == self.player_Id)
+                    if self.pause_initiator:
+                        if self.pause_overlay is None:
+                            self.pause_overlay = PauseOverlay(self.screen, self.screen_manager, AudioManager())
+                        self.pause_overlay.state = "MAIN"
+                        self.pause_overlay.is_initiator = True
+                    # Discard any UDP positions received just before/during pause
+                    self.screen_manager.network.latest_positions.clear()
+                    AudioManager().stop_music()
+
+                elif data.get("type") == "GAME_RESUMED":
+                    self.is_paused = False
+                    self.pause_initiator = False
+                    if self.pause_overlay:
+                        self.pause_overlay.state = None
+                    # Discard stale UDP positions accumulated during pause
+                    self.screen_manager.network.latest_positions.clear()
+                    AudioManager().resume_music()
+
+                elif data.get("type") == "SHOP_AUTORIZATION":
                     self.shop_autorization = ["payload"]["authorized"]
 
                 elif data.get("type") == "BUY_UNIT_RESULT":
@@ -397,6 +476,9 @@ class GameScreen:
             if self.player_gold > 100:
                 self.shop_autorization = True
 
+        if self.is_paused:
+            return
+
         keys = pygame.key.get_pressed()
 
         # Mover Izquierda / Derecha
@@ -489,3 +571,33 @@ class GameScreen:
         if self.is_game_over:
             self.winner_box.draw(self.screen)
             self.game_over_button.draw(self.screen)
+
+        # Draw pause overlay or message box
+        if self.is_paused:
+            if self.pause_initiator and self.pause_overlay:
+                self.pause_overlay.draw(self.screen)
+            else:
+                self._draw_game_paused_message()
+
+    def _draw_game_paused_message(self):
+        """Draw a simple gray message box for the non-initiator player during pause."""
+        BASE_W, BASE_H = 1280, 720
+        sx = self.screen.get_width() / BASE_W
+        sy = self.screen.get_height() / BASE_H
+
+        box_w = int(400 * sx)
+        box_h = int(100 * sy)
+        box_x = (self.screen.get_width() - box_w) // 2
+        box_y = (self.screen.get_height() - box_h) // 2
+
+        box_surface = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+        box_surface.fill((128, 128, 128, 200))
+        self.screen.blit(box_surface, (box_x, box_y))
+
+        CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+        font_path = os.path.join(CURRENT_DIR, "..", "assets", "Anton-Regular.ttf")
+        font_size = int(36 * sy)
+        font = pygame.font.Font(font_path, font_size)
+        text_surface = font.render("GAME PAUSED", True, (255, 255, 255))
+        text_rect = text_surface.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 2))
+        self.screen.blit(text_surface, text_rect)
