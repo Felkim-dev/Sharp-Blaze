@@ -54,6 +54,9 @@ class NetworkManager:
         self.udp_player_id = None
         self.is_udp_keep_alive_running = False
 
+        self.is_ping_running = False
+        self._ping_start_time = 0
+
     # --------------------------- UDP Methods -------------------------------------
     def init_udp_connection(self,session_id,player_id):
         """It is called when the Lobby Start button is clicked"""
@@ -107,6 +110,23 @@ class NetworkManager:
             self.is_udp_keep_alive_running = True
             thread = threading.Thread(target=self._udp_keep_alive_loop, daemon=True)
             thread.start()
+
+    def start_ping_thread(self):
+        if not self.is_ping_running:
+            self.is_ping_running = True
+            thread = threading.Thread(target=self._ping_loop, daemon=True)
+            thread.start()
+
+    def _ping_loop(self):
+        while self.is_ping_running:
+            try:
+                if self.connected and self.client_tcp:
+                    ping_msg = json.dumps({"type": "PING", "payload": {}}) + "\n"
+                    self.client_tcp.send(ping_msg.encode("utf-8"))
+                    self._ping_start_time = time.time()
+                time.sleep(0.5)
+            except Exception:
+                break
 
     def _udp_keep_alive_loop(self):
         """Periodic UDP_HELLO rebroadcast to ensure server has our endpoint registered"""
@@ -282,6 +302,7 @@ class NetworkManager:
 
             self.connected = True
             self.connection_status = "IDLE"
+            self.start_ping_thread()
 
         except socket.timeout:
             print("Timeout.")
@@ -315,17 +336,21 @@ class NetworkManager:
             except Exception as e:
                 print(f"Error in: {e}")
 
+    def _update_rtt(self):
+        if self._ping_start_time > 0:
+            rtt = (time.time() - self._ping_start_time) * 1000
+            self._ping_start_time = 0
+            if self.rtt_ema == 0:
+                self.rtt_ema = rtt
+            else:
+                self.rtt_ema = self.rtt_alpha * rtt + (1 - self.rtt_alpha) * self.rtt_ema
+            self.current_rtt = self.rtt_ema
+
     def receive_json(self):
 
         if self.pending_messages:
             self.tcp_messages_received += 1
-            if self._last_tcp_send_time > 0:
-                rtt = (time.time() - self._last_tcp_send_time) * 1000
-                if self.rtt_ema == 0:
-                    self.rtt_ema = rtt
-                else:
-                    self.rtt_ema = self.rtt_alpha * rtt + (1 - self.rtt_alpha) * self.rtt_ema
-                self.current_rtt = self.rtt_ema
+            self._update_rtt()
             return self.pending_messages.pop(0)
 
         if self.connected:
@@ -335,7 +360,6 @@ class NetworkManager:
                     print("[NETWORK] Servidor TCP cerró la conexión.")
                     self._close_tcp_socket()
                     return {"type": "DISCONNECTED"}
-                print(f"Mensaje de entrada TCP: {data}")
                 if data:
                     self.receive_buffer += data
                     if "\n" in self.receive_buffer:
@@ -346,6 +370,9 @@ class NetworkManager:
                             if json_packet.strip():
                                 try:
                                     json_valido = json.loads(json_packet)
+                                    if json_valido.get("type") == "OK":
+                                        self._update_rtt()
+                                        continue
                                     self.pending_messages.append(json_valido)
                                 except json.JSONDecodeError as e:
                                     print(
@@ -354,13 +381,7 @@ class NetworkManager:
 
                         if self.pending_messages:
                             self.tcp_messages_received += 1
-                            if self._last_tcp_send_time > 0:
-                                rtt = (time.time() - self._last_tcp_send_time) * 1000
-                                if self.rtt_ema == 0:
-                                    self.rtt_ema = rtt
-                                else:
-                                    self.rtt_ema = self.rtt_alpha * rtt + (1 - self.rtt_alpha) * self.rtt_ema
-                                self.current_rtt = self.rtt_ema
+                            self._update_rtt()
                             return self.pending_messages.pop(0)
             except BlockingIOError:
                 pass
@@ -372,9 +393,9 @@ class NetworkManager:
         return None
 
     def disconnect(self):
-        # 1. Signal the UDP thread to stop
         self.is_udp_listening = False
         self.is_udp_keep_alive_running = False
+        self.is_ping_running = False
         self.udp_session_id = None
         self.udp_player_id = None
 
@@ -405,6 +426,7 @@ class NetworkManager:
         self.current_rtt = 0
         self.rtt_ema = 0
         self._last_tcp_send_time = 0
+        self._ping_start_time = 0
         self.udp_packets_received = 0
         self.udp_timeouts = 0
         self.udp_window_start = time.time()
