@@ -24,6 +24,7 @@ class GameEngine
 			bool accepted = false;
 			std::string reason;
 			int targetCurrentHp = -1;
+			int impactDelayMs = 0;
 		};
 
 		struct PurchaseResult
@@ -70,7 +71,7 @@ class GameEngine
 		void repathUnit(int unitId, const games_types::CellCoord& destinationCell);
 		void processMoveCommandsWithFormation(const std::vector<games_types::PlayerCommand>& moveCommands);
 		void processAttackCommand(const games_types::PlayerCommand& cmd);
-		AttackRequestResult executeAttackAttempt(int playerId, int attackerId, int targetId);
+			AttackRequestResult executeAttackAttempt(int playerId, int attackerId, int targetId, bool applyDamage = true);
 		bool shouldKeepAttackLock(const AttackRequestResult& result) const;
 
 		std::shared_ptr<GameSession> session;
@@ -78,6 +79,7 @@ class GameEngine
 		std::queue<games_types::PlayerCommand> commandQueue;
 		std::unordered_map<int, std::deque<games_types::CellCoord>> movementRoutes;
 		std::unordered_map<int, int> attackLockTargetByAttacker;
+			std::unordered_map<int, int> attackImpactRemainingMs;
 		std::unordered_map<int, FormationAssignment> formationByUnit;
 		std::uint64_t formationEpoch = 0;
 		std::unordered_map<int, int> attackerCooldownRemainingMs;
