@@ -140,6 +140,23 @@ class GameScreen:
         self.world.build_initial_state(units,structures,player_ID,obstacles)
         self.update_unit_counts()
 
+        target_x, target_y = None, None
+        for s_id, structure in self.world.structures.items():
+            if self.world.get_owner_from_id(s_id) == self.player_Id:
+                target_x, target_y = structure.x, structure.y
+                break
+
+        if target_x is None:
+            if self.player_Id == 1:
+                target_x, target_y = 300, 4700
+            else:
+                target_x, target_y = 4700, 300
+
+        self.camera.x = target_x - self.camera.screen_width // 2
+        self.camera.y = target_y - self.camera.screen_height // 2
+        self.camera.x = max(0, min(self.camera.x, self.camera.map_width - self.camera.screen_width))
+        self.camera.y = max(0, min(self.camera.y, self.camera.map_height - self.camera.screen_height))
+
     def update_unit_counts(self):
         attackers = 0
         collectors = 0
@@ -158,6 +175,10 @@ class GameScreen:
 
     def trigger_game_over(self, winner_name):
         AudioManager().resume_music()
+        self.is_paused = False
+        self.pause_initiator = False
+        if self.pause_overlay:
+            self.pause_overlay.state = None
         self.is_game_over = True
         self.winner_player_id = winner_name
 
@@ -168,6 +189,10 @@ class GameScreen:
         self.winner_box.update_text(nuevo_texto)
         
     def trigger_disconnect(self):
+        self.is_paused = False
+        self.pause_initiator = False
+        if self.pause_overlay:
+            self.pause_overlay.state = None
         self.is_game_over = True
         nuevo_texto = f"GAME\nDISCONNECTED!"
         self.winner_box.update_text(nuevo_texto)
@@ -217,7 +242,7 @@ class GameScreen:
                 continue
 
             # Delegate events to pause overlay (initiator only)
-            if self.is_paused:
+            if self.is_paused and not self.is_game_over:
                 if self.pause_initiator and self.pause_overlay:
                     action = self.pause_overlay.handle_events([event])
                     if action == "resume":
@@ -376,7 +401,7 @@ class GameScreen:
                     AudioManager().resume_music()
 
                 elif data.get("type") == "SHOP_AUTORIZATION":
-                    self.shop_autorization = ["payload"]["authorized"]
+                    self.shop_autorization = data["payload"]["authorized"]
 
                 elif data.get("type") == "BUY_UNIT_RESULT":
                     if data["status"] == "accepted":
@@ -573,7 +598,7 @@ class GameScreen:
             self.game_over_button.draw(self.screen)
 
         # Draw pause overlay or message box
-        if self.is_paused:
+        if self.is_paused and not self.is_game_over:
             if self.pause_initiator and self.pause_overlay:
                 self.pause_overlay.draw(self.screen)
             else:
@@ -585,18 +610,18 @@ class GameScreen:
         sx = self.screen.get_width() / BASE_W
         sy = self.screen.get_height() / BASE_H
 
-        box_w = int(400 * sx)
-        box_h = int(100 * sy)
+        box_w = int(800 * sx)
+        box_h = int(220 * sy)
         box_x = (self.screen.get_width() - box_w) // 2
         box_y = (self.screen.get_height() - box_h) // 2
 
         box_surface = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
-        box_surface.fill((128, 128, 128, 200))
+        box_surface.fill((40, 40, 50, 230))
         self.screen.blit(box_surface, (box_x, box_y))
 
         CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
         font_path = os.path.join(CURRENT_DIR, "..", "assets", "Anton-Regular.ttf")
-        font_size = int(36 * sy)
+        font_size = int(85 * sy)
         font = pygame.font.Font(font_path, font_size)
         text_surface = font.render("GAME PAUSED", True, (255, 255, 255))
         text_rect = text_surface.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 2))
