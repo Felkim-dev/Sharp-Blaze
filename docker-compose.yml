@@ -19,14 +19,14 @@ services:
       BROKER_GAME_HOST_IP: ${SERVER_IP:-127.0.0.1}
       
       # Red Docker para comunicación interna servidor-broker
-      BROKER_GAME_NETWORK: sharp-blaze-network
+      #BROKER_GAME_NETWORK: sharp-blaze-network
     ports:
       # Exponer broker en puerto 6000 (Tailscale lo hace accesible)
       - "6000:6000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - sharp-blaze-network
+    #networks:
+    #  - sharp-blaze-network
 
   game-server-image:
     build:
@@ -36,6 +36,6 @@ services:
     profiles:
       - build-only
 
-networks:
-  sharp-blaze-network:
-    driver: bridge
+# networks:
+#   sharp-blaze-network:
+#     driver: bridge
