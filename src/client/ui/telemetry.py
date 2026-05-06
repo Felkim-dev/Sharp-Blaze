@@ -37,18 +37,26 @@ class TelemetryPanel:
         if hasattr(network_manager, "current_rtt"):
             self.rtt_ms = int(network_manager.current_rtt)
 
-        udp_recv = getattr(network_manager, "udp_packets_received", 0)
-        udp_loss = getattr(network_manager, "udp_timeouts", 0)
+        udp_rate = getattr(network_manager, "udp_rate", 0)
+        udp_loss = getattr(network_manager, "udp_loss_rate", 0)
         tcp_sent = getattr(network_manager, "tcp_messages_sent", 0)
         tcp_recv = getattr(network_manager, "tcp_messages_received", 0)
 
         text_color = (200, 200, 200)
         gold_color = (255, 215, 0)
+        warn_color = (255, 80, 80)
+
+        rtt_display = self.rtt_ms
+        rtt_color = text_color
+        if rtt_display > 100:
+            rtt_color = gold_color
+        if rtt_display > 200:
+            rtt_color = warn_color
 
         lines = [
             (f"FPS: {current_fps}", text_color),
-            (f"LATENCY: {self.rtt_ms}ms", gold_color if self.rtt_ms > 100 else text_color),
-            (f"UDP  OK:{udp_recv}  LOSS:{udp_loss}", text_color),
+            (f"LATENCY: {rtt_display}ms", rtt_color),
+            (f"UDP  OK:{udp_rate}%  LOSS:{udp_loss}%", text_color),
             (f"TCP  OUT:{tcp_sent}  IN:{tcp_recv}", text_color),
         ]
 

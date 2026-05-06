@@ -14,11 +14,19 @@ class NetworkManager:
         """INITIAL STATES"""
 
         self.current_rtt = 0
+        self.rtt_ema = 0
+        self.rtt_alpha = 0.3
         self._last_tcp_send_time = 0
-        self.udp_packets_received = 0
-        self.udp_timeouts = 0
         self.tcp_messages_sent = 0
         self.tcp_messages_received = 0
+
+        self.udp_packets_received = 0
+        self.udp_timeouts = 0
+        self.udp_window_start = time.time()
+        self.udp_window_packets = 0
+        self.udp_rate = 0
+        self.udp_loss_window = 0
+        self.udp_loss_rate = 0
 
         self.cell_size = 50
         # -------------------- TCP INTIAL STATES -------------------
@@ -131,8 +139,15 @@ class NetworkManager:
                 # Socket has a 1-second timeout so we periodically check is_udp_listening
                 raw_data, origin_directions = self.client_udp.recvfrom(1024)
                 self.udp_packets_received += 1
+                self.udp_window_packets += 1
+                now = time.time()
+                if now - self.udp_window_start >= 1.0:
+                    self.udp_rate = min(100, self.udp_window_packets)
+                    self.udp_loss_rate = min(100, self.udp_loss_window)
+                    self.udp_window_packets = 0
+                    self.udp_loss_window = 0
+                    self.udp_window_start = now
 
-                # Asumiendo tu paquete de 12 bytes (<iff)
                 if len(raw_data) == 12:
                     entity_id, indx_x, indx_y = struct.unpack("<iff", raw_data)
 
@@ -152,7 +167,14 @@ class NetworkManager:
 
             except socket.timeout:
                 self.udp_timeouts += 1
-                # Retry Hello if we haven't received any position data yet
+                self.udp_loss_window += 1
+                now = time.time()
+                if now - self.udp_window_start >= 1.0:
+                    self.udp_rate = min(100, self.udp_window_packets)
+                    self.udp_loss_rate = min(100, self.udp_loss_window)
+                    self.udp_window_packets = 0
+                    self.udp_loss_window = 0
+                    self.udp_window_start = now
                 if not self._udp_hello_confirmed and hasattr(self, '_udp_hello_msg'):
                     now = time.time()
                     if now - last_hello_time >= hello_retry_interval:
@@ -298,7 +320,12 @@ class NetworkManager:
         if self.pending_messages:
             self.tcp_messages_received += 1
             if self._last_tcp_send_time > 0:
-                self.current_rtt = (time.time() - self._last_tcp_send_time) * 1000
+                rtt = (time.time() - self._last_tcp_send_time) * 1000
+                if self.rtt_ema == 0:
+                    self.rtt_ema = rtt
+                else:
+                    self.rtt_ema = self.rtt_alpha * rtt + (1 - self.rtt_alpha) * self.rtt_ema
+                self.current_rtt = self.rtt_ema
             return self.pending_messages.pop(0)
 
         if self.connected:
@@ -328,7 +355,12 @@ class NetworkManager:
                         if self.pending_messages:
                             self.tcp_messages_received += 1
                             if self._last_tcp_send_time > 0:
-                                self.current_rtt = (time.time() - self._last_tcp_send_time) * 1000
+                                rtt = (time.time() - self._last_tcp_send_time) * 1000
+                                if self.rtt_ema == 0:
+                                    self.rtt_ema = rtt
+                                else:
+                                    self.rtt_ema = self.rtt_alpha * rtt + (1 - self.rtt_alpha) * self.rtt_ema
+                                self.current_rtt = self.rtt_ema
                             return self.pending_messages.pop(0)
             except BlockingIOError:
                 pass
@@ -371,9 +403,15 @@ class NetworkManager:
         self.udp_port_server = None
         self.latest_positions.clear()
         self.current_rtt = 0
+        self.rtt_ema = 0
         self._last_tcp_send_time = 0
         self.udp_packets_received = 0
         self.udp_timeouts = 0
+        self.udp_window_start = time.time()
+        self.udp_window_packets = 0
+        self.udp_rate = 0
+        self.udp_loss_window = 0
+        self.udp_loss_rate = 0
         self.tcp_messages_sent = 0
         self.tcp_messages_received = 0
         print("Disconnection complete and network restarted.")
