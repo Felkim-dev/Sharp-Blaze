@@ -1,6 +1,7 @@
 from typing import Dict, Any, List, Tuple
 import math
 from utils.json import JSON_Manager
+from .game_config_loader import GameConfigLoader
 
 
 class UnitCommander:
@@ -15,7 +16,7 @@ class UnitCommander:
     Commands are sent via network.py using JSON protocol
     """
 
-    def __init__(self, game_world, network, player_id: int):
+    def __init__(self, game_world, network, player_id: int, difficulty: str = "MEDIUM"):
         """
         Initialize unit commander
         
@@ -23,11 +24,31 @@ class UnitCommander:
             game_world: GameWorld instance (for unit positions, terrain)
             network: Network instance (for sending commands)
             player_id: 1 or 2, which player is bot
+            difficulty: EASY, MEDIUM or HARD difficulty profile
         """
         self.game_world = game_world
         self.network = network
         self.player_id = player_id
+        self.difficulty = difficulty
         self.enemy_id = 2 if player_id == 1 else 1
+
+        self.config_loader = GameConfigLoader()
+        self.difficulty_params = self.config_loader.get_difficulty_params(difficulty) or {}
+        self.command_budget = {
+            "EASY": 4,
+            "MEDIUM": 7,
+            "HARD": 10,
+        }.get(difficulty, 6)
+        self.attack_group_cap = {
+            "EASY": 1,
+            "MEDIUM": 3,
+            "HARD": 5,
+        }.get(difficulty, 2)
+        self.scout_group_cap = {
+            "EASY": 1,
+            "MEDIUM": 2,
+            "HARD": 4,
+        }.get(difficulty, 1)
         
         # Unit ID ranges
         if player_id == 1:
@@ -70,6 +91,7 @@ class UnitCommander:
             List of command dicts to send to server
         """
         commands = []
+        remaining_budget = self.command_budget
         
         # ====================================
         # STEP 1: Build units
@@ -77,16 +99,27 @@ class UnitCommander:
         
         build_attackers = decision.get("build_attackers", 0)
         build_collectors = decision.get("build_collectors", 0)
+        if build_attackers + build_collectors > remaining_budget:
+            preferred_attackers = min(build_attackers, remaining_budget)
+            remaining_budget -= preferred_attackers
+            build_collectors = min(build_collectors, remaining_budget)
+            build_attackers = preferred_attackers
         
         for _ in range(build_attackers):
             cmd = self._create_build_attacker_command()
             if cmd:
                 commands.append(cmd)
+                remaining_budget -= 1
+                if remaining_budget <= 0:
+                    return commands
         
         for _ in range(build_collectors):
             cmd = self._create_build_collector_command()
             if cmd:
                 commands.append(cmd)
+                remaining_budget -= 1
+                if remaining_budget <= 0:
+                    return commands
         
         # ====================================
         # STEP 2: Move units to strategic locations
@@ -94,17 +127,27 @@ class UnitCommander:
         
         priority = decision.get("priority", "expand")
         aggression = decision.get("aggression", 0.0)
+        army_balance = decision.get("army_balance", 0.0)
+        threat_level = decision.get("threat_level", 0.5)
         
-        move_commands = self._generate_movement_orders(priority, aggression)
-        commands.extend(move_commands)
+        move_commands = self._generate_movement_orders(priority, aggression, army_balance, threat_level)
+        for cmd in move_commands:
+            commands.append(cmd)
+            remaining_budget -= 1
+            if remaining_budget <= 0:
+                return commands
         
         # ====================================
         # STEP 3: Attack orders if aggressive
         # ====================================
         
-        if aggression > 0.5:
-            attack_commands = self._generate_attack_orders()
-            commands.extend(attack_commands)
+        if aggression > 0.45 or priority == "attack":
+            attack_commands = self._generate_attack_orders(priority, aggression, army_balance, threat_level)
+            for cmd in attack_commands:
+                commands.append(cmd)
+                remaining_budget -= 1
+                if remaining_budget <= 0:
+                    return commands
         
         return commands
 
@@ -147,7 +190,8 @@ class UnitCommander:
         command = JSON_Manager.get_unit_recolectors()
         return command
 
-    def _generate_movement_orders(self, priority: str, aggression: float) -> List[Dict[str, Any]]:
+    def _generate_movement_orders(self, priority: str, aggression: float,
+                                  army_balance: float, threat_level: float) -> List[Dict[str, Any]]:
         """
         Generate movement orders for existing units based on priority
         
@@ -187,7 +231,8 @@ class UnitCommander:
         # ====================================
         
         base_x, base_y = self.player_base
-        for unit_id, unit in collectors:
+        collector_limit = len(collectors) if self.difficulty != "EASY" else min(len(collectors), 3)
+        for unit_id, unit in collectors[:collector_limit]:
             dist_to_base = math.sqrt((unit.x - base_x)**2 + (unit.y - base_y)**2)
             nearest_mine = self._find_nearest_mining_location(unit.x, unit.y)
             dist_to_mine = math.sqrt((unit.x - nearest_mine[0])**2 + (unit.y - nearest_mine[1])**2) if nearest_mine else float('inf')
@@ -211,16 +256,18 @@ class UnitCommander:
         # Move attackers (depends on priority)
         # ====================================
         
+        attack_force = self._select_attack_force(attackers, priority, aggression, army_balance, threat_level)
+
         if priority == "attack" or aggression > 0.5:
             # Move toward enemy base
             enemy_base = (300, 4700) if self.enemy_id == 1 else (4700, 300)
-            for unit_id, unit in attackers:
+            for unit_id, unit in attack_force:
                 cmd = self._create_move_command(unit_id, enemy_base[0], enemy_base[1])
                 commands.append(cmd)
         
         elif priority == "defend":
             # Keep near own base
-            for unit_id, unit in attackers:
+            for unit_id, unit in attack_force:
                 base_x, base_y = self.player_base
                 # Add some randomness around base
                 offset_x = (hash((unit_id, "x")) % 400) - 200
@@ -232,7 +279,8 @@ class UnitCommander:
         
         else:  # "expand" - focus on collectors, keep attackers mobile
             # Spread attackers around for scouting
-            for i, (unit_id, unit) in enumerate(attackers):
+            scout_force = attack_force[:self.scout_group_cap]
+            for i, (unit_id, unit) in enumerate(scout_force):
                 scout_location = self.mining_locations[i % len(self.mining_locations)]
                 cmd = self._create_move_command(unit_id, scout_location[0], scout_location[1])
                 commands.append(cmd)
@@ -251,7 +299,27 @@ class UnitCommander:
                 return struct_id
         return None
 
-    def _generate_attack_orders(self) -> List[Dict[str, Any]]:
+    def _select_attack_force(self, attackers, priority: str, aggression: float,
+                             army_balance: float, threat_level: float):
+        if not attackers:
+            return []
+
+        if self.difficulty == "EASY":
+            cap = 1 if priority != "attack" else 2
+        elif self.difficulty == "MEDIUM":
+            cap = self.attack_group_cap if aggression <= 0.6 else min(len(attackers), self.attack_group_cap + 1)
+        else:
+            cap = self.attack_group_cap
+            if priority == "attack" and army_balance > 0:
+                cap += 1
+            if threat_level < 0.35 and aggression > 0.7:
+                cap += 1
+
+        cap = max(1, min(len(attackers), cap))
+        return sorted(attackers, key=lambda item: item[0])[:cap]
+
+    def _generate_attack_orders(self, priority: str, aggression: float,
+                                army_balance: float, threat_level: float) -> List[Dict[str, Any]]:
         """
         Generate attack commands for nearest enemy units or the enemy base.
         
@@ -274,6 +342,10 @@ class UnitCommander:
         if not my_attackers:
             return commands
 
+        attack_force = self._select_attack_force(my_attackers, priority, aggression, army_balance, threat_level)
+        if not attack_force:
+            return commands
+
         # Find all enemy units
         enemy_units = []
         for unit_id, unit in self.game_world.units.items():
@@ -283,7 +355,7 @@ class UnitCommander:
         
         if enemy_units:
             # Priority 1: Attack nearest enemy unit
-            for attacker_id, attacker_unit in my_attackers:
+            for attacker_id, attacker_unit in attack_force:
                 nearest_enemy = min(
                     enemy_units,
                     key=lambda e: math.sqrt(
@@ -297,7 +369,7 @@ class UnitCommander:
             # Priority 2: No enemy units → attack enemy base structure directly
             enemy_base_id = self._get_enemy_base_id()
             if enemy_base_id is not None:
-                for attacker_id, _ in my_attackers:
+                for attacker_id, _ in attack_force:
                     cmd = self._create_attack_command(attacker_id, enemy_base_id)
                     commands.append(cmd)
         

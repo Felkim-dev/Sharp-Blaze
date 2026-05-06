@@ -1,6 +1,8 @@
 from typing import Dict, Any
 import time
 
+from .game_config_loader import GameConfigLoader
+
 
 class BotAI:
     """
@@ -36,6 +38,10 @@ class BotAI:
         self.commander = unit_commander
         self.network = network
         
+        # Difficulty parameters are the runtime source of truth for timing.
+        self.config_loader = GameConfigLoader()
+        self.difficulty_params = self.config_loader.get_difficulty_params(difficulty)
+
         # Decision cycle timing
         self.decision_cycle_ms = self._get_decision_cycle()
         self.last_decision_time = time.time() * 1000  # ms
@@ -52,6 +58,9 @@ class BotAI:
         Returns:
             Time in milliseconds between decisions
         """
+        if self.difficulty_params:
+            return float(self.difficulty_params.get("decision_interval_ms", 1000.0))
+
         if self.difficulty == "EASY":
             return 1500.0  # 1.5 seconds (slower, more predictable)
         elif self.difficulty == "MEDIUM":

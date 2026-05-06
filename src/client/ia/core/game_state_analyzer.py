@@ -251,11 +251,20 @@ class GameStateAnalyzer:
             self.enemy_id
         )
 
+        bot_power = bot_attackers + (0.5 * bot_collectors)
+        enemy_power = enemy_attackers + (0.5 * enemy_collectors)
+        if bot_power == 0 and enemy_power == 0:
+            army_balance = 0.0
+        else:
+            army_balance = (bot_power - enemy_power) / max(bot_power, enemy_power)
+            army_balance = max(-1.0, min(1.0, army_balance))
+
         state = {
             # Metrics for Simplex objective function
             "threat_level": threat,
             "resource_efficiency": resource,
             "positional_advantage": position,
+            "army_balance": army_balance,
 
             # Unit counts
             "bot_attackers": bot_attackers,

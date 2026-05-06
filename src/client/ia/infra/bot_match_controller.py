@@ -151,7 +151,12 @@ class BotMatchController:
                     # Init AI
                     analyzer = GameStateAnalyzer(payload["player_id"])
                     decision_engine = DecisionEngine(self.difficulty)
-                    commander = UnitCommander(self.bot_game_world, self.bot_network, payload["player_id"])
+                    commander = UnitCommander(
+                        self.bot_game_world,
+                        self.bot_network,
+                        payload["player_id"],
+                        self.difficulty,
+                    )
                     
                     self.bot_ai = BotAI(
                         player_id=payload["player_id"],

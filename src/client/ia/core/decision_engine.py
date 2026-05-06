@@ -41,6 +41,9 @@ class DecisionEngine:
         self.threat_weight = difficulty_params.get("threat_weight", 0.3)
         self.resource_weight = difficulty_params.get("resource_weight", 0.4)
         self.position_weight = difficulty_params.get("position_weight", 0.3)
+        self.simplex_aggression = difficulty_params.get("simplex_aggression", 0.5)
+        self.target_attacker_count = difficulty_params.get("target_attacker_count", 3)
+        self.target_collector_count = difficulty_params.get("target_collector_count", 5)
         
         # Load constraints from bot_ai_config.json
         self.max_units = self.config_loader.get_max_units_per_player()
@@ -77,12 +80,15 @@ class DecisionEngine:
         threat_level = game_state.get("threat_level", 0.5)
         resource_efficiency = game_state.get("resource_efficiency", 0.5)
         positional_advantage = game_state.get("positional_advantage", 0.0)
+        army_balance = game_state.get("army_balance", 0.0)
         
         bot_attackers = game_state.get("bot_attackers", 0)
         bot_collectors = game_state.get("bot_collectors", 0)
         total_bot_units = game_state.get("total_bot_units", 0)
         
         enemy_attackers = game_state.get("enemy_attackers", 0)
+        attacker_gap = max(0, self.target_attacker_count - bot_attackers)
+        collector_gap = max(0, self.target_collector_count - bot_collectors)
         
         # ====================================
         # STEP 1: Define decision variables bounds
@@ -114,13 +120,15 @@ class DecisionEngine:
         # c_agg: coefficient for aggression (positional advantage)
         
         # More threat → want more attackers → reduce cost of attackers
-        c_a = -1.0 * self.threat_weight * (threat_level + 0.5)  # Negate for minimization
+        balance_threat_bias = max(0.0, -army_balance)
+        c_a = -1.0 * self.threat_weight * (threat_level + 0.5 + (0.1 * attacker_gap) + (0.4 * balance_threat_bias))  # Negate for minimization
         
         # Lower resource efficiency → want more collectors → reduce cost of collectors
-        c_c = -1.0 * self.resource_weight * (1.0 - resource_efficiency)
+        c_c = -1.0 * self.resource_weight * ((1.0 - resource_efficiency) + (0.1 * collector_gap))
         
         # Positive positional advantage → be more aggressive
-        c_agg = -1.0 * self.position_weight * max(0, positional_advantage)
+        aggression_bias = self.simplex_aggression - 0.5
+        c_agg = -1.0 * self.position_weight * max(0, positional_advantage + aggression_bias + (0.25 * army_balance))
         
         c = np.array([c_a, c_c, c_agg])
         
@@ -171,19 +179,19 @@ class DecisionEngine:
             aggression = float(np.clip(result.x[2], 0.0, 1.0))
         else:
             # Fallback: safe conservative decision
-            attackers_to_build = 0
-            collectors_to_build = 1 if current_gold >= self.COLLECTOR_COST else 0
-            aggression = 0.0
+            attackers_to_build = 1 if current_gold >= self.ATTACKER_COST and attacker_gap > collector_gap else 0
+            collectors_to_build = 1 if current_gold >= self.COLLECTOR_COST and collector_gap >= attacker_gap else 0
+            aggression = float(np.clip(self.simplex_aggression * 0.5, 0.0, 1.0))
         
         # ====================================
         # STEP 6: Determine priority
         # ====================================
         
-        if threat_level > 0.6:
+        if threat_level > 0.6 or army_balance < -0.35:
             priority = "defend"
         elif resource_efficiency < 0.4:
             priority = "expand"
-        elif positional_advantage > 0.3:
+        elif positional_advantage > 0.3 or army_balance > 0.25:
             priority = "attack"
         else:
             priority = "expand" if collectors_to_build > attackers_to_build else "attack"

@@ -7,7 +7,7 @@ from pathlib import Path
 # Add parent directories to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from game_state_analyzer import GameStateAnalyzer
+from core.game_state_analyzer import GameStateAnalyzer
 
 
 class MockUnit:
@@ -254,6 +254,7 @@ class TestGameStateAnalyzer(unittest.TestCase):
             "threat_level",
             "resource_efficiency",
             "positional_advantage",
+            "army_balance",
             "bot_attackers",
             "bot_collectors",
             "enemy_attackers",
@@ -285,6 +286,9 @@ class TestGameStateAnalyzer(unittest.TestCase):
         
         self.assertGreaterEqual(result["positional_advantage"], -1.0)
         self.assertLessEqual(result["positional_advantage"], 1.0)
+
+        self.assertGreaterEqual(result["army_balance"], -1.0)
+        self.assertLessEqual(result["army_balance"], 1.0)
         
         self.assertGreaterEqual(result["bot_attackers"], 0)
         self.assertGreaterEqual(result["bot_collectors"], 0)
