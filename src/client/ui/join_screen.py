@@ -94,7 +94,12 @@ class JoinScreen:
         # ERROR CONTROL
         self.show_error = False
         self.error_time_init = 0
-        self.duration_error = 5000 #ms
+        self.duration_error = 5000
+
+        self.backspace_ready = True
+        self.backspace_last_time = 0
+        self.backspace_initial_delay = 400
+        self.backspace_repeat_interval = 50
 
     def show_notification(self):
 
@@ -149,10 +154,6 @@ class JoinScreen:
                         if char.isalnum():
                             self.inputbox_nickname.user_input += char
 
-                    # Backspace: delete one character at a time (per keypress)
-                    if event.key == pygame.K_BACKSPACE:
-                        self.inputbox_nickname.user_input = self.inputbox_nickname.user_input[:-1]
-
                 # Enter key handling: trigger JOIN action
                 if event.key == pygame.K_RETURN and len(self.inputbox_nickname.user_input) > 3:
                     if not Config.OFFLINE_DEBUG_MODE:
@@ -166,6 +167,21 @@ class JoinScreen:
                 mouse_pos = event.pos
 
                 self.btn_join.check_hover(mouse_pos)
+
+        if keys[pygame.K_BACKSPACE]:
+            now = pygame.time.get_ticks()
+            if self.backspace_ready:
+                if len(self.inputbox_nickname.user_input) > 0:
+                    self.inputbox_nickname.user_input = self.inputbox_nickname.user_input[:-1]
+                self.backspace_ready = False
+                self.backspace_last_time = now
+            elif now - self.backspace_last_time > self.backspace_repeat_interval:
+                if now - self.backspace_last_time > self.backspace_initial_delay or len(self.inputbox_nickname.user_input) > 0:
+                    if len(self.inputbox_nickname.user_input) > 0:
+                        self.inputbox_nickname.user_input = self.inputbox_nickname.user_input[:-1]
+                    self.backspace_last_time = now
+        else:
+            self.backspace_ready = True
 
     def update(self):
         state = self.screen_manager.network.connection_status
