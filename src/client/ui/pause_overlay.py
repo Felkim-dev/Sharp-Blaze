@@ -1,7 +1,7 @@
 import pygame
 import os
 
-from ui.component import Button, Text, CloseButton, Slider
+from ui.component import Button, Text, Slider
 from utils.audio import AudioManager
 
 # Pause menu overlay displayed during gameplay.
@@ -54,23 +54,26 @@ class PauseOverlay:
         title_pos = (panel_x + panel_width // 2, panel_y + int(50 * sy))
         title_size = int(70 * sy)
         self.title = Text(title_pos, "Pause", title_size, (255, 255, 255), TITLE_FONT)
-        self.title_foreign = Text(title_pos, "JUEGO PAUSADO", title_size, (255, 255, 255), TITLE_FONT)
-
-        self.cross_btn = CloseButton(
-            panel_x + panel_width - int(50 * sx),
-            panel_y + int(20 * sy),
-            size=int(30 * sy),
-        )
+        self.title_foreign = Text(title_pos, "GAME PAUSED", title_size, (255, 255, 255), TITLE_FONT)
 
         # Main menu buttons (centered within panel)
         btn_w = int(350 * sx)
-        btn_h = int(50 * sy)
+        btn_h = int(40 * sy)
         btn_x = panel_x + (panel_width - btn_w) // 2
-        btn_y = panel_y + int(130 * sy)
-        separation_y = int(60 * sy)
+        btn_y = panel_y + int(110 * sy)
+        separation_y = int(50 * sy)
+
+        self.btn_resume = Button(
+            (btn_x, btn_y + separation_y * 0),
+            (btn_w, btn_h),
+            (0, 159, 12),
+            "RESUME",
+            (255, 255, 255),
+            int(24 * sy),
+        )
 
         self.btn_volume = Button(
-            (btn_x, btn_y + separation_y * 0),
+            (btn_x, btn_y + separation_y * 1),
             (btn_w, btn_h),
             (0, 212, 255),  # #00d4ff
             "Volume",
@@ -79,7 +82,7 @@ class PauseOverlay:
         )
 
         self.btn_surrender = Button(
-            (btn_x, btn_y + separation_y * 1),
+            (btn_x, btn_y + separation_y * 2),
             (btn_w, btn_h),
             (204, 5, 35),  # #cc0523
             "Surrender",
@@ -103,15 +106,15 @@ class PauseOverlay:
         
         label_area_width = int(160 * sx)
         gap = int(20 * sx)
-        bar_width = int(280 * sx)
-        bar_height = int(50 * sy)
+        bar_width = int(220 * sx)
+        bar_height = int(25 * sy)
         total_width = label_area_width + gap + bar_width
         block_left = panel_x + (panel_width - total_width) // 2
         
         label_right_x = block_left + label_area_width
         bar_x = label_right_x + gap
-        slider_y_music = panel_y + int(140 * sy)
-        slider_y_sfx = slider_y_music + int(70 * sy)
+        slider_y_music = panel_y + int(120 * sy)
+        slider_y_sfx = slider_y_music + int(55 * sy)
         label_size_slider = int(22 * sy)
         
         # Music and Effects volume sliders
@@ -183,8 +186,9 @@ class PauseOverlay:
                 self.title.draw(screen)
             else:
                 self.title_foreign.draw(screen)
-            self.cross_btn.draw(screen)
             mouse_pos = pygame.mouse.get_pos()
+            self.btn_resume.check_hover(mouse_pos)
+            self.btn_resume.draw(screen)
             self.btn_volume.check_hover(mouse_pos)
             self.btn_volume.draw(screen)
             self.btn_surrender.check_hover(mouse_pos)
@@ -200,12 +204,11 @@ class PauseOverlay:
         mouse_pos = pygame.mouse.get_pos()
         for event in events:
             if self.state == "MAIN":
-                if self.cross_btn.handle_event(event):
-                    self.state = None
-                    AudioManager().play_click()
-                    return "close"
-
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if self.btn_resume.button_rectangle.collidepoint(mouse_pos):
+                        self.state = None
+                        AudioManager().play_click()
+                        return "resume"
                     if self.btn_volume.button_rectangle.collidepoint(mouse_pos):
                         self.state = "VOLUME"
                         AudioManager().play_click()
@@ -230,9 +233,8 @@ class PauseOverlay:
             self.slider_sfx.value = int(self.audio_manager.sfx_volume * 100)
 
     def _draw_volume_submenu(self, screen):
-        """Draw the Volume submenu (panel, title, X, back, sliders)."""
+        """Draw the Volume submenu (panel, title, back, sliders)."""
         screen.blit(self.temp_surface, (self.panel_x, self.panel_y))
-        self.cross_btn.draw(screen)
         self.text_volume_title.draw(screen)
         self.btn_volume_back.check_hover(pygame.mouse.get_pos())
         self.btn_volume_back.draw(screen)
@@ -254,12 +256,7 @@ class PauseOverlay:
         self.btn_no.draw(screen)
 
     def _handle_volume_events(self, event, mouse_pos):
-        """Handle Volume submenu events (X, back, sliders). Returns action or None."""
-        if self.cross_btn.handle_event(event):
-            self.state = "MAIN"
-            AudioManager().play_click()
-            return "back"
-
+        """Handle Volume submenu events (back, sliders). Returns action or None."""
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.btn_volume_back.button_rectangle.collidepoint(mouse_pos):
                 self.state = "MAIN"

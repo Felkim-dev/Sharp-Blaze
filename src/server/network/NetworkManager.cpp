@@ -642,11 +642,13 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                     {
                         if (record->engine->isPaused())
                         {
+                            std::cout << "[PAUSE] Rejected: already paused by P" << record->pausedByPlayerId << std::endl;
                             continue;
                         }
 
                         record->engine->setPaused(true);
                         record->pausedByPlayerId = internalPlayerId;
+                        std::cout << "[PAUSE] P" << internalPlayerId << " paused session " << sessionId << std::endl;
 
                         std::pair<SOCKET, SOCKET> players{};
                         if (sessionOrchestrator.getPlayers(sessionId, players))
@@ -657,32 +659,41 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                             {
                                 sendText(players.second, pausedMsg);
                             }
+                            std::cout << "[PAUSE] Broadcasted GAME_PAUSED to both players" << std::endl;
                         }
                     }
                     else
                     {
                         if (!record->engine->isPaused())
                         {
+                            std::cout << "[PAUSE] Rejected resume: not paused" << std::endl;
                             continue;
                         }
 
                         if (record->pausedByPlayerId != internalPlayerId)
                         {
+                            std::cout << "[PAUSE] Rejected resume: P" << internalPlayerId 
+                                      << " tried to resume but pause owned by P" << record->pausedByPlayerId << std::endl;
+                            const std::string rejectMsg = "{\"type\":\"PAUSE_REJECTED\",\"payload\":{\"reason\":\"not_pause_owner\"}}\n";
+                            sendText(clientSocket, rejectMsg);
                             continue;
                         }
 
                         record->engine->setPaused(false);
                         record->pausedByPlayerId = -1;
+                        std::cout << "[PAUSE] P" << internalPlayerId << " resumed session " << sessionId << std::endl;
 
                         std::pair<SOCKET, SOCKET> players{};
                         if (sessionOrchestrator.getPlayers(sessionId, players))
                         {
                             const std::string resumedMsg = "{\"type\":\"GAME_RESUMED\",\"payload\":{}}\n";
-                            sendText(players.first, resumedMsg);
+                            bool sent1 = sendText(players.first, resumedMsg);
+                            bool sent2 = true;
                             if (players.second != players.first)
                             {
-                                sendText(players.second, resumedMsg);
+                                sent2 = sendText(players.second, resumedMsg);
                             }
+                            std::cout << "[PAUSE] Broadcasted GAME_RESUMED: P1=" << sent1 << " P2=" << sent2 << std::endl;
                         }
                     }
                 }
