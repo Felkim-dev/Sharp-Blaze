@@ -66,11 +66,12 @@ class InputBox:
         RectangleDimension: tuple,
         DefaultText: str,
         MaxLength: int = 15,
-        NotAllowedChars: list = None,
     ):
         # Characteristics
         self.Position = Position
         self.RectangleDimension = RectangleDimension
+        self.min_width = RectangleDimension[0]
+        self.center_x = Position[0] + RectangleDimension[0] // 2
 
         # Strings
         # DEFAULT
@@ -100,7 +101,6 @@ class InputBox:
 
         # RESTRICTIONS
         self.max_length = MaxLength
-        self.notallowed_chars = NotAllowedChars
 
     def draw(self,screen):
 
@@ -133,6 +133,13 @@ class InputBox:
             # RENDER THE NEW TEXT OF THE USER
             self.text_surface_USER = self.inputbox_font.render(self.user_input, True, self.WHITE)
 
+            # DYNAMIC WIDTH: expand box to fit typed text
+            text_w = self.text_surface_USER.get_width()
+            new_width = max(self.min_width, text_w + 40)
+            if new_width != self.inputbox_rectangle.width:
+                self.inputbox_rectangle.width = new_width
+                self.inputbox_rectangle.centerx = self.center_x
+
             # CENTERING THE TEXT OF THE USER
             self.text_rect_USER = self.text_surface_USER.get_rect()
             self.text_rect_USER.center = self.inputbox_rectangle.center
@@ -140,6 +147,12 @@ class InputBox:
             # SHOWING ON THE SCREEN THE TEXT
             screen.blit(self.text_surface_USER, self.text_rect_USER)
         else:
+            # Reset to minimum width when showing default hint text
+            if self.inputbox_rectangle.width != self.min_width:
+                self.inputbox_rectangle.width = self.min_width
+                self.inputbox_rectangle.centerx = self.center_x
+            self.text_rect_DEFAULT = self.text_surface_DEFAULT.get_rect()
+            self.text_rect_DEFAULT.center = self.inputbox_rectangle.center
             # SHOWING THE DEFAULT TEXT
             screen.blit(self.text_surface_DEFAULT, self.text_rect_DEFAULT)
 
@@ -205,18 +218,42 @@ class TextBox:
         # Rectangle
         self.textbox_rectangle = pygame.Rect(Position, (RectangleDimension))
 
-    def update_text(self,text):
+        self.min_width = RectangleDimension[0]
+        self.max_width = RectangleDimension[0] * 2
+        self.width = RectangleDimension[0]
+        self.height = RectangleDimension[1]
+
+    def update_text(self, text):
         self.text = text
-        
+
+    def handle_event(self, event):
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_BACKSPACE:
+                self.text = self.text[:-1]
+                return True
+            elif event.key == pygame.K_RETURN:
+                return "ENTER"
+            if event.unicode.isalnum() and len(event.unicode) > 0:
+                self.text += event.unicode
+                return True
+        return False
+
     def draw(self, screen):
-
-        # DRAW OF THE TOP RECTANGLE
-        pygame.draw.rect(screen,self.rectangle_color,self.textbox_rectangle,border_radius=self.CORNERS_RADIUS)
-        # DRAW OF THE WHITE RECTANGLE
-        pygame.draw.rect(screen,self.WHITE,self.textbox_rectangle,self.BORDER_SIZE,border_radius=self.CORNERS_RADIUS)
-
-        # Handle multiline text
         lines = self.text.split('\n')
+
+        max_line_width = 0
+        for line in lines:
+            line_width, _ = self.inputbox_font.size(line)
+            if line_width > max_line_width:
+                max_line_width = line_width
+
+        padding = 20
+        self.width = max(self.min_width, min(max_line_width + padding, self.max_width))
+        self.textbox_rectangle.width = self.width
+
+        pygame.draw.rect(screen, self.rectangle_color, self.textbox_rectangle, border_radius=self.CORNERS_RADIUS)
+        pygame.draw.rect(screen, self.WHITE, self.textbox_rectangle, self.BORDER_SIZE, border_radius=self.CORNERS_RADIUS)
+
         total_height = len(lines) * self.inputbox_font.get_height()
         start_y = self.textbox_rectangle.centery - (total_height // 2)
 
