@@ -14,6 +14,12 @@ class NetworkManager:
         """INITIAL STATES"""
 
         self.current_rtt = 0
+        self._last_tcp_send_time = 0
+        self.udp_packets_received = 0
+        self.udp_timeouts = 0
+        self.tcp_messages_sent = 0
+        self.tcp_messages_received = 0
+
         self.cell_size = 50
         # -------------------- TCP INTIAL STATES -------------------
         self.client_tcp = None
@@ -124,6 +130,7 @@ class NetworkManager:
                 # Este hilo se quedará esperando aquí hasta que llegue un paquete
                 # Socket has a 1-second timeout so we periodically check is_udp_listening
                 raw_data, origin_directions = self.client_udp.recvfrom(1024)
+                self.udp_packets_received += 1
 
                 # Asumiendo tu paquete de 12 bytes (<iff)
                 if len(raw_data) == 12:
@@ -144,6 +151,7 @@ class NetworkManager:
                     self.latest_positions[entity_id].append((x, y))
 
             except socket.timeout:
+                self.udp_timeouts += 1
                 # Retry Hello if we haven't received any position data yet
                 if not self._udp_hello_confirmed and hasattr(self, '_udp_hello_msg'):
                     now = time.time()
@@ -279,6 +287,8 @@ class NetworkManager:
             try:
                 message = json.dumps(data_dictionary) + "\n"
                 self.client_tcp.send(message.encode("utf-8"))
+                self.tcp_messages_sent += 1
+                self._last_tcp_send_time = time.time()
                 print(f"Mensaje de salida TCP: {message}")
             except Exception as e:
                 print(f"Error in: {e}")
@@ -286,6 +296,9 @@ class NetworkManager:
     def receive_json(self):
 
         if self.pending_messages:
+            self.tcp_messages_received += 1
+            if self._last_tcp_send_time > 0:
+                self.current_rtt = (time.time() - self._last_tcp_send_time) * 1000
             return self.pending_messages.pop(0)
 
         if self.connected:
@@ -302,11 +315,9 @@ class NetworkManager:
                         partes = self.receive_buffer.split("\n")
                         self.receive_buffer = partes.pop()
 
-                        # Ahora 'partes' solo tiene paquetes JSON completos y perfectos
                         for json_packet in partes:
-                            if json_packet.strip():  # Ignorar líneas en blanco
+                            if json_packet.strip():
                                 try:
-                                    # Convertimos a diccionario y lo formamos en la fila
                                     json_valido = json.loads(json_packet)
                                     self.pending_messages.append(json_valido)
                                 except json.JSONDecodeError as e:
@@ -314,8 +325,10 @@ class NetworkManager:
                                         f"Error encountered while reading JSON: {json_packet} -> {e}"
                                     )
 
-                        # Si logramos procesar algo, devolvemos el primer mensaje de la fila
                         if self.pending_messages:
+                            self.tcp_messages_received += 1
+                            if self._last_tcp_send_time > 0:
+                                self.current_rtt = (time.time() - self._last_tcp_send_time) * 1000
                             return self.pending_messages.pop(0)
             except BlockingIOError:
                 pass
@@ -358,6 +371,11 @@ class NetworkManager:
         self.udp_port_server = None
         self.latest_positions.clear()
         self.current_rtt = 0
+        self._last_tcp_send_time = 0
+        self.udp_packets_received = 0
+        self.udp_timeouts = 0
+        self.tcp_messages_sent = 0
+        self.tcp_messages_received = 0
         print("Disconnection complete and network restarted.")
 
     def calculate_rtt(self, sent_timestamp):
