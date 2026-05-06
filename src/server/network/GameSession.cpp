@@ -1179,8 +1179,8 @@ void GameSession::initializeGameState()
 
 	//recolector inicial jugador 2
 	units[8000] = UnitPosition{8000, 4500.0f, 200.0f};
-	units[8001] = UnitPosition{8002, 4500.0f, 300.0f};
-	units[8002] = UnitPosition{8003, 4500.0f, 400.0f};
+	units[8001] = UnitPosition{8001, 4500.0f, 300.0f};
+	units[8002] = UnitPosition{8002, 4500.0f, 400.0f};
 
 	//por ahora una unica tienda estatica en el mapa
 	shops[11000] = ShopUnit{11000, 2500.0f, 2500.0f, 120.0f};

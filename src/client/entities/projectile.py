@@ -37,11 +37,6 @@ class RectangularProjectile:
         if distance < self.speed:
             self.pos = target_pos
             self.is_dead = True
-
-            # ¡AQUÍ ES DONDE BAJA LA VIDA VISUALMENTE!
-            # Llamamos a un método en la unidad para que procese el daño y muestre el texto flotante
-            if hasattr(self.target, "reduce_health"):
-                self.target.reduce_health(self.hp)
         else:
             # Mover la bala
             direction_vector.normalize_ip()

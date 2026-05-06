@@ -515,6 +515,35 @@ namespace
         assert(session->getEntityHealth(6000, hpAfterReturnInRange, maxAfterReturnInRange));
         assert(hpAfterReturnInRange == hpAfterOutOfRangeTick);
     }
+
+    void testAttackCommandDeduplication()
+    {
+        auto session = std::make_shared<GameSession>(1, 2, 20);
+        GameEngine engine(session);
+
+        // Place attacker (p1) and target (p2)
+        session->upsertUnitPosition(1000, 2500.0f, 2500.0f);
+        session->upsertUnitPosition(6000, 3500.0f, 2500.0f);
+        session->registerSpawnedUnit(1000, 1, games_types::EntityType::Attacker);
+        session->registerSpawnedUnit(6000, 2, games_types::EntityType::Attacker);
+
+        games_types::PlayerCommand cmd{};
+        cmd.type = games_types::CommandType::AttackUnit;
+        cmd.playerId = 1;
+        cmd.attack.attackerId = 1000;
+        cmd.attack.targetId = 6000;
+
+        // Enqueue the same attack multiple times (simulating repeated client messages)
+        engine.tcpCommandEnqueue(cmd);
+        engine.tcpCommandEnqueue(cmd);
+        engine.tcpCommandEnqueue(cmd);
+
+        engine.commandQueueProcess();
+
+        const auto results = engine.drainAttackResults();
+        // Expect only one processed attack result for this attacker in the same batch
+        assert(results.size() == 1);
+    }
 }
 
 int main()
@@ -536,6 +565,7 @@ int main()
     testFormationSpreadAroundSharedTarget();
     testContinuousAttackRespectsCooldownAndRepeats();
     testContinuousAttackStopsAfterOutOfRange();
+    testAttackCommandDeduplication();
 
     std::cout << "server_logic_tests: all checks passed" << std::endl;
     return 0;
