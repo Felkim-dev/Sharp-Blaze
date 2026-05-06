@@ -140,10 +140,12 @@ class BotMatchSpawner:
             "SHARP_BLAZE_UDP_PORT": str(self._internal_udp_port),
         }
 
-        # Port mapping: None means Docker assigns random host ports
+        # Bind mapped ports to the specific host IP (like the broker does).
+        # This avoids Docker/proxy returning packets from a different host
+        # interface IP (which breaks UDP when multiple interfaces/VPNs exist).
         ports = {
-            f"{self._internal_tcp_port}/tcp": None,
-            f"{self._internal_udp_port}/udp": None,
+            f"{self._internal_tcp_port}/tcp": (self._host_ip,),
+            f"{self._internal_udp_port}/udp": (self._host_ip,),
         }
 
         container_name = f"sharp-blaze-bot-{self._session_id}"

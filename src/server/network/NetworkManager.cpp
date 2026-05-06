@@ -413,13 +413,21 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                             sessionOrchestrator.createDedicatedSession(parsed.initialConnect.sessionId);
                         }
 
-                        if (!sessionOrchestrator.registerClientToSession(
+                        {
+                            int assignedId = sessionOrchestrator.registerClientToSession(
                                 clientSocket,
                                 parsed.initialConnect.sessionId,
-                                internalPlayerId))
-                        {
-                            std::cerr << "[ERROR] Failed to register client " << parsed.initialConnect.playerId
-                                      << " to dedicated session " << parsed.initialConnect.sessionId << std::endl;
+                                g_players[clientSocket].internalPlayerId);
+
+                            if (assignedId == 0)
+                            {
+                                std::cerr << "[ERROR] Failed to register client " << parsed.initialConnect.playerId
+                                          << " to dedicated session " << parsed.initialConnect.sessionId << std::endl;
+                            }
+                            else
+                            {
+                                g_players[clientSocket].internalPlayerId = assignedId;
+                            }
                         }
 
                         std::cout << "[DEDICATED] P" << playerId << " (" << parsed.initialConnect.playerId

@@ -286,8 +286,18 @@ class UnitCommander:
             Command dict (TCP protocol format)
             Format: {"type": "MOVE_ORDER", "payload": {"unit_id": ..., "target_x": ..., "target_y": ...}}
         """
-        # Use JSON_Manager to generate proper TCP command
-        command = JSON_Manager.get_moveorder(unit_id, int(target_x), int(target_y))
+        # Convert world coordinates to grid indexes expected by the server
+        # Server expects target_x/target_y in [0..99] (grid indices), not world pixels.
+        cell_size = 50
+        grid_x = int(target_x // cell_size)
+        grid_y = int(target_y // cell_size)
+
+        # Clamp to valid grid range
+        grid_x = max(0, min(99, grid_x))
+        grid_y = max(0, min(99, grid_y))
+
+        # Use JSON_Manager to generate proper TCP command with grid indices
+        command = JSON_Manager.get_moveorder(unit_id, grid_x, grid_y)
         return command
 
     def _create_attack_command(self, attacker_id: int, target_id: int) -> Dict[str, Any]:

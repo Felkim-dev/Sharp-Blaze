@@ -285,14 +285,8 @@ class BotNetworkClient:
             # Start listener thread
             self._start_udp_listener()
 
-            # Start keepalive thread
-            if self.udp_keepalive_thread is None or not self.udp_keepalive_thread.is_alive():
-                self.udp_keepalive_active = True
-                self.udp_keepalive_thread = threading.Thread(
-                    target=self._udp_keepalive_loop,
-                    daemon=True,
-                )
-                self.udp_keepalive_thread.start()
+            # Start keepalive thread (use helper to ensure single-start)
+            self.start_udp_keepalive()
 
             # Send hello with retries until server acknowledges
             max_retries = 20
@@ -416,6 +410,21 @@ class BotNetworkClient:
                 break
 
         print("[BotNet] UDP keepalive thread stopped")
+
+    def start_udp_keepalive(self) -> None:
+        """
+        Start the UDP keepalive thread if it's not already running.
+
+        This mirrors the human client's keepalive helper and centralizes
+        the start logic so multiple callers won't spawn duplicate threads.
+        """
+        if self.udp_keepalive_thread is None or not self.udp_keepalive_thread.is_alive():
+            self.udp_keepalive_active = True
+            self.udp_keepalive_thread = threading.Thread(
+                target=self._udp_keepalive_loop,
+                daemon=True,
+            )
+            self.udp_keepalive_thread.start()
 
     # ────────────────────────────────────────────────────────────
     #  UDP — Position Retrieval

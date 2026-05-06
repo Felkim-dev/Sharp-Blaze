@@ -292,7 +292,7 @@ void SessionOrchestrator::createDedicatedSession(int sessionId)
     std::cout << "[SESSION] Created dedicated session " << sessionId << std::endl;
 }
 
-bool SessionOrchestrator::registerClientToSession(SOCKET clientSocket, int sessionId, int internalPlayerId)
+int SessionOrchestrator::registerClientToSession(SOCKET clientSocket, int sessionId, int internalPlayerId)
 {
     std::lock_guard<std::mutex> lock(mtx);
 
@@ -300,7 +300,7 @@ bool SessionOrchestrator::registerClientToSession(SOCKET clientSocket, int sessi
     if (it == sessionsById.end())
     {
         std::cerr << "[SESSION] Session " << sessionId << " not found" << std::endl;
-        return false;
+        return 0;
     }
 
     SessionRecord& record = it->second;
@@ -308,23 +308,23 @@ bool SessionOrchestrator::registerClientToSession(SOCKET clientSocket, int sessi
     if (record.p1 == INVALID_SOCKET)
     {
         record.p1 = clientSocket;
-        record.p1InternalPlayerId = internalPlayerId;
+        record.p1InternalPlayerId = 1;
         sessionIdByClient[clientSocket] = sessionId;
         std::cout << "[SESSION] Client registered as P1 to session " << sessionId << std::endl;
-        return true;
+        return 1;
     }
     else if (record.p2 == INVALID_SOCKET)
     {
         record.p2 = clientSocket;
-        record.p2InternalPlayerId = internalPlayerId;
+        record.p2InternalPlayerId = 2;
         sessionIdByClient[clientSocket] = sessionId;
         std::cout << "[SESSION] Client registered as P2 to session " << sessionId << std::endl;
-        return true;
+        return 2;
     }
     else
     {
         std::cerr << "[SESSION] Session " << sessionId << " is full" << std::endl;
-        return false;
+        return 0;
     }
 }
 
