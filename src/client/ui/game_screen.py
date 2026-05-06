@@ -151,6 +151,8 @@ class GameScreen:
         self.is_game_over = True
         self.winner_player_id = winner_name
 
+        self.screen_manager.network.disconnect()
+
         # ¡Aquí es donde inyectas el nombre real para que se actualice en pantalla!
         nuevo_texto = f"SHARP BLAZE\n{self.winner_player_id} VICTORY!"
         self.winner_box.update_text(nuevo_texto)
@@ -339,30 +341,31 @@ class GameScreen:
                     self.attacker_entity_id = data["payload"]["attacker_entity_id"]
                     self.target_current_hp = data["payload"]["current_hp"]
 
-                    # Informacion sobre el ATACANTE
-                    self.attacker_entity_id = data["payload"]["attacker_entity_id"]
-
-                    attacker = self.world.get_entity(self.attacker_entity_id)
-                    target = self.world.get_entity(self.target_entity_id)
-
-                    new_bullet = RectangularProjectile(
-                        start_x=attacker.x,
-                        start_y=attacker.y,
-                        target_entity=target,
-                        hp=self.target_current_hp, 
-                    )
-
-                    self.world.projectiles.append(new_bullet)
-
-                    # Audio: attacker fires and target receives the shot
-                    AudioManager().play_shoot()
-                    AudioManager().play_receive_shot()
-
                     if 1000 <= self.target_entity_id <= 4999 or 6000 <= self.target_entity_id <= 9999:
                         self.world.units[self.target_entity_id].reduce_health(self.target_current_hp)
 
                     elif 0 <= self.target_entity_id <= 999 or 5000 <= self.target_entity_id <= 5999:
                         self.world.structures[self.target_entity_id].reduce_health(self.target_current_hp)
+
+                    AudioManager().play_receive_shot()
+
+                elif data.get("type") == "ATTACK_RESULT":
+                    if data.get("status") == "accepted":
+                        self.attacker_entity_id = data["payload"]["attacker_id"]
+                        self.target_entity_id = data["payload"]["target_id"]
+
+                        attacker = self.world.get_entity(self.attacker_entity_id)
+                        target = self.world.get_entity(self.target_entity_id)
+
+                        if attacker is not None and target is not None:
+                            new_bullet = RectangularProjectile(
+                                start_x=attacker.x,
+                                start_y=attacker.y,
+                                target_entity=target,
+                                hp=0,
+                            )
+                            self.world.projectiles.append(new_bullet)
+                            AudioManager().play_shoot()
 
                 elif data.get("type") == "GAME_OVER":
                     self.winner_player_id = data["payload"]["winner_player_id"]

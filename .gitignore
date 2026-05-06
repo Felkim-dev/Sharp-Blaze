@@ -57,3 +57,11 @@ example.json
 # ==========================================
 test_connection.py
 plan_botImplementation.md
+
+# ==========================================
+# AI Agents & Tools (OpenCode, Sisyphus, etc.)
+# ==========================================
+.sisyphus/
+.opencode/
+.agents/
+AGENTS.md

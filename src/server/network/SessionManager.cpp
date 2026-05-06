@@ -79,6 +79,15 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
                     result.reason,
                     result.targetCurrentHp);
                 matchEventCallback(targetSocket, attackResultMessage);
+
+                if (result.accepted)
+                {
+                    const SOCKET mirroredSocket = (targetSocket == p1Socket) ? p2Socket : p1Socket;
+                    if (mirroredSocket != INVALID_SOCKET && mirroredSocket != targetSocket)
+                    {
+                        matchEventCallback(mirroredSocket, attackResultMessage);
+                    }
+                }
             }
 
             const auto economyEvents = engine->drainEconomyTransactions();

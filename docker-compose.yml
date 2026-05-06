@@ -4,13 +4,18 @@ services:
       context: ./src/broker
       dockerfile: Dockerfile
     environment:
+      # El broker escucha en todas las interfaces internas
       BROKER_HOST: 0.0.0.0
       BROKER_PORT: 6000
+      
+      # Imagen del servidor de juego a ejecutar
       BROKER_GAME_IMAGE: sharp-blaze-server:latest
       BROKER_GAME_TCP_PORT: 5555
       BROKER_GAME_UDP_PORT: 5556
       BROKER_GAME_HOST_IP: ${SERVER_IP:-127.0.0.1} #agregar ip de la maquina en el archivo .env (ej SERVER_IP=100.x.x.x)
+
     ports:
+      # Exponer broker en puerto 6000 (Tailscale lo hace accesible)
       - "6000:6000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

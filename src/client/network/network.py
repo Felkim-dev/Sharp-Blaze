@@ -40,7 +40,11 @@ class NetworkManager:
 
         self.latest_positions = {}  
         self.is_udp_listening = False
-        self._udp_thread = None  # Reference to the UDP listener thread
+
+        # UDP Keep-Alive
+        self.udp_session_id = None
+        self.udp_player_id = None
+        self.is_udp_keep_alive_running = False
 
     # --------------------------- UDP Methods -------------------------------------
     def init_udp_connection(self,session_id,player_id):
@@ -68,8 +72,12 @@ class NetworkManager:
         print(f"Session_id {local_session_id}, player_id {local_player_id}, checksum {checksum}")
         print(f"Connecting to UDP server: {self.server_ip}:{self.udp_port_server}")
         try:
-            # Send initial hello
             self.client_udp.sendto(self._udp_hello_msg, self._udp_hello_target)
+            
+            # Store session and player IDs for keep-alive
+            self.udp_session_id = session_id
+            self.udp_player_id = player_id
+            
             print("UDP Channel open. Waiting for positions")
 
             self.start_udp_thread()
@@ -116,16 +124,37 @@ class NetworkManager:
     
     def start_udp_thread(self):
         """Runs the secondary thread that hears the network"""
-        # Ensure any previous UDP thread is fully stopped before starting a new one
-        if self._udp_thread is not None and self._udp_thread.is_alive():
-            self.is_udp_listening = False
-            self._udp_thread.join(timeout=3.0)
-            if self._udp_thread.is_alive():
-                print("[WARNING] Old UDP thread did not exit in time")
+        if not self.is_udp_listening:
+            self.is_udp_listening = True
+            thread = threading.Thread(target=self._udp_listen_loop, daemon=True)
+            thread.start()
 
-        self.is_udp_listening = True
-        self._udp_thread = threading.Thread(target=self._udp_listen_loop, daemon=True)
-        self._udp_thread.start()
+    def start_udp_keep_alive(self):
+        """Starts a thread that periodically sends UDP_HELLO to keep endpoint alive"""
+        if not self.is_udp_keep_alive_running:
+            self.is_udp_keep_alive_running = True
+            thread = threading.Thread(target=self._udp_keep_alive_loop, daemon=True)
+            thread.start()
+
+    def _udp_keep_alive_loop(self):
+        """Periodic UDP_HELLO rebroadcast to ensure server has our endpoint registered"""
+        while self.is_udp_keep_alive_running:
+            try:
+                if self.udp_session_id is not None and self.udp_player_id is not None:
+                    header = struct.pack("!ii", self.udp_session_id, self.udp_player_id)
+                    checksum = 0
+                    for b in header:
+                        checksum ^= b
+                    
+                    welcome_message = header + struct.pack("!I", checksum)
+                    self.client_udp.sendto(self._udp_hello_msg, self._udp_hello_target)
+                    print("[UDP Keep-Alive] Resending UDP_HELLO to server")
+                
+                time.sleep(1)  # Reenviar cada 1 segundo
+            except Exception as e:
+                if self.is_udp_keep_alive_running:
+                    print(f"[ERROR UDP Keep-Alive] {e}")
+                break
 
     def _udp_listen_loop(self):
         """Bucle infinito del hilo secundario. Desempaqueta y guarda."""
@@ -353,7 +382,6 @@ class NetworkManager:
                 print("[WARNING] UDP thread did not exit in time during disconnect")
         self._udp_thread = None
 
-        # 3. Now safely close and recreate the socket
         if self.client_udp is not None:
             try:
                 self.client_udp.close()
