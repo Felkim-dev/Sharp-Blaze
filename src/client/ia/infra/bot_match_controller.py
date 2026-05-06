@@ -62,7 +62,8 @@ class BotMatchController:
 
             time.sleep(1.0) # Give it a little more time to settle
 
-            # Set up human connection via LobbyScreen simulation
+            # Step 2: Inform human UI — human must connect FIRST to get Player 1.
+            # The bot connects SECOND so the server assigns it Player 2.
             print("[BotController] Informing Human UI of Match...")
             match_payload = {
                 "type": "BROKER_MATCH_FOUND",
@@ -74,15 +75,32 @@ class BotMatchController:
                     "token": self.server_info["token"],
                     "you": "human_player",
                     "opponent": "bot_ai",
-                    "global_player_id": 1,
+                    "global_player_id": 1,  # Human is always Player 1
                 }
             }
             # Inject into the pending messages of the human network.
             # The LobbyScreen will process this in the main thread and connect.
             self.human_network.pending_messages.append(match_payload)
-            
-            # Step 3: Connect Bot
-            print("[BotController] Connecting Bot...")
+
+            # Wait for the human TCP connection to be established before the bot connects.
+            # This guarantees that the server assigns Player 1 to the human and Player 2 to the bot.
+            print("[BotController] Waiting for human client to connect (Player 1)...")
+            human_connect_timeout = 8.0  # seconds
+            human_connect_deadline = time.time() + human_connect_timeout
+            while time.time() < human_connect_deadline:
+                if self.human_network.connected:
+                    print("[BotController] Human connected successfully as Player 1.")
+                    break
+                time.sleep(0.1)
+            else:
+                print("[BotController] WARNING: Human did not connect in time. "
+                      "Bot may get Player 1 instead.")
+
+            # Small extra delay to let the server fully register the human connection
+            time.sleep(0.3)
+
+            # Step 3: Connect Bot (always after human → becomes Player 2)
+            print("[BotController] Connecting Bot as Player 2...")
             self.bot_network = BotNetworkClient()
             success = self.bot_network.connect_tcp(
                 self.server_info["ip"],

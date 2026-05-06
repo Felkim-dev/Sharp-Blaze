@@ -34,10 +34,14 @@ class UnitCommander:
             self.attackers_range = range(1000, 3000)
             self.collectors_range = range(3000, 5000)
             self.player_base = (300, 4700)
+            # Enemy base structure IDs (Player 2 structures: 5000-5999)
+            self.enemy_base_id_range = range(5000, 6000)
         else:
             self.attackers_range = range(6000, 8000)
             self.collectors_range = range(8000, 10000)
             self.player_base = (4700, 300)
+            # Enemy base structure IDs (Player 1 structures: 0-999)
+            self.enemy_base_id_range = range(0, 1000)
         
         self.mining_locations = [
             (3500, 3500),  # Center mines (Resource 10000)
@@ -45,6 +49,11 @@ class UnitCommander:
             (2900, 2100),  # Upper-left mines (Resource 10002)
             (1500, 1500),  # Upper-left corner mines (Resource 10003)
         ]
+        
+        # Threshold: if collector is within this distance of a mine, send it back to base
+        self.mine_arrival_threshold = 400  # world pixels
+        # Threshold: if collector is close to base, send it to mine again
+        self.base_arrival_threshold = 400  # world pixels
         
         # Track recently issued orders (prevent duplicates)
         self.last_commands = {}
@@ -171,14 +180,32 @@ class UnitCommander:
                 collectors.append((unit_id, unit))
         
         # ====================================
-        # Move collectors (always toward mines for resource gathering)
+        # Move collectors — explicit state machine per unit
+        # States: "to_mine"  → heading to nearest mine to collect
+        #         "to_base"  → heading to own base to deposit
+        # Transition only happens when the unit actually arrives (within threshold).
         # ====================================
         
+        base_x, base_y = self.player_base
         for unit_id, unit in collectors:
-            target = self._find_nearest_mining_location(unit.x, unit.y)
-            if target:
-                cmd = self._create_move_command(unit_id, target[0], target[1])
+            dist_to_base = math.sqrt((unit.x - base_x)**2 + (unit.y - base_y)**2)
+            nearest_mine = self._find_nearest_mining_location(unit.x, unit.y)
+            dist_to_mine = math.sqrt((unit.x - nearest_mine[0])**2 + (unit.y - nearest_mine[1])**2) if nearest_mine else float('inf')
+
+            if dist_to_mine <= self.mine_arrival_threshold:
+                # Collector arrived near mine → send it back to base to deposit
+                cmd = self._create_move_command(unit_id, base_x, base_y)
                 commands.append(cmd)
+            elif dist_to_base <= self.base_arrival_threshold:
+                # Collector arrived at base (deposited) → send it to mine again
+                if nearest_mine:
+                    cmd = self._create_move_command(unit_id, nearest_mine[0], nearest_mine[1])
+                    commands.append(cmd)
+            else:
+                # In transit → keep going to the nearest mine
+                if nearest_mine:
+                    cmd = self._create_move_command(unit_id, nearest_mine[0], nearest_mine[1])
+                    commands.append(cmd)
         
         # ====================================
         # Move attackers (depends on priority)
@@ -212,22 +239,41 @@ class UnitCommander:
         
         return commands
 
+    def _get_enemy_base_id(self) -> int:
+        """
+        Find the enemy base structure ID from game_world.structures.
+        
+        Returns:
+            Structure ID of the enemy base, or None if not found.
+        """
+        for struct_id in self.game_world.structures:
+            if struct_id in self.enemy_base_id_range:
+                return struct_id
+        return None
+
     def _generate_attack_orders(self) -> List[Dict[str, Any]]:
         """
-        Generate attack commands for nearest enemy units
+        Generate attack commands for nearest enemy units or the enemy base.
+        
+        Priority:
+        1. Attack enemy units if any exist
+        2. Attack enemy base directly if no enemy units are present
         
         Returns:
             List of attack commands
         """
         commands = []
         
-        # Find all attackers
+        # Find all own attackers
         my_attackers = []
         for unit_id, unit in self.game_world.units.items():
             owner = self.game_world.get_owner_from_id(unit_id)
             if owner == self.player_id and unit_id in self.attackers_range:
                 my_attackers.append((unit_id, unit))
         
+        if not my_attackers:
+            return commands
+
         # Find all enemy units
         enemy_units = []
         for unit_id, unit in self.game_world.units.items():
@@ -235,21 +281,25 @@ class UnitCommander:
             if owner == self.enemy_id:
                 enemy_units.append((unit_id, unit))
         
-        if not enemy_units:
-            return commands
-        
-        # Simple greedy assignment: each attacker targets nearest enemy
-        for attacker_id, attacker_unit in my_attackers:
-            nearest_enemy = min(
-                enemy_units,
-                key=lambda e: math.sqrt(
-                    (attacker_unit.x - e[1].x)**2 + 
-                    (attacker_unit.y - e[1].y)**2
+        if enemy_units:
+            # Priority 1: Attack nearest enemy unit
+            for attacker_id, attacker_unit in my_attackers:
+                nearest_enemy = min(
+                    enemy_units,
+                    key=lambda e: math.sqrt(
+                        (attacker_unit.x - e[1].x)**2 + 
+                        (attacker_unit.y - e[1].y)**2
+                    )
                 )
-            )
-            
-            cmd = self._create_attack_command(attacker_id, nearest_enemy[0])
-            commands.append(cmd)
+                cmd = self._create_attack_command(attacker_id, nearest_enemy[0])
+                commands.append(cmd)
+        else:
+            # Priority 2: No enemy units → attack enemy base structure directly
+            enemy_base_id = self._get_enemy_base_id()
+            if enemy_base_id is not None:
+                for attacker_id, _ in my_attackers:
+                    cmd = self._create_attack_command(attacker_id, enemy_base_id)
+                    commands.append(cmd)
         
         return commands
 

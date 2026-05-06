@@ -375,12 +375,12 @@ class NetworkManager:
         self.udp_keepalive_active = False
         self.udp_endpoint_registered = False
 
-        # 2. Wait for the old UDP thread to fully exit before touching the socket
-        if self._udp_thread is not None and self._udp_thread.is_alive():
-            self._udp_thread.join(timeout=3.0)
-            if self._udp_thread.is_alive():
-                print("[WARNING] UDP thread did not exit in time during disconnect")
-        self._udp_thread = None
+        # 2. Wait for the UDP keepalive thread to fully exit before touching the socket
+        if self.udp_keepalive_thread is not None and self.udp_keepalive_thread.is_alive():
+            self.udp_keepalive_thread.join(timeout=3.0)
+            if self.udp_keepalive_thread.is_alive():
+                print("[WARNING] UDP keepalive thread did not exit in time during disconnect")
+        self.udp_keepalive_thread = None
 
         if self.client_udp is not None:
             try:
