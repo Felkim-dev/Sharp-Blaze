@@ -85,6 +85,8 @@ class GameScreen:
         self.is_game_over = False
         self.winner_player_id = None
         self.is_paused = False
+        # Phase 1: visual only, game continues running underneath
+        # Pause overlay created lazily on first ESC press
         self.pause_overlay = None
         # Center the game-over UI relative to screen dimensions
         go_box_w, go_box_h = int(800 * sx), int(200 * sy)
@@ -171,16 +173,21 @@ class GameScreen:
         """Processes one-time events like mouse clicks."""
         for event in events:
 
+            # ESC toggle: open/close the pause menu
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 if self.is_game_over:
+                    # Game over takes priority over pause
                     pass
                 elif self.pause_overlay and self.pause_overlay.state == "SURRENDER_CONFIRM":
+                    # ESC during surrender confirmation closes dialog only
                     self.pause_overlay.state = "MAIN"
                 elif self.is_paused:
+                    # Close the pause menu
                     self.is_paused = False
                     if self.pause_overlay:
                         self.pause_overlay.state = None
                 else:
+                    # Open the pause menu (lazy overlay creation)
                     self.is_paused = True
                     if self.pause_overlay is None:
                         self.pause_overlay = PauseOverlay(self.screen, self.screen_manager, AudioManager())
@@ -203,6 +210,8 @@ class GameScreen:
                         self.screen_manager.change_screen("MAIN")
                 continue
 
+            # Delegate all events to the pause overlay while paused
+            # Skip normal game event processing
             if self.is_paused and self.pause_overlay:
                 action = self.pause_overlay.handle_events([event])
                 if action == "close":
@@ -523,5 +532,6 @@ class GameScreen:
             self.winner_box.draw(self.screen)
             self.game_over_button.draw(self.screen)
 
+        # Draw pause overlay on top of all game elements
         if self.is_paused and self.pause_overlay:
             self.pause_overlay.draw(self.screen)

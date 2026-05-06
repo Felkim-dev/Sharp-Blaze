@@ -4,8 +4,17 @@ import os
 from ui.component import Button, Text, CloseButton, Slider
 from utils.audio import AudioManager
 
+# Pause menu overlay displayed during gameplay.
+# Phase 1: Visual only -- no actual game freeze, no network messages.
+
 
 class PauseOverlay:
+    """In-game pause menu overlay with volume controls and surrender option.
+
+    State machine: MAIN -> VOLUME, MAIN -> SURRENDER_CONFIRM.
+    Draws a centered celeste (#0cc0df) panel on top of the game world.
+    Handles its own widget events and returns actions to GameScreen.
+    """
     def __init__(self, screen, screen_manager, audio_manager):
         self.screen = screen
         self.screen_manager = screen_manager
@@ -17,6 +26,7 @@ class PauseOverlay:
 
         self.state = "MAIN"  # "MAIN", "VOLUME", "SURRENDER_CONFIRM"
 
+        # Panel dimensions and position (centered on screen)
         panel_width = int(600 * sx)
         panel_height = int(300 * sy)
         panel_x = (self.screen.get_width() - panel_width) // 2
@@ -39,6 +49,7 @@ class PauseOverlay:
         CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
         TITLE_FONT = os.path.join(CURRENT_DIR, "..", "assets", "Anton-Regular.ttf")
 
+        # Title using Anton font
         title_pos = (panel_x + panel_width // 2, panel_y + int(50 * sy))
         title_size = int(70 * sy)
         self.title = Text(title_pos, "Pause", title_size, (255, 255, 255), TITLE_FONT)
@@ -49,6 +60,7 @@ class PauseOverlay:
             size=int(30 * sy),
         )
 
+        # Main menu buttons (centered within panel)
         btn_w = int(350 * sx)
         btn_h = int(50 * sy)
         btn_x = panel_x + (panel_width - btn_w) // 2
@@ -73,6 +85,7 @@ class PauseOverlay:
             int(24 * sy),
         )
 
+        # Volume submenu: title, back button, sliders
         self.text_volume_title = Text(
             title_pos, "Volume", title_size, (255, 255, 255), TITLE_FONT
         )
@@ -99,6 +112,7 @@ class PauseOverlay:
         slider_y_sfx = slider_y_music + int(70 * sy)
         label_size_slider = int(22 * sy)
         
+        # Music and Effects volume sliders
         self.slider_music = Slider(
             label_y=slider_y_music,
             label_right_x=label_right_x,
@@ -121,6 +135,7 @@ class PauseOverlay:
             label_size=label_size_slider,
         )
         
+        # Surrender confirmation dialog
         confirm_text_y = panel_y + int(140 * sy)
         self.text_confirm = Text(
             (panel_x + panel_width // 2, confirm_text_y),
@@ -156,6 +171,7 @@ class PauseOverlay:
         )
 
     def draw(self, screen):
+        """Render the overlay based on current state."""
         if self.state is None:
             return
 
@@ -175,6 +191,7 @@ class PauseOverlay:
             self._draw_surrender_confirm(screen)
 
     def handle_events(self, events):
+        """Process events for interactive widgets. Returns action string or None."""
         mouse_pos = pygame.mouse.get_pos()
         for event in events:
             if self.state == "MAIN":
@@ -201,12 +218,14 @@ class PauseOverlay:
         return None
 
     def update_volumes(self):
+        """Sync slider positions with AudioManager values."""
         if hasattr(self, 'slider_music'):
             self.slider_music.value = int(self.audio_manager.music_volume * 100)
         if hasattr(self, 'slider_sfx'):
             self.slider_sfx.value = int(self.audio_manager.sfx_volume * 100)
 
     def _draw_volume_submenu(self, screen):
+        """Draw the Volume submenu (panel, title, X, back, sliders)."""
         screen.blit(self.temp_surface, (self.panel_x, self.panel_y))
         self.cross_btn.draw(screen)
         self.text_volume_title.draw(screen)
@@ -216,6 +235,7 @@ class PauseOverlay:
         self.slider_sfx.draw(screen)
 
     def _draw_surrender_confirm(self, screen):
+        """Draw the surrender confirmation dialog."""
         screen.blit(self.temp_surface, (self.panel_x, self.panel_y))
         self.title.draw(screen)
         self.text_confirm.draw(screen)
@@ -226,6 +246,7 @@ class PauseOverlay:
         self.btn_no.draw(screen)
 
     def _handle_volume_events(self, event, mouse_pos):
+        """Handle Volume submenu events (X, back, sliders). Returns action or None."""
         if self.cross_btn.handle_event(event):
             self.state = "MAIN"
             AudioManager().play_click()
@@ -248,6 +269,7 @@ class PauseOverlay:
         return None
 
     def _handle_surrender_confirm_events(self, event, mouse_pos):
+        """Handle surrender confirm events (X, Yes, No). Returns action or None."""
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.btn_si.button_rectangle.collidepoint(mouse_pos):
                 AudioManager().play_click()
