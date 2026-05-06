@@ -108,7 +108,7 @@ class BotAI:
         # STEP 3: Execute commands
         # ====================================
         
-        commands = self.commander.execute_decision(decision, current_gold)
+        commands = self.commander.execute_decision(decision, current_gold, game_state)
         
         # ====================================
         # STEP 4: Send commands to server

@@ -148,6 +148,27 @@ class BotMatchController:
                     # Init world
                     self.bot_game_world.load_initial_state(payload.get("units", {}), payload.get("structures", {}))
                     
+                    # ====================================
+                    # Extract and register shops & mines from structures
+                    # ====================================
+                    structures = payload.get("structures", {})
+                    shops = {}
+                    mines = {}
+                    
+                    for struct_id_str, pos in structures.items():
+                        struct_id = int(struct_id_str)
+                        # Shops: IDs 11000-11999
+                        if 11000 <= struct_id < 12000:
+                            shops[struct_id] = pos
+                        # Mines: IDs 10000-10999
+                        elif 10000 <= struct_id < 11000:
+                            mines[struct_id] = pos
+                    
+                    if shops:
+                        self.bot_game_world.register_shops(shops)
+                    if mines:
+                        self.bot_game_world.register_mines(mines)
+                    
                     # Init AI
                     analyzer = GameStateAnalyzer(payload["player_id"])
                     decision_engine = DecisionEngine(self.difficulty)

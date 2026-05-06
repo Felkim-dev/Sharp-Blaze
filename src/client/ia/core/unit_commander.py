@@ -2,6 +2,8 @@ from typing import Dict, Any, List, Tuple
 import math
 from utils.json import JSON_Manager
 from .game_config_loader import GameConfigLoader
+from .shop_manager import ShopManager
+from .attack_decision import AttackDecisionEngine
 
 
 class UnitCommander:
@@ -78,14 +80,21 @@ class UnitCommander:
         
         # Track recently issued orders (prevent duplicates)
         self.last_commands = {}
+        
+        # ====================================
+        # NEW: Shop & Attack Decision Managers
+        # ====================================
+        self.shop_manager = ShopManager(self.game_world)
+        self.attack_decision = AttackDecisionEngine()
 
-    def execute_decision(self, decision: Dict[str, Any], current_gold: int) -> List[Dict[str, Any]]:
+    def execute_decision(self, decision: Dict[str, Any], current_gold: int, game_state: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
         Convert decision into concrete commands
         
         Args:
-            decision: Output from DecisionEngine.decide()
+            decision: Output from DecisionEngine.decide() (build counts, priority, aggression, etc.)
             current_gold: Current gold amount
+            game_state: Full analyzed game state (threat_level, army_balance, game_phase, etc.)
         
         Returns:
             List of command dicts to send to server
@@ -138,11 +147,19 @@ class UnitCommander:
                 return commands
         
         # ====================================
-        # STEP 3: Attack orders if aggressive
+        # STEP 3: Attack orders using intelligent decision logic
         # ====================================
         
-        if aggression > 0.45 or priority == "attack":
-            attack_commands = self._generate_attack_orders(priority, aggression, army_balance, threat_level)
+        # Use full game_state for attack decision (not just decision dict)
+        if game_state is None:
+            game_state = {}  # Fallback to empty dict if not provided
+        
+        # Use AttackDecisionEngine to decide whether to attack
+        attack_decision = self.attack_decision.decide_attack_target(game_state)
+        
+        if attack_decision != "no_attack":
+            # Only generate attacks if decision is not "no_attack"
+            attack_commands = self._generate_attack_orders(attack_decision, priority, aggression, army_balance, threat_level)
             for cmd in attack_commands:
                 commands.append(cmd)
                 remaining_budget -= 1
@@ -159,6 +176,8 @@ class UnitCommander:
         """
         Create command to build an attacker unit
         
+        Validates that at least one unit is near a shop before allowing purchase.
+        
         Uses JSON_Manager.get_unit_attacker() to generate TCP-compatible command
         
         Returns:
@@ -168,14 +187,25 @@ class UnitCommander:
         if len(self.game_world.units) >= 50:  # Max units per player
             return None
         
+        # ====================================
+        # NEW: Verify shop proximity
+        # ====================================
+        if not self.shop_manager.can_buy_unit(self.player_id):
+            print(f"[UnitCmd] Cannot buy Attacker: no unit at shop. {self.shop_manager.debug_shop_status(self.player_id)}")
+            return None
+        
         # Use JSON_Manager to generate proper TCP command
         # Returns: {"type": "BUY_UNIT", "payload": {"unit_type": "Attacker", "quantity": 1}}
         command = JSON_Manager.get_unit_attacker()
+        unit_at_shop = self.shop_manager.get_unit_at_shop(self.player_id)
+        print(f"[UnitCmd] Building Attacker (unit {unit_at_shop} at shop)")
         return command
 
     def _create_build_collector_command(self) -> Dict[str, Any]:
         """
         Create command to build a collector unit
+        
+        Validates that at least one unit is near a shop before allowing purchase.
         
         Uses JSON_Manager.get_unit_recolectors() to generate TCP-compatible command
         
@@ -185,9 +215,18 @@ class UnitCommander:
         if len(self.game_world.units) >= 50:
             return None
         
+        # ====================================
+        # NEW: Verify shop proximity
+        # ====================================
+        if not self.shop_manager.can_buy_unit(self.player_id):
+            print(f"[UnitCmd] Cannot buy Collector: no unit at shop. {self.shop_manager.debug_shop_status(self.player_id)}")
+            return None
+        
         # Use JSON_Manager to generate proper TCP command
         # Returns: {"type": "BUY_UNIT", "payload": {"unit_type": "Collector", "quantity": 1}}
         command = JSON_Manager.get_unit_recolectors()
+        unit_at_shop = self.shop_manager.get_unit_at_shop(self.player_id)
+        print(f"[UnitCmd] Building Collector (unit {unit_at_shop} at shop)")
         return command
 
     def _generate_movement_orders(self, priority: str, aggression: float,
@@ -318,14 +357,17 @@ class UnitCommander:
         cap = max(1, min(len(attackers), cap))
         return sorted(attackers, key=lambda item: item[0])[:cap]
 
-    def _generate_attack_orders(self, priority: str, aggression: float,
+    def _generate_attack_orders(self, attack_decision: str, priority: str, aggression: float,
                                 army_balance: float, threat_level: float) -> List[Dict[str, Any]]:
         """
-        Generate attack commands for nearest enemy units or the enemy base.
+        Generate attack commands based on intelligent attack decision.
         
-        Priority:
-        1. Attack enemy units if any exist
-        2. Attack enemy base directly if no enemy units are present
+        Args:
+            attack_decision: "attack_base" or "attack_troops" (from AttackDecisionEngine)
+            priority: Strategic priority ("expand", "defend", "attack")
+            aggression: Aggression level 0.0-1.0
+            army_balance: Army strength ratio (-1.0 to 1.0)
+            threat_level: Threat assessment (0.0-1.0)
         
         Returns:
             List of attack commands
@@ -342,6 +384,8 @@ class UnitCommander:
         if not my_attackers:
             return commands
 
+        # Parameters already provided; select attack force based on difficulty
+        
         attack_force = self._select_attack_force(my_attackers, priority, aggression, army_balance, threat_level)
         if not attack_force:
             return commands
@@ -353,27 +397,75 @@ class UnitCommander:
             if owner == self.enemy_id:
                 enemy_units.append((unit_id, unit))
         
-        if enemy_units:
-            # Priority 1: Attack nearest enemy unit
-            for attacker_id, attacker_unit in attack_force:
-                nearest_enemy = min(
-                    enemy_units,
-                    key=lambda e: math.sqrt(
-                        (attacker_unit.x - e[1].x)**2 + 
-                        (attacker_unit.y - e[1].y)**2
-                    )
-                )
-                cmd = self._create_attack_command(attacker_id, nearest_enemy[0])
-                commands.append(cmd)
-        else:
-            # Priority 2: No enemy units → attack enemy base structure directly
+        # Log attack decision for debugging (reconstruct minimal game state for logging)
+        debug_state = {"threat_level": threat_level, "army_balance": army_balance}
+        decision_details = self.attack_decision.get_attack_decision_details(attack_decision, debug_state)
+        print(decision_details)
+        
+        # ====================================
+        # Execute attack based on decision
+        # ====================================
+        
+        if attack_decision == "attack_base":
+            # Attack enemy base structure directly
             enemy_base_id = self._get_enemy_base_id()
             if enemy_base_id is not None:
-                for attacker_id, _ in attack_force:
+                for attacker_id, attacker_unit in attack_force:
+                    # Check if unit is within base attack range (1000px)
+                    # If not, still send order (server will handle out-of-range)
                     cmd = self._create_attack_command(attacker_id, enemy_base_id)
                     commands.append(cmd)
+            else:
+                print("[UnitCmd] Enemy base not found!")
+        
+        elif attack_decision == "attack_troops":
+            # Attack enemy troops (units)
+            if enemy_units:
+                # Determine target priority (attackers vs collectors)
+                attackers = [e for e in enemy_units if e[0] in self.enemy_attackers_range()]
+                collectors = [e for e in enemy_units if e[0] in self.enemy_collectors_range()]
+                
+                # Target strategy: prioritize attackers (threat reduction)
+                # unless we're significantly ahead (then attack collectors for economy damage)
+                should_attack_collectors = self.attack_decision.should_attack_collector_first(threat_level, army_balance)
+                
+                if should_attack_collectors and collectors:
+                    target_list = collectors
+                elif attackers:
+                    target_list = attackers
+                else:
+                    target_list = enemy_units  # Fall back to any unit
+                
+                # Assign targets to attack force
+                for i, (attacker_id, attacker_unit) in enumerate(attack_force):
+                    # Rotate through target list if more attackers than targets
+                    target = target_list[i % len(target_list)]
+                    cmd = self._create_attack_command(attacker_id, target[0])
+                    commands.append(cmd)
+            else:
+                # No enemy units but we still want to attack (shouldn't happen if decision was made correctly)
+                # Try attacking base instead
+                enemy_base_id = self._get_enemy_base_id()
+                if enemy_base_id is not None:
+                    for attacker_id, _ in attack_force:
+                        cmd = self._create_attack_command(attacker_id, enemy_base_id)
+                        commands.append(cmd)
         
         return commands
+
+    def enemy_attackers_range(self):
+        """Get enemy attacker unit ID range"""
+        if self.enemy_id == 1:
+            return range(1000, 3000)
+        else:
+            return range(6000, 8000)
+
+    def enemy_collectors_range(self):
+        """Get enemy collector unit ID range"""
+        if self.enemy_id == 1:
+            return range(3000, 5000)
+        else:
+            return range(8000, 10000)
 
     def _find_nearest_mining_location(self, x: float, y: float) -> Tuple[float, float]:
         """
