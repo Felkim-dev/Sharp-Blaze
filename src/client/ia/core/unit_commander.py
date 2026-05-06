@@ -80,7 +80,6 @@ class UnitCommander:
         
         # Track recently issued orders (prevent duplicates)
         self.last_commands = {}
-        self.collector_states = {}
         
         # ====================================
         # NEW: Shop & Attack Decision Managers
@@ -277,23 +276,20 @@ class UnitCommander:
             nearest_mine = self._find_nearest_mining_location(unit.x, unit.y)
             dist_to_mine = math.sqrt((unit.x - nearest_mine[0])**2 + (unit.y - nearest_mine[1])**2) if nearest_mine else float('inf')
 
-            if unit_id not in self.collector_states:
-                self.collector_states[unit_id] = "to_mine"
-
-            if self.collector_states[unit_id] == "to_mine":
-                if dist_to_mine <= self.mine_arrival_threshold:
-                    self.collector_states[unit_id] = "to_base"
-            elif self.collector_states[unit_id] == "to_base":
-                if dist_to_base <= self.base_arrival_threshold:
-                    self.collector_states[unit_id] = "to_mine"
-
-            if self.collector_states[unit_id] == "to_base":
+            if dist_to_mine <= self.mine_arrival_threshold:
+                # Collector arrived near mine → send it back to base to deposit
                 cmd = self._create_move_command(unit_id, base_x, base_y)
-                if cmd: commands.append(cmd)
-            else:
+                commands.append(cmd)
+            elif dist_to_base <= self.base_arrival_threshold:
+                # Collector arrived at base (deposited) → send it to mine again
                 if nearest_mine:
                     cmd = self._create_move_command(unit_id, nearest_mine[0], nearest_mine[1])
-                    if cmd: commands.append(cmd)
+                    commands.append(cmd)
+            else:
+                # In transit → keep going to the nearest mine
+                if nearest_mine:
+                    cmd = self._create_move_command(unit_id, nearest_mine[0], nearest_mine[1])
+                    commands.append(cmd)
         
         # ====================================
         # Move attackers (depends on priority)
@@ -306,7 +302,7 @@ class UnitCommander:
             enemy_base = (300, 4700) if self.enemy_id == 1 else (4700, 300)
             for unit_id, unit in attack_force:
                 cmd = self._create_move_command(unit_id, enemy_base[0], enemy_base[1])
-                if cmd: commands.append(cmd)
+                commands.append(cmd)
         
         elif priority == "defend":
             # Keep near own base
@@ -318,7 +314,7 @@ class UnitCommander:
                 target_x = max(0, min(5000, base_x + offset_x))
                 target_y = max(0, min(5000, base_y + offset_y))
                 cmd = self._create_move_command(unit_id, target_x, target_y)
-                if cmd: commands.append(cmd)
+                commands.append(cmd)
         
         else:  # "expand" - focus on collectors, keep attackers mobile
             # Spread attackers around for scouting
@@ -326,7 +322,7 @@ class UnitCommander:
             for i, (unit_id, unit) in enumerate(scout_force):
                 scout_location = self.mining_locations[i % len(self.mining_locations)]
                 cmd = self._create_move_command(unit_id, scout_location[0], scout_location[1])
-                if cmd: commands.append(cmd)
+                commands.append(cmd)
         
         return commands
 
@@ -418,7 +414,7 @@ class UnitCommander:
                     # Check if unit is within base attack range (1000px)
                     # If not, still send order (server will handle out-of-range)
                     cmd = self._create_attack_command(attacker_id, enemy_base_id)
-                    if cmd: commands.append(cmd)
+                    commands.append(cmd)
             else:
                 print("[UnitCmd] Enemy base not found!")
         
@@ -445,7 +441,7 @@ class UnitCommander:
                     # Rotate through target list if more attackers than targets
                     target = target_list[i % len(target_list)]
                     cmd = self._create_attack_command(attacker_id, target[0])
-                    if cmd: commands.append(cmd)
+                    commands.append(cmd)
             else:
                 # No enemy units but we still want to attack (shouldn't happen if decision was made correctly)
                 # Try attacking base instead
@@ -453,7 +449,7 @@ class UnitCommander:
                 if enemy_base_id is not None:
                     for attacker_id, _ in attack_force:
                         cmd = self._create_attack_command(attacker_id, enemy_base_id)
-                        if cmd: commands.append(cmd)
+                        commands.append(cmd)
         
         return commands
 
@@ -514,12 +510,6 @@ class UnitCommander:
         grid_x = max(0, min(99, grid_x))
         grid_y = max(0, min(99, grid_y))
 
-        order_key = f"action_{unit_id}"
-        action_tuple = ("move", grid_x, grid_y)
-        if self.last_commands.get(order_key) == action_tuple:
-            return None
-        self.last_commands[order_key] = action_tuple
-
         # Use JSON_Manager to generate proper TCP command with grid indices
         command = JSON_Manager.get_moveorder(unit_id, grid_x, grid_y)
         return command
@@ -538,12 +528,6 @@ class UnitCommander:
             Command dict (TCP protocol format)
             Format: {"type": "ATTACK", "payload": {"attacker_id": ..., "target_id": ...}}
         """
-        order_key = f"action_{attacker_id}"
-        action_tuple = ("attack", target_id)
-        if self.last_commands.get(order_key) == action_tuple:
-            return None
-        self.last_commands[order_key] = action_tuple
-
         # Use JSON_Manager to generate proper TCP command
         command = JSON_Manager.attack(target_id, attacker_id)
         return command

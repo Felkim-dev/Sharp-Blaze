@@ -297,7 +297,7 @@ class GameScreen:
                 print(data)
 
                 if data.get("type") == "SHOP_AUTORIZATION":
-                    self.shop_autorization = ["payload"]["authorized"]
+                    self.shop_autorization = data["payload"]["authorized"]
 
                 elif data.get("type") == "BUY_UNIT_RESULT":
                     if data["status"] == "accepted":

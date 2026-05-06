@@ -23,10 +23,10 @@ class BotGameScreen:
             self.player_gold = payload.get("gold", self.player_gold)
             
         elif msg_type == "BUY_UNIT_RESULT" and data.get("status") == "accepted":
-            self.player_gold = payload.get("payload", {}).get("new_balance", self.player_gold)
-            unit_id = payload.get("payload", {}).get("unit_id")
-            spawn_x = payload.get("payload", {}).get("spawn_x", 0)
-            spawn_y = payload.get("payload", {}).get("spawn_y", 0)
+            self.player_gold = payload.get("new_balance", self.player_gold)
+            unit_id = payload.get("unit_id")
+            spawn_x = payload.get("spawn_x", 0)
+            spawn_y = payload.get("spawn_y", 0)
             if unit_id is not None:
                 bot_game_world.add_unit(unit_id, spawn_x, spawn_y)
             
@@ -36,6 +36,7 @@ class BotGameScreen:
                 bot_game_world.add_unit(unit_id, 0, 0) # Position will be corrected by UDP
             
         elif msg_type == "ENTITY_DESTROYED":
-            target_id = payload.get("target_entity_id")
+            # Some server versions send "entity_id", others might send "target_entity_id"
+            target_id = payload.get("entity_id", payload.get("target_entity_id"))
             if target_id is not None:
                 bot_game_world.remove_entity(target_id)
