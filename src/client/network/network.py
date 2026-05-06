@@ -67,7 +67,7 @@ class NetworkManager:
         print(f"Connecting to UDP server: {self.server_ip}:{self.udp_port_server}")
 
         try:
-            self.client_udp.sendto(welcome_message,(self.server_ip,self.udp_port_server))
+            self.client_udp.sendto(self._udp_hello_msg, self._udp_hello_target)
             
             # Store session and player IDs for keep-alive
             self.udp_session_id = session_id
@@ -105,7 +105,7 @@ class NetworkManager:
                         checksum ^= b
                     
                     welcome_message = header + struct.pack("!I", checksum)
-                    self.client_udp.sendto(welcome_message, (self.server_ip, self.udp_port_server))
+                    self.client_udp.sendto(self._udp_hello_msg, self._udp_hello_target)
                     print("[UDP Keep-Alive] Resending UDP_HELLO to server")
                 
                 time.sleep(1)  # Reenviar cada 1 segundo
