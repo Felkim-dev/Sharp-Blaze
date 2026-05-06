@@ -348,14 +348,6 @@ void GlobalUDPDispatcher::loopEmision() {
                         0,
                         reinterpret_cast<const sockaddr*>(&endpoint.addr),
                         sizeof(endpoint.addr));
-                    if (sentBytes != 12)
-                    {
-                        std::cout << "se envio algo pero no mide 12" << std::endl;
-                    }
-                    if (sentBytes == 12)
-                    {
-                        std::cout << "Si envio algo" << std::endl;
-                    }
                     if (sentBytes < 0)
                     {
                         const int err = net::GetLastError();

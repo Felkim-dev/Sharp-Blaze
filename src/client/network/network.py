@@ -27,6 +27,7 @@ class NetworkManager:
 
         # ------------------- UDP INITIAL STATES -------------------
         self.client_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.client_udp.settimeout(1.0)  # Timeout to allow clean thread shutdown
         self.client_udp.bind(("0.0.0.0",Config.UDP_PORT_CLIENT))
         self.udp_port_server = None
         self.server_ip = None
@@ -58,7 +59,9 @@ class NetworkManager:
         for b in header:
             checksum ^= b
 
-        welcome_message = header + struct.pack("!I", checksum)
+        self._udp_hello_msg = header + struct.pack("!I", checksum)
+        self._udp_hello_target = (self.server_ip, self.udp_port_server)
+        self._udp_hello_confirmed = False
 
         print(f"Session_id {local_session_id}, player_id {local_player_id}, checksum {checksum}")
         print(f"Connecting to UDP server: {self.server_ip}:{self.udp_port_server}")
@@ -113,16 +116,25 @@ class NetworkManager:
 
     def _udp_listen_loop(self):
         """Bucle infinito del hilo secundario. Desempaqueta y guarda."""
+        last_hello_time = time.time()
+        hello_retry_interval = 2.0  # Retry Hello every 2 seconds until confirmed
+
         while self.is_udp_listening:
             try:
                 # Este hilo se quedará esperando aquí hasta que llegue un paquete
+                # Socket has a 1-second timeout so we periodically check is_udp_listening
                 raw_data, origin_directions = self.client_udp.recvfrom(1024)
 
                 # Asumiendo tu paquete de 12 bytes (<iff)
                 if len(raw_data) == 12:
                     entity_id, indx_x, indx_y = struct.unpack("<iff", raw_data)
-                    # Guardamos las coordenadas limpias en el buzón
 
+                    # First position received = Hello was successful
+                    if not self._udp_hello_confirmed:
+                        self._udp_hello_confirmed = True
+                        print("[UDP] Hello confirmed! Receiving positions.")
+
+                    # Guardamos las coordenadas limpias en el buzón
                     x,y =self.grid_to_world(indx_x,indx_y)
 
                     if entity_id not in self.latest_positions:
@@ -131,11 +143,24 @@ class NetworkManager:
                     # Agregamos la nueva coordenada al final de su lista
                     self.latest_positions[entity_id].append((x, y))
 
+            except socket.timeout:
+                # Retry Hello if we haven't received any position data yet
+                if not self._udp_hello_confirmed and hasattr(self, '_udp_hello_msg'):
+                    now = time.time()
+                    if now - last_hello_time >= hello_retry_interval:
+                        try:
+                            self.client_udp.sendto(self._udp_hello_msg, self._udp_hello_target)
+                            last_hello_time = now
+                            print(f"[UDP] Retrying Hello (no positions received yet)")
+                        except Exception as e:
+                            print(f"[UDP] Hello retry failed: {e}")
+                continue
             except OSError:
                 # Ocurre si cerramos el socket al desconectar
                 break
             except Exception as e:
                 print(f"[ERROR UDP Thread] {e}")
+        print("[UDP] Listener thread exited cleanly.")
 
     def grid_to_world(self, grid_x, grid_y):
         """Convert the indexes the grid to world."""
@@ -302,6 +327,7 @@ class NetworkManager:
         return None
 
     def disconnect(self):
+        # 1. Signal the UDP thread to stop
         self.is_udp_listening = False
         self.is_udp_keep_alive_running = False
         self.udp_session_id = None
@@ -314,6 +340,7 @@ class NetworkManager:
                 print(f"Error cerrando el socket UDP: {e}")
 
         self.client_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.client_udp.settimeout(1.0)  # Timeout for clean thread shutdown
         try:
             self.client_udp.bind(("0.0.0.0", Config.UDP_PORT_CLIENT))
         except Exception as e:
