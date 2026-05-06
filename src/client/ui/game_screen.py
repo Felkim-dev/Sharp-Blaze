@@ -8,6 +8,7 @@ from ui.telemetry import TelemetryPanel
 from ui.component import InfoBox, TextBox, Button
 from entities.projectile import RectangularProjectile
 from ui.shop import Shop
+from ui.pause_overlay import PauseOverlay
 
 from utils.json import JSON_Manager
 from utils.config import Config
@@ -83,6 +84,8 @@ class GameScreen:
         # GAME STATE
         self.is_game_over = False
         self.winner_player_id = None
+        self.is_paused = False
+        self.pause_overlay = None
         # Center the game-over UI relative to screen dimensions
         go_box_w, go_box_h = int(800 * sx), int(200 * sy)
         go_box_x = (screen_w - go_box_w) // 2
@@ -107,6 +110,8 @@ class GameScreen:
         self.winner_player_id = None
         self.is_shop_open = False
         self.is_dragging = False
+        self.is_paused = False
+        self.pause_overlay = None
         
         # Reset camera
         self.camera.x = 0
@@ -166,6 +171,23 @@ class GameScreen:
         """Processes one-time events like mouse clicks."""
         for event in events:
 
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                if self.is_game_over:
+                    pass
+                elif self.pause_overlay and self.pause_overlay.state == "SURRENDER_CONFIRM":
+                    self.pause_overlay.state = "MAIN"
+                elif self.is_paused:
+                    self.is_paused = False
+                    if self.pause_overlay:
+                        self.pause_overlay.state = None
+                else:
+                    self.is_paused = True
+                    if self.pause_overlay is None:
+                        self.pause_overlay = PauseOverlay(self.screen, self.screen_manager, AudioManager())
+                    else:
+                        self.pause_overlay.state = "MAIN"
+                    AudioManager().play_click()
+
             if self.is_game_over:
                 # Si el juego terminó, SOLO escuchamos clics izquierdos para el botón
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -179,6 +201,17 @@ class GameScreen:
                         self.is_game_over = False
                         self.winner_player_id = None
                         self.screen_manager.change_screen("MAIN")
+                continue
+
+            if self.is_paused and self.pause_overlay:
+                action = self.pause_overlay.handle_events([event])
+                if action == "close":
+                    self.is_paused = False
+                    self.pause_overlay.state = None
+                elif action == "surrender_confirm":
+                    print("[PAUSE] Surrender confirmed — would end game in Phase 2")
+                    self.is_paused = False
+                    self.pause_overlay.state = None
                 continue
 
             # Detect Mouse Button Press
@@ -489,3 +522,6 @@ class GameScreen:
         if self.is_game_over:
             self.winner_box.draw(self.screen)
             self.game_over_button.draw(self.screen)
+
+        if self.is_paused and self.pause_overlay:
+            self.pause_overlay.draw(self.screen)
