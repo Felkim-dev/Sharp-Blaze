@@ -1,5 +1,4 @@
 import pygame
-import string
 
 from ui.component import Button, InputBox, Text,CloseButton,TextBox
 
@@ -63,15 +62,11 @@ class JoinScreen:
         )
 
         # INPUT BOX
-        # List of Prohibited Simbols
-        prohibited_simbols = string.punctuation
-        prohibited_simbols += " "
         # INPUT BOX CREATION
         self.inputbox_nickname = InputBox(
             (center_x_input, init_y),
             INPUT_WH,
             "ENTER USERNAME (>3 CHARACTERS)",
-            NotAllowedChars=prohibited_simbols,
         )
 
         # ID CREATION
@@ -150,12 +145,16 @@ class JoinScreen:
                         < self.inputbox_nickname.max_length
                     ):
 
-                        # Comprobation to avoid special characters
-                        if (
-                            not char in self.inputbox_nickname.notallowed_chars
-                            or self.inputbox_nickname.notallowed_chars is None
-                        ):
+                        # Comprobation to avoid special characters (alphanumeric only)
+                        if char.isalnum():
                             self.inputbox_nickname.user_input += char
+
+                # Enter key handling: trigger JOIN action
+                if event.key == pygame.K_RETURN and len(self.inputbox_nickname.user_input) > 3:
+                    if not Config.OFFLINE_DEBUG_MODE:
+                        if self.screen_manager.network.connection_status != "CONNECTING":
+                            AudioManager().play_click()
+                            self.screen_manager.network.connect_to_broker(self.inputbox_nickname.user_input)
 
             elif event.type == pygame.MOUSEMOTION and len(self.inputbox_nickname.user_input) > 3:
 

@@ -68,7 +68,7 @@ class PauseOverlay:
             (btn_w, btn_h),
             (0, 159, 12),
             "RESUME",
-            (255, 255, 255),
+            (0, 0, 0),
             int(24 * sy),
         )
 
