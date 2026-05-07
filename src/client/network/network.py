@@ -276,6 +276,7 @@ class NetworkManager:
                     player_id,
                     match_payload.get("session_id"),
                     match_payload.get("token"),
+                    match_payload.get("global_player_id"),
                 ),
                 False,
             ),

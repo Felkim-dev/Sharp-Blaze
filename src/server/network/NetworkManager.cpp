@@ -384,7 +384,12 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         g_players[clientSocket].sessionId = parsed.initialConnect.sessionId;
 
                         int internalPlayerId = g_players[clientSocket].internalPlayerId;
-                        if (internalPlayerId == 0)
+                        if (parsed.initialConnect.internalPlayerId > 0)
+                        {
+                            internalPlayerId = parsed.initialConnect.internalPlayerId;
+                            g_players[clientSocket].internalPlayerId = internalPlayerId;
+                        }
+                        else if (internalPlayerId == 0)
                         {
                             int playersInSession = 0;
                             for (const auto& playerEntry : g_players)
