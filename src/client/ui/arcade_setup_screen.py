@@ -121,7 +121,7 @@ class ArcadeSetupScreen:
                         if self._check_docker_available():
                             from ia.infra.arcade_match_controller import ArcadeMatchController
                             controller = ArcadeMatchController(
-                                "MEDIUM",
+                                "HARD",
                                 self.screen_manager.network,
                                 self.screen_manager,
                             )
@@ -156,7 +156,7 @@ class ArcadeSetupScreen:
                     if self._check_docker_available():
                         from ia.infra.arcade_match_controller import ArcadeMatchController
                         controller = ArcadeMatchController(
-                            "MEDIUM",
+                            "HARD",
                             self.screen_manager.network,
                             self.screen_manager,
                         )
