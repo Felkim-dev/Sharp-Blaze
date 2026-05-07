@@ -54,10 +54,12 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
                 {
                     std::this_thread::sleep_for(std::chrono::milliseconds(kTickMs) - elapsed);
                 }
-                continue;
-            }
+            continue;
+        }
 
-            engine->commandQueueProcess();
+        bool shouldStop = false;
+
+        engine->commandQueueProcess();
             engine->advanceMovement(kTickMs);
             engine->advanceCollectors(kTickMs);
             engine->advanceCombat(kTickMs);
@@ -128,6 +130,94 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
                 }
             }
 
+            // Arcade mode timer check (5-minute time limit)
+            {
+                auto timerSession = engine->getSession();
+                if (timerSession && timerSession->isArcadeMode() && !timerSession->isSuddenDeath())
+                {
+                    const auto now = std::chrono::steady_clock::now();
+                    const auto elapsedSecs = std::chrono::duration_cast<std::chrono::seconds>(
+                        now - timerSession->getGameStartTime()).count();
+
+                    if (elapsedSecs >= timerSession->getGameDurationSeconds())
+                    {
+                        const int p1Gold = timerSession->getPlayerGold(p1InternalPlayerId);
+                        const int p2Gold = timerSession->getPlayerGold(p2InternalPlayerId);
+
+                        if (p1Gold > p2Gold)
+                        {
+                            timerSession->setGameOver(p1InternalPlayerId);
+                            if (matchEventCallback)
+                            {
+                                const std::string gameOverMsg = client_protocol::BuildGameOverWithReasonResponse(
+                                    std::to_string(timerSession->getSessionId()),
+                                    p1InternalPlayerId,
+                                    "time_limit");
+                                matchEventCallback(p1Socket, gameOverMsg);
+                                if (p2Socket != p1Socket)
+                                    matchEventCallback(p2Socket, gameOverMsg);
+                            }
+                            shouldStop = true;
+                        }
+                        else if (p2Gold > p1Gold)
+                        {
+                            timerSession->setGameOver(p2InternalPlayerId);
+                            if (matchEventCallback)
+                            {
+                                const std::string gameOverMsg = client_protocol::BuildGameOverWithReasonResponse(
+                                    std::to_string(timerSession->getSessionId()),
+                                    p2InternalPlayerId,
+                                    "time_limit");
+                                matchEventCallback(p1Socket, gameOverMsg);
+                                if (p2Socket != p1Socket)
+                                    matchEventCallback(p2Socket, gameOverMsg);
+                            }
+                            shouldStop = true;
+                        }
+                        else
+                        {
+                            timerSession->setSuddenDeath(true);
+                            if (matchEventCallback)
+                            {
+                                const std::string suddenDeathMsg =
+                                    "{\"type\":\"SUDDEN_DEATH\",\"payload\":{}}\n";
+                                matchEventCallback(p1Socket, suddenDeathMsg);
+                                if (p2Socket != p1Socket)
+                                    matchEventCallback(p2Socket, suddenDeathMsg);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Arcade mode TIMER_UPDATE broadcast (every ~1 second)
+            {
+                auto timerSession = engine->getSession();
+                int dummyWinner = 0;
+                if (timerSession && timerSession->isArcadeMode() &&
+                    !timerSession->isSuddenDeath() && !timerSession->isGameOver(dummyWinner))
+                {
+                    const auto now = std::chrono::steady_clock::now();
+                    const auto sinceLastUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        now - timerSession->getLastTimerUpdateTime()).count();
+
+                    if (sinceLastUpdate >= 1000 && matchEventCallback)
+                    {
+                        const int elapsedSecs = static_cast<int>(
+                            std::chrono::duration_cast<std::chrono::seconds>(
+                                now - timerSession->getGameStartTime()).count());
+                        int remaining = timerSession->getGameDurationSeconds() - elapsedSecs;
+                        if (remaining < 0) remaining = 0;
+
+                        const std::string timerMsg = client_protocol::BuildTimerUpdate(remaining);
+                        matchEventCallback(p1Socket, timerMsg);
+                        if (p2Socket != p1Socket)
+                            matchEventCallback(p2Socket, timerMsg);
+                        timerSession->setLastTimerUpdateTime(now);
+                    }
+                }
+            }
+
             const auto attackResults = engine->drainAttackResults();
             for (const auto& result : attackResults)
             {
@@ -193,7 +283,6 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
                 }
             }
 
-            bool shouldStop = false;
             const auto combatEvents = engine->drainCombatEvents();
             for (const auto& event : combatEvents)
             {

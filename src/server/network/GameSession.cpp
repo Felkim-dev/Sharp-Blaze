@@ -1317,6 +1317,42 @@ void GameSession::setLastAutoSpawnTime(std::chrono::steady_clock::time_point t)
 	lastAutoSpawnTime = t;
 }
 
+std::chrono::steady_clock::time_point GameSession::getGameStartTime() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return gameStartTime;
+}
+
+int GameSession::getGameDurationSeconds() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return gameDurationSeconds;
+}
+
+bool GameSession::isSuddenDeath() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return suddenDeath;
+}
+
+void GameSession::setSuddenDeath(bool value)
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	suddenDeath = value;
+}
+
+std::chrono::steady_clock::time_point GameSession::getLastTimerUpdateTime() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return lastTimerUpdateTime;
+}
+
+void GameSession::setLastTimerUpdateTime(std::chrono::steady_clock::time_point t)
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	lastTimerUpdateTime = t;
+}
+
 int GameSession::getArcadeBombHp() const
 {
 	std::lock_guard<std::mutex> lock(sessionMutex);
@@ -1450,6 +1486,11 @@ void GameSession::initializeGameState()
         nextP2AttackerId = 6000 + arcadeInitialAttackers;
 
         lastAutoSpawnTime = std::chrono::steady_clock::now();
+
+        gameStartTime = lastAutoSpawnTime;
+        gameDurationSeconds = arcadeGameDurationSeconds;
+        suddenDeath = false;
+        lastTimerUpdateTime = gameStartTime;
 
         return;
 	}

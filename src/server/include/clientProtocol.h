@@ -127,6 +127,7 @@ namespace client_protocol
         int attackerPlayerId);
     std::string BuildGameOverResponse(int sessionId, int playerId);
     std::string BuildPauseBroadcast(int pausedByPlayerId);
+    std::string BuildTimerUpdate(int remainingSeconds);
     std::string BuildGameOverWithReasonResponse(
         const std::string& sessionId, int winnerPlayerId, const std::string& reason);
     bool MessageFramer(

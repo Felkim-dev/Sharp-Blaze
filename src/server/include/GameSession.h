@@ -65,6 +65,12 @@ class GameSession
 
         std::chrono::steady_clock::time_point lastAutoSpawnTime;
 
+        // Arcade mode game timer
+        std::chrono::steady_clock::time_point gameStartTime;
+        std::chrono::steady_clock::time_point lastTimerUpdateTime;
+        int gameDurationSeconds = 300;
+        bool suddenDeath = false;
+
         int winnerPlayerId = 0;
         int nextP1AttackerId = games_types::id_ranges::p1Attackers.minId;
         int nextP1CollectorId = games_types::id_ranges::p1Collectors.minId;
@@ -151,6 +157,13 @@ class GameSession
         std::chrono::steady_clock::time_point getLastAutoSpawnTime() const;
         void setLastAutoSpawnTime(std::chrono::steady_clock::time_point t);
         void setGameOver(int winnerId);
+
+        std::chrono::steady_clock::time_point getGameStartTime() const;
+        int getGameDurationSeconds() const;
+        bool isSuddenDeath() const;
+        void setSuddenDeath(bool value);
+        std::chrono::steady_clock::time_point getLastTimerUpdateTime() const;
+        void setLastTimerUpdateTime(std::chrono::steady_clock::time_point t);
 
         void clearRecentlyDestroyedUnits();
         void initializeGameState();

@@ -376,6 +376,14 @@ std::string client_protocol::BuildPauseBroadcast(int pausedByPlayerId)
     return message.dump() + '\n';
 }
 
+std::string client_protocol::BuildTimerUpdate(int remainingSeconds)
+{
+    json message;
+    message["type"] = "TIMER_UPDATE";
+    message["payload"]["remaining_seconds"] = remainingSeconds;
+    return message.dump() + '\n';
+}
+
 std::string client_protocol::BuildGameOverWithReasonResponse(
     const std::string& sessionId, int winnerPlayerId, const std::string& reason)
 {
