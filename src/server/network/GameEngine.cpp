@@ -73,7 +73,8 @@ namespace
     bool isPurchasableTroop(games_types::EntityType unitType)
     {
         return unitType == games_types::EntityType::Attacker ||
-               unitType == games_types::EntityType::Collector;
+               unitType == games_types::EntityType::Collector ||
+               unitType == games_types::EntityType::Bomb;
     }
 
     bool findShopAuthorizationState(const std::vector<games_types::UnitPosition>& units,
@@ -109,14 +110,16 @@ namespace
     {
         if (games_types::id_ranges::p1Structures.contains(entityId) ||
             games_types::id_ranges::p1Attackers.contains(entityId) ||
-            games_types::id_ranges::p1Collectors.contains(entityId))
+            games_types::id_ranges::p1Collectors.contains(entityId) ||
+            games_types::id_ranges::p1Bombs.contains(entityId))
         {
             return 1;
         }
 
         if (games_types::id_ranges::p2Structures.contains(entityId) ||
             games_types::id_ranges::p2Attackers.contains(entityId) ||
-            games_types::id_ranges::p2Collectors.contains(entityId))
+            games_types::id_ranges::p2Collectors.contains(entityId) ||
+            games_types::id_ranges::p2Bombs.contains(entityId))
         {
             return 2;
         }
@@ -622,7 +625,8 @@ void GameEngine::advanceMovement(int deltaMs)
     }
 
     std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
-    if (units.empty())
+    const bool hasBombs = session->isArcadeMode() && !session->getBombsSnapshot().empty();
+    if (units.empty() && !hasBombs)
     {
         return;
     }
@@ -726,6 +730,90 @@ void GameEngine::advanceMovement(int deltaMs)
         if (routeIt != movementRoutes.end() && !routeIt->second.empty())
         {
             repathUnit(unitId, routeIt->second.back());
+        }
+    }
+
+    if (session->isArcadeMode())
+    {
+        std::vector<games_types::UnitPosition> bombs = session->getBombsSnapshot();
+        for (const auto& bomb : bombs)
+        {
+            const int ownerId = ownerFromEntityId(bomb.entity_id);
+            games_types::UnitPosition enemyBase{};
+            if (ownerId == 1)
+            {
+                for (const auto& s : structures)
+                {
+                    if (s.entity_id == 5000)
+                    {
+                        enemyBase = s;
+                        break;
+                    }
+                }
+            }
+            else if (ownerId == 2)
+            {
+                for (const auto& s : structures)
+                {
+                    if (s.entity_id == 0)
+                    {
+                        enemyBase = s;
+                        break;
+                    }
+                }
+            }
+
+            auto routeIt = movementRoutes.find(bomb.entity_id);
+            if (routeIt == movementRoutes.end() || routeIt->second.empty())
+            {
+                if (enemyBase.entity_id != 0)
+                {
+                    repathUnit(bomb.entity_id, worldToCell(enemyBase.x, enemyBase.y));
+                }
+                continue;
+            }
+
+            if (movementCooldownRemainingMs.count(bomb.entity_id) > 0)
+            {
+                continue;
+            }
+
+            auto& route = routeIt->second;
+            const games_types::CellCoord currentCell = worldToCell(bomb.x, bomb.y);
+            while (!route.empty() && route.front() == currentCell)
+            {
+                route.pop_front();
+            }
+
+            if (route.empty())
+            {
+                movementRoutes.erase(routeIt);
+                continue;
+            }
+
+            games_types::CellCoord nextCell = route.front();
+            if (!movementGrid.inBounds(nextCell) || movementGrid.isStaticBlocked(nextCell))
+            {
+                if (enemyBase.entity_id != 0)
+                {
+                    repathUnit(bomb.entity_id, worldToCell(enemyBase.x, enemyBase.y));
+                }
+                continue;
+            }
+
+            const auto [worldX, worldY] = cellCenterToWorld(nextCell);
+            session->upsertBombPosition(bomb.entity_id, worldX, worldY);
+            movementCooldownRemainingMs[bomb.entity_id] = 83;
+            route.pop_front();
+
+            if (enemyBase.entity_id != 0)
+            {
+                const float explosionRadius = static_cast<float>(session->getArcadeExplosionRadius());
+                if (circlesIntersect(worldX, worldY, 25.0f, enemyBase.x, enemyBase.y, explosionRadius))
+                {
+                    session->setGameOver(ownerId);
+                }
+            }
         }
     }
 }
@@ -960,7 +1048,8 @@ GameEngine::PurchaseResult GameEngine::processUnitPurchase(
         return result;
     }
 
-    if (!hasShopAuthorization(playerId))
+    const bool isBombInArcade = (unitType == games_types::EntityType::Bomb && session->isArcadeMode());
+    if (!isBombInArcade && !hasShopAuthorization(playerId))
     {
         result.reason = "shop_not_authorized";
         return result;
@@ -991,26 +1080,34 @@ GameEngine::PurchaseResult GameEngine::processUnitPurchase(
     // const float spawnX = 75.0;
     // const float spawnY = 75.0;
 
-    session->upsertUnitPosition(unitId, spawnX, spawnY);
-    session->registerSpawnedUnit(unitId, playerId, unitType);
-    if (unitType == games_types::EntityType::Collector)
+    if (isBombInArcade)
     {
-        games_types::CollectorUnit collector{};
-        collector.entityId = unitId;
-        collector.ownerPlayerId = playerId;
-        collector.state = games_types::CollectorState::Idle;
-        collector.x = spawnX;
-        collector.y = spawnY;
-        collector.targetResourceId = -1;
-        collector.carriedAmount = 0;
-        collector.carryCapacity = 200;
-        collector.gatherDurationMs = 1000;
-        collector.depositDurationMs = 500;
-        collector.stateTimeRemainingMs = 0;
-        if (!session->upsertCollector(collector))
+        session->upsertBombPosition(unitId, spawnX, spawnY);
+        session->registerSpawnedUnit(unitId, playerId, games_types::EntityType::Bomb);
+    }
+    else
+    {
+        session->upsertUnitPosition(unitId, spawnX, spawnY);
+        session->registerSpawnedUnit(unitId, playerId, unitType);
+        if (unitType == games_types::EntityType::Collector)
         {
-            result.reason = "collector_spawn_failed";
-            return result;
+            games_types::CollectorUnit collector{};
+            collector.entityId = unitId;
+            collector.ownerPlayerId = playerId;
+            collector.state = games_types::CollectorState::Idle;
+            collector.x = spawnX;
+            collector.y = spawnY;
+            collector.targetResourceId = -1;
+            collector.carriedAmount = 0;
+            collector.carryCapacity = 200;
+            collector.gatherDurationMs = 1000;
+            collector.depositDurationMs = 500;
+            collector.stateTimeRemainingMs = 0;
+            if (!session->upsertCollector(collector))
+            {
+                result.reason = "collector_spawn_failed";
+                return result;
+            }
         }
     }
 
@@ -1030,7 +1127,24 @@ bool GameEngine::propertyValidation(int playerId, int unitId) const
         return false;
     }
 
-    return games_types::isPlayerControllableUnitId(playerId, unitId);
+    if (games_types::isPlayerControllableUnitId(playerId, unitId))
+    {
+        return true;
+    }
+
+    if (session->isArcadeMode())
+    {
+        if (playerId == 1 && games_types::id_ranges::p1Bombs.contains(unitId))
+        {
+            return true;
+        }
+        if (playerId == 2 && games_types::id_ranges::p2Bombs.contains(unitId))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void GameEngine::setNewRoute(const games_types::PlayerCommand& cmd)
@@ -1044,15 +1158,8 @@ void GameEngine::setNewRouteToCell(const games_types::PlayerCommand& cmd, const 
     {
         return;
     }
-    std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
-    auto unitIt = std::find_if(
-        units.begin(),
-        units.end(),
-        [unitId = cmd.unitId](const games_types::UnitPosition& unit) {
-            return unit.entity_id == unitId;
-        });
-
-    if (unitIt == units.end())
+    games_types::UnitPosition unitPos{};
+    if (!session->getEntityPosition(cmd.unitId, unitPos))
     {
         return;
     }
@@ -1063,9 +1170,9 @@ void GameEngine::setNewRouteToCell(const games_types::PlayerCommand& cmd, const 
     const auto resources = session->getResourcesSnapshot();
     const auto shops = session->getShopsSnapshot();
     const auto obstacles = session->getStaticObstaclesSnapshot();
-    populateStaticPathGrid(pathGrid, structures, resources, shops, obstacles, unitIt->entity_id);
+    populateStaticPathGrid(pathGrid, structures, resources, shops, obstacles, cmd.unitId);
 
-    const games_types::CellCoord startCell = worldToCell(unitIt->x, unitIt->y);
+    const games_types::CellCoord startCell = worldToCell(unitPos.x, unitPos.y);
 
     pathGrid.setStaticBlocked(startCell, false);
 
@@ -1103,14 +1210,14 @@ void GameEngine::setNewRouteToCell(const games_types::PlayerCommand& cmd, const 
         effectiveDestination,
         pathGrid);
 
-    auto& routeState = movementRoutes[unitIt->entity_id];
+    auto& routeState = movementRoutes[cmd.unitId];
     routeState.clear();
 
     if (routeCells.empty())
     {
         if (startCell == destinationCell)
         {
-            movementRoutes.erase(unitIt->entity_id);
+            movementRoutes.erase(cmd.unitId);
         }
         return;
     }
@@ -1124,15 +1231,8 @@ void GameEngine::repathUnit(int unitId, const games_types::CellCoord& destinatio
     {
         return;
     }
-    std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
-    auto unitIt = std::find_if(
-        units.begin(),
-        units.end(),
-        [unitId](const games_types::UnitPosition& unit) {
-            return unit.entity_id == unitId;
-        });
-
-    if (unitIt == units.end())
+    games_types::UnitPosition unitPos{};
+    if (!session->getEntityPosition(unitId, unitPos))
     {
         return;
     }
@@ -1146,6 +1246,7 @@ void GameEngine::repathUnit(int unitId, const games_types::CellCoord& destinatio
     populateStaticPathGrid(pathGrid, structures, resources, shops, obstacles, unitId);
 
     // Treat all other units as temporary static blocks so pathfinder avoids them
+    const std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
     for (const auto& otherUnit : units)
     {
         if (otherUnit.entity_id != unitId)
@@ -1158,7 +1259,7 @@ void GameEngine::repathUnit(int unitId, const games_types::CellCoord& destinatio
         }
     }
 
-    const games_types::CellCoord startCell = worldToCell(unitIt->x, unitIt->y);
+    const games_types::CellCoord startCell = worldToCell(unitPos.x, unitPos.y);
     pathGrid.setStaticBlocked(startCell, false);
 
     games_types::CellCoord effectiveDestination = destinationCell;

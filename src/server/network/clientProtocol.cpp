@@ -15,7 +15,8 @@ namespace
     bool isPurchasableTroopType(games_types::EntityType type)
     {
         return type == games_types::EntityType::Collector ||
-               type == games_types::EntityType::Attacker;
+               type == games_types::EntityType::Attacker ||
+               type == games_types::EntityType::Bomb;
     }
     bool isAttackerTroop(int entityId)
     {
@@ -66,6 +67,11 @@ namespace
         if (typeName == "Shop")
         {
             outType = games_types::EntityType::Shop;
+            return true;
+        }
+        if (typeName == "Bomb")
+        {
+            outType = games_types::EntityType::Bomb;
             return true;
         }
 
@@ -165,7 +171,7 @@ std::string client_protocol::BuildMatchStartResponse(
     constexpr float kCellSize = 50.0f;
     constexpr int kGridMaxIndex = 99;
 
-    auto worldToGrid = [](float value) -> int {
+    auto worldToGrid = [=](float value) -> int {
         int cell = static_cast<int>(value / kCellSize);
         if (cell < 0)
         {

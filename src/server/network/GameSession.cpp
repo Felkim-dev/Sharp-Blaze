@@ -622,6 +622,28 @@ bool GameSession::allocateUnitId(int playerId, games_types::EntityType unitType,
 		}
 	}
 
+	if (unitType == games_types::EntityType::Bomb)
+	{
+		if (playerId == player1)
+		{
+			if (nextP1BombId > games_types::id_ranges::p1Bombs.maxId)
+			{
+				return false;
+			}
+			outUnitId = nextP1BombId++;
+			return true;
+		}
+		if (playerId == player2)
+		{
+			if (nextP2BombId > games_types::id_ranges::p2Bombs.maxId)
+			{
+				return false;
+			}
+			outUnitId = nextP2BombId++;
+			return true;
+		}
+	}
+
 	return false;
 }
 
@@ -700,6 +722,27 @@ bool GameSession::tryPurchaseUnit(
 			candidateId = nextP2CollectorId;
 		}
 	}
+	else if (unitType == games_types::EntityType::Bomb)
+	{
+		if (playerId == player1)
+		{
+			if (nextP1BombId > games_types::id_ranges::p1Bombs.maxId)
+			{
+				outReason = "id_range_exhausted";
+				return false;
+			}
+			candidateId = nextP1BombId;
+		}
+		else
+		{
+			if (nextP2BombId > games_types::id_ranges::p2Bombs.maxId)
+			{
+				outReason = "id_range_exhausted";
+				return false;
+			}
+			candidateId = nextP2BombId;
+		}
+	}
 	else
 	{
 		outReason = "unit_type_not_purchasable";
@@ -726,7 +769,7 @@ bool GameSession::tryPurchaseUnit(
 			++nextP2AttackerId;
 		}
 	}
-	else
+	else if (unitType == games_types::EntityType::Collector)
 	{
 		if (playerId == player1)
 		{
@@ -735,6 +778,17 @@ bool GameSession::tryPurchaseUnit(
 		else
 		{
 			++nextP2CollectorId;
+		}
+	}
+	else if (unitType == games_types::EntityType::Bomb)
+	{
+		if (playerId == player1)
+		{
+			++nextP1BombId;
+		}
+		else
+		{
+			++nextP2BombId;
 		}
 	}
 
@@ -1012,6 +1066,10 @@ bool GameSession::registerSpawnedUnit(int unitId, int ownerPlayerId, games_types
 	{
 		hp = attackerHp;
 	}
+	else if (unitType == games_types::EntityType::Bomb)
+	{
+		hp = arcadeBombHp;
+	}
 	else
 	{
 		return false;
@@ -1036,6 +1094,13 @@ bool GameSession::getEntityPosition(int entityId, UnitPosition& outPosition) con
 	if (structureIt != structures.end())
 	{
 		outPosition = structureIt->second;
+		return true;
+	}
+
+	auto bombIt = bombs.find(entityId);
+	if (bombIt != bombs.end())
+	{
+		outPosition = bombIt->second;
 		return true;
 	}
 
@@ -1101,12 +1166,27 @@ bool GameSession::applyDamageToEntity(int attackerPlayerId,
 	{
 		units.erase(entityId);
 		collectors.erase(entityId);
+		bombs.erase(entityId);
 		recentlyDestroyedUnitIds.insert(entityId);
 		if (!games_types::id_ranges::p1Structures.contains(entityId) &&
 			!games_types::id_ranges::p2Structures.contains(entityId))
 		{
 			entityCurrentHp.erase(entityId);
 			entityMaxHp.erase(entityId);
+		}
+
+		if (games_types::classifyEntityTypeFromId(entityId) == games_types::EntityType::Bomb)
+		{
+			auto goldIt = playerGold.find(attackerPlayerId);
+			if (goldIt != playerGold.end())
+			{
+				goldIt->second += arcadeKillGoldPerBomb;
+				pendingEconomyTransactions.push_back(games_types::EconomyTransaction{
+					attackerPlayerId,
+					arcadeKillGoldPerBomb,
+					goldIt->second,
+					"bomb_destroyed"});
+			}
 		}
 
 		if (games_types::id_ranges::p1Structures.contains(entityId) ||
@@ -1181,6 +1261,62 @@ int GameSession::getMinDamage() const
 {
 	std::lock_guard<std::mutex> lock(sessionMutex);
 	return minDamage;
+}
+
+int GameSession::getArcadeExplosionRadius() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return arcadeExplosionRadius;
+}
+
+int GameSession::getArcadeKillGoldPerBomb() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return arcadeKillGoldPerBomb;
+}
+
+int GameSession::getArcadeBombHp() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return arcadeBombHp;
+}
+
+void GameSession::setGameOver(int winnerId)
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	if (!gameOver)
+	{
+		gameOver = true;
+		winnerPlayerId = winnerId;
+	}
+}
+
+void GameSession::upsertBombPosition(int id, float x, float y)
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	auto it = bombs.find(id);
+	if (it != bombs.end())
+	{
+		it->second.x = x;
+		it->second.y = y;
+		return;
+	}
+	bombs[id] = UnitPosition{id, x, y};
+}
+
+std::vector<UnitPosition> GameSession::getBombsSnapshot() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	std::vector<UnitPosition> snapshot;
+	snapshot.reserve(bombs.size());
+	for (const auto& entry : bombs)
+	{
+		if (recentlyDestroyedUnitIds.find(entry.first) == recentlyDestroyedUnitIds.end())
+		{
+			snapshot.push_back(entry.second);
+		}
+	}
+	return snapshot;
 }
 
 void GameSession::initializeGameState()
@@ -1262,11 +1398,16 @@ void GameSession::initializeGameState()
 			staticObstacles[obstacleLine.id] = obstacleLine;
 		}
 
-		// Next attacker IDs
-		nextP1AttackerId = 1000 + arcadeInitialAttackers;
-		nextP2AttackerId = 6000 + arcadeInitialAttackers;
+        nextP1BombId = games_types::id_ranges::p1Bombs.minId;
+        nextP2BombId = games_types::id_ranges::p2Bombs.minId;
+        unitGoldCostByType[games_types::EntityType::Bomb] = arcadeBombCost;
+        bombs.clear();
 
-		return;
+        // Next attacker IDs
+        nextP1AttackerId = 1000 + arcadeInitialAttackers;
+        nextP2AttackerId = 6000 + arcadeInitialAttackers;
+
+        return;
 	}
 
 	//bases de los jugadores

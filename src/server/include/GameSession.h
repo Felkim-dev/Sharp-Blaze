@@ -45,6 +45,10 @@ class GameSession
         bool gameOver = false;
         bool arcadeMode = false;
 
+        std::unordered_map<int, UnitPosition> bombs;
+        int nextP1BombId = games_types::id_ranges::p1Bombs.minId;
+        int nextP2BombId = games_types::id_ranges::p2Bombs.minId;
+
         // Arcade mode config (loaded from arcade_config.json)
         int arcadeStartingGold = 500;
         int arcadeBombCost = 1000;
@@ -87,6 +91,8 @@ class GameSession
         void upsertUnitPosition(int id, float x, float y);
         std::vector<UnitPosition> getUnitsSnapshot() const;
         void setUnitsSnapshot(const std::vector<UnitPosition>& newUnits);
+        void upsertBombPosition(int id, float x, float y);
+        std::vector<UnitPosition> getBombsSnapshot() const;
         std::vector<CollectorUnit> getCollectorsSnapshot() const;
         void setCollectorsSnapshot(const std::vector<CollectorUnit>& newCollectors);
         bool getCollector(int collectorId, CollectorUnit& outCollector) const;
@@ -134,6 +140,11 @@ class GameSession
         int getAttackerRange() const;
         int getAttackerCooldownMs() const;
         int getMinDamage() const;
+
+        int getArcadeExplosionRadius() const;
+        int getArcadeKillGoldPerBomb() const;
+        int getArcadeBombHp() const;
+        void setGameOver(int winnerId);
 
         void clearRecentlyDestroyedUnits();
         void initializeGameState();
