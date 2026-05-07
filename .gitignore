@@ -55,3 +55,11 @@ example.json
 # Testing
 # ==========================================
 test_connection.py
+
+# ==========================================
+# AI Agents & Tools (OpenCode, Sisyphus, etc.)
+# ==========================================
+.sisyphus/
+.opencode/
+.agents/
+AGENTS.md

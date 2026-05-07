@@ -8,9 +8,11 @@ from ui.telemetry import TelemetryPanel
 from ui.component import InfoBox, TextBox, Button
 from entities.projectile import RectangularProjectile
 from ui.shop import Shop
+from ui.pause_overlay import PauseOverlay
 
 from utils.json import JSON_Manager
 from utils.config import Config
+from utils.audio import AudioManager
 
 class GameScreen:
     def __init__(self, screen_manager , screen):
@@ -22,6 +24,11 @@ class GameScreen:
         # MAIN COLOR
         self.MAINDARK = (19, 23, 34)
 
+        # SCALE FACTORS relative to base resolution 1280x720
+        BASE_W, BASE_H = 1280, 720
+        sx = self.screen.get_width() / BASE_W
+        sy = self.screen.get_height() / BASE_H
+
         # WORLD
         self.world = GameWorld(self.screen_manager.network)
 
@@ -30,11 +37,11 @@ class GameScreen:
         screen_h = self.screen.get_height()
         self.camera = Camera(screen_w, screen_h, map_width=5000, map_height=5000)
 
-        # MINIMAP
-        self.minimap = Minimap(screen_w,screen_h,map_width=5000, map_height=5000)
+        # MINIMAP (scaled)
+        self.minimap = Minimap(screen_w, screen_h, map_width=5000, map_height=5000)
 
-        # Instantiate the Telemetry Panel
-        self.telemetry = TelemetryPanel(self.screen.get_width())
+        # Instantiate the Telemetry Panel (scaled)
+        self.telemetry = TelemetryPanel(screen_w, screen_h)
 
         # SHOP
         self.shop = Shop()
@@ -61,9 +68,13 @@ class GameScreen:
         SWORD_PATH = os.path.join(CURRENT_DIR, "..", "assets", "sword.png")
 
         # Instantiate the Text Boxes of Gold, Collectors and Attackers
-        self.infobox_gold = InfoBox((50,650),(175,40),gray,"GOLD",self.player_gold_string,white,15,GOLD_PATH)
-        self.infobox_hat = InfoBox((250,650),(200,40),gray,"COLLECTORS",self.player_recolector_units_string,white,15,HAT_PATH)
-        self.infobox_sword = InfoBox((470,650),(200,40),gray,"ATTACKERS",self.player_attacker_units_string,white,15,SWORD_PATH)
+        # Positions are relative to screen dimensions for resolution scaling
+        info_y = screen_h - int(70 * sy)
+        info_box_h = int(40 * sy)
+        info_text_size = int(15 * sy)
+        self.infobox_gold = InfoBox((int(50 * sx), info_y),(int(175 * sx), info_box_h),gray,"GOLD",self.player_gold_string,white,info_text_size,GOLD_PATH)
+        self.infobox_hat = InfoBox((int(250 * sx), info_y),(int(200 * sx), info_box_h),gray,"COLLECTORS",self.player_recolector_units_string,white,info_text_size,HAT_PATH)
+        self.infobox_sword = InfoBox((int(470 * sx), info_y),(int(200 * sx), info_box_h),gray,"ATTACKERS",self.player_attacker_units_string,white,info_text_size,SWORD_PATH)
 
         # UI Drag State
         self.is_dragging = False
@@ -73,10 +84,50 @@ class GameScreen:
         # GAME STATE
         self.is_game_over = False
         self.winner_player_id = None
-        self.winner_box = TextBox((240,180),(800,200),(0,159, 12),f"SHARP BLAZE\nVICTORY!",(255,255,255),72)
-        self.game_over_button = Button((465,420),(350,70),(112,112,112),"RETURN TO MENU", (255,255,255),36)
+        self.is_paused = False
+        self.pause_initiator = False
+        # Phase 1: visual only, game continues running underneath
+        # Pause overlay created lazily on first ESC press
+        self.pause_overlay = None
+        # Center the game-over UI relative to screen dimensions
+        go_box_w, go_box_h = int(800 * sx), int(200 * sy)
+        go_box_x = (screen_w - go_box_w) // 2
+        go_box_y = (screen_h - go_box_h) // 2 - int(60 * sy)
+        go_text_size = int(72 * sy)
+        self.winner_box = TextBox((go_box_x, go_box_y),(go_box_w, go_box_h),(0,159, 12),f"SHARP BLAZE\nVICTORY!",(255,255,255),go_text_size)
+        go_btn_w, go_btn_h = int(350 * sx), int(70 * sy)
+        go_btn_x = (screen_w - go_btn_w) // 2
+        go_btn_y = go_box_y + go_box_h + int(40 * sy)
+        go_btn_text_size = int(36 * sy)
+        self.game_over_button = Button((go_btn_x, go_btn_y),(go_btn_w, go_btn_h),(112,112,112),"RETURN TO MENU", (255,255,255),go_btn_text_size)
+
+    def reset_state(self):
+        # Clear world objects
+        self.world.units.clear()
+        self.world.structures.clear()
+        self.world.projectiles.clear()
+        self.world.obstacles.clear()
+        
+        # Reset game states
+        self.is_game_over = False
+        self.winner_player_id = None
+        self.is_shop_open = False
+        self.is_dragging = False
+        self.is_paused = False
+        self.pause_initiator = False
+        self.pause_overlay = None
+        
+        # Reset camera
+        self.camera.x = 0
+        self.camera.y = 0
+        
+        # Reset Network variables
+        if hasattr(self.screen_manager.network, 'latest_positions'):
+            self.screen_manager.network.latest_positions.clear()
 
     def load_initial_state(self, gold, units, structures, player_ID, obstacles, local_ID, enemy_ID):
+        
+        self.reset_state()
 
         self.player_gold = gold
         self.infobox_gold.update_text(str(self.player_gold)) 
@@ -87,18 +138,93 @@ class GameScreen:
         
         # TODO:ADD UNIT UI
         self.world.build_initial_state(units,structures,player_ID,obstacles)
+        self.update_unit_counts()
+
+        target_x, target_y = None, None
+        for s_id, structure in self.world.structures.items():
+            if self.world.get_owner_from_id(s_id) == self.player_Id:
+                target_x, target_y = structure.x, structure.y
+                break
+
+        if target_x is None:
+            if self.player_Id == 1:
+                target_x, target_y = 300, 4700
+            else:
+                target_x, target_y = 4700, 300
+
+        self.camera.x = target_x - self.camera.screen_width // 2
+        self.camera.y = target_y - self.camera.screen_height // 2
+        self.camera.x = max(0, min(self.camera.x, self.camera.map_width - self.camera.screen_width))
+        self.camera.y = max(0, min(self.camera.y, self.camera.map_height - self.camera.screen_height))
+
+    def update_unit_counts(self):
+        attackers = 0
+        collectors = 0
+        for u_id, unit in self.world.units.items():
+            if self.world.get_owner_from_id(u_id) == self.player_Id:
+                if unit.__class__.__name__ == "Attacker":
+                    attackers += 1
+                elif unit.__class__.__name__ == "Recolectors":
+                    collectors += 1
+                    
+        self.player_attacker_units = attackers
+        self.player_recolector_units = collectors
+        
+        self.infobox_sword.update_text(str(self.player_attacker_units))
+        self.infobox_hat.update_text(str(self.player_recolector_units))
 
     def trigger_game_over(self, winner_name):
+        AudioManager().resume_music()
+        self.is_paused = False
+        self.pause_initiator = False
+        if self.pause_overlay:
+            self.pause_overlay.state = None
         self.is_game_over = True
         self.winner_player_id = winner_name
 
+        self.screen_manager.network.disconnect()
+
         # ¡Aquí es donde inyectas el nombre real para que se actualice en pantalla!
-        nuevo_texto = f"SHARP BLAZE {self.winner_player_id} VICTORY!"
+        nuevo_texto = f"SHARP BLAZE\n{self.winner_player_id} VICTORY!"
+        self.winner_box.update_text(nuevo_texto)
+        
+    def trigger_disconnect(self):
+        self.is_paused = False
+        self.pause_initiator = False
+        if self.pause_overlay:
+            self.pause_overlay.state = None
+        self.is_game_over = True
+        nuevo_texto = f"GAME\nDISCONNECTED!"
         self.winner_box.update_text(nuevo_texto)
 
     def handle_events(self, events, keys):
         """Processes one-time events like mouse clicks."""
         for event in events:
+
+            # ESC toggle: open the pause menu (close only via RESUME button)
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                if self.is_game_over:
+                    pass  # Game over takes priority over pause
+                elif self.pause_overlay and self.pause_overlay.state == "SURRENDER_CONFIRM":
+                    # ESC during surrender confirmation closes dialog only
+                    self.pause_overlay.state = "MAIN"
+                elif self.pause_overlay and self.pause_overlay.state == "VOLUME":
+                    # ESC during volume submenu returns to main
+                    self.pause_overlay.state = "MAIN"
+                elif not self.is_paused:
+                    # Open the pause menu (send PAUSE to server)
+                    self.is_paused = True
+                    self.pause_initiator = True
+                    if self.pause_overlay is None:
+                        self.pause_overlay = PauseOverlay(self.screen, self.screen_manager, AudioManager())
+                    else:
+                        self.pause_overlay.state = "MAIN"
+                    self.pause_overlay.is_initiator = True
+                    AudioManager().play_click()
+                    AudioManager().stop_music()
+                    if not Config.OFFLINE_DEBUG_MODE:
+                        self.screen_manager.network.send_json(JSON_Manager.get_pause_game(True))
+                # else: ESC is ignored while paused (use RESUME button instead)
 
             if self.is_game_over:
                 # Si el juego terminó, SOLO escuchamos clics izquierdos para el botón
@@ -107,11 +233,33 @@ class GameScreen:
 
                     # Tu lógica exacta de detección:
                     if self.game_over_button.button_rectangle.collidepoint(mouse_pos):
+                        AudioManager().play_click()
                         print("[GAME SCREEN] Return to Menu clicked!")
                         self.screen_manager.network.disconnect()
                         self.is_game_over = False
                         self.winner_player_id = None
                         self.screen_manager.change_screen("MAIN")
+                continue
+
+            # Delegate events to pause overlay (initiator only)
+            if self.is_paused and not self.is_game_over:
+                if self.pause_initiator and self.pause_overlay:
+                    action = self.pause_overlay.handle_events([event])
+                    if action == "resume":
+                        self.is_paused = False
+                        self.pause_initiator = False
+                        self.pause_overlay.state = None
+                        AudioManager().resume_music()
+                        if not Config.OFFLINE_DEBUG_MODE:
+                            self.screen_manager.network.send_json(JSON_Manager.get_pause_game(False))
+                    elif action == "surrender_confirm":
+                        if not Config.OFFLINE_DEBUG_MODE:
+                            self.screen_manager.network.send_json(JSON_Manager.get_surrender())
+                        self.is_paused = False
+                        self.pause_initiator = False
+                        if self.pause_overlay:
+                            self.pause_overlay.state = None
+                # Non-initiator: ignore all input during pause
                 continue
 
             # Detect Mouse Button Press
@@ -127,20 +275,31 @@ class GameScreen:
                     continue
 
                 if self.is_shop_open:
+                    shop_rect = pygame.Rect(self.shop.x, self.shop.y, self.shop.width, self.shop.height)
+                    
+                    if shop_rect.collidepoint(mouse_x, mouse_y):
+                        action = self.shop.handle_click(event, event.pos)
 
-                    action = self.shop.handle_click(event,event.pos)
-
-                    if action == "CLOSE":
+                        if action == "CLOSE":
+                            self.is_shop_open = False
+                            for entity in self.world.structures.values():
+                                if entity.__class__.__name__ == "Shop":
+                                    entity.is_selected = False
+                        elif action == "BUY_COLLECTOR":
+                            print("[GAME] Sending TCP command to buy Collector...")
+                            self.screen_manager.network.send_json(JSON_Manager.get_unit_recolectors())
+                        elif action == "BUY_ATTACKER":
+                            print("[GAME] Sending TCP command to buy Attacker...")
+                            self.screen_manager.network.send_json(JSON_Manager.get_unit_attacker())
+                        
+                        # Consume the click if inside the shop UI, preventing it from selecting world units
+                        continue
+                    else:
+                        # Clicked outside the shop. Close it and deselect the shop structure.
                         self.is_shop_open = False
-                        continue
-                    elif action == "BUY_COLLECTOR":
-                        print("[GAME] Sending TCP command to buy Collector...")
-                        self.screen_manager.network.send_json(JSON_Manager.get_unit_recolectors())
-                        continue
-                    elif action == "BUY_ATTACKER":
-                        print("[GAME] Sending TCP command to buy Attacker...")
-                        self.screen_manager.network.send_json(JSON_Manager.get_unit_attacker())
-                        continue
+                        for entity in self.world.structures.values():
+                            if entity.__class__.__name__ == "Shop":
+                                entity.is_selected = False
 
                 # 2. TRANSLATE: Screen Coordinates -> World Coordinates
                 world_x = mouse_x + self.camera.x
@@ -203,6 +362,8 @@ class GameScreen:
         elif entity_id in self.world.structures:
             del self.world.structures[entity_id]
             print(f"[WORLD] Structure {entity_id} destroyed and removed.")
+            
+        self.update_unit_counts()
 
     def update(self):
 
@@ -210,14 +371,37 @@ class GameScreen:
             return
 
         if not Config.OFFLINE_DEBUG_MODE:
-            data = self.screen_manager.network.receive_json()
-
-            if data:
+            while True:
+                data = self.screen_manager.network.receive_json()
+                if not data:
+                    break
 
                 print(data)
 
-                if data.get("type") == "SHOP_AUTORIZATION":
-                    self.shop_autorization = ["payload"]["authorized"]
+                if data.get("type") == "GAME_PAUSED":
+                    paused_by = data["payload"].get("paused_by", -1)
+                    self.is_paused = True
+                    self.pause_initiator = (paused_by == self.player_Id)
+                    if self.pause_initiator:
+                        if self.pause_overlay is None:
+                            self.pause_overlay = PauseOverlay(self.screen, self.screen_manager, AudioManager())
+                        self.pause_overlay.state = "MAIN"
+                        self.pause_overlay.is_initiator = True
+                    # Discard any UDP positions received just before/during pause
+                    self.screen_manager.network.latest_positions.clear()
+                    AudioManager().stop_music()
+
+                elif data.get("type") == "GAME_RESUMED":
+                    self.is_paused = False
+                    self.pause_initiator = False
+                    if self.pause_overlay:
+                        self.pause_overlay.state = None
+                    # Discard stale UDP positions accumulated during pause
+                    self.screen_manager.network.latest_positions.clear()
+                    AudioManager().resume_music()
+
+                elif data.get("type") == "SHOP_AUTORIZATION":
+                    self.shop_autorization = data["payload"]["authorized"]
 
                 elif data.get("type") == "BUY_UNIT_RESULT":
                     if data["status"] == "accepted":
@@ -227,6 +411,10 @@ class GameScreen:
                         self.new_gold = data["payload"]["new_balance"]
 
                         self.world.spawn_unit(self.new_unit_id,self.new_spawn_x,self.new_spawn_y)
+                        self.update_unit_counts()
+
+                        # Play shop purchase sound on successful buy
+                        AudioManager().play_shop()
 
                         self.player_gold = self.new_gold
                         self.infobox_gold.update_text(str(self.player_gold)) 
@@ -241,6 +429,7 @@ class GameScreen:
                         self.world.units[self.new_unit_id] = self.world.return_entities_object(self.new_unit_id,300, 4700)
 
                     self.world.entity_team_changer(self.new_unit_id)
+                    self.update_unit_counts()
 
                 elif data.get("type") == "RESOURCES":
 
@@ -256,26 +445,31 @@ class GameScreen:
                     self.attacker_entity_id = data["payload"]["attacker_entity_id"]
                     self.target_current_hp = data["payload"]["current_hp"]
 
-                    # Informacion sobre el ATACANTE
-                    self.attacker_entity_id = data["payload"]["attacker_entity_id"]
-
-                    attacker = self.world.get_entity(self.attacker_entity_id)
-                    target = self.world.get_entity(self.target_entity_id)
-
-                    new_bullet = RectangularProjectile(
-                        start_x=attacker.x,
-                        start_y=attacker.y,
-                        target_entity=target,
-                        hp=self.target_current_hp, 
-                    )
-
-                    self.world.projectiles.append(new_bullet)
-
                     if 1000 <= self.target_entity_id <= 4999 or 6000 <= self.target_entity_id <= 9999:
                         self.world.units[self.target_entity_id].reduce_health(self.target_current_hp)
 
                     elif 0 <= self.target_entity_id <= 999 or 5000 <= self.target_entity_id <= 5999:
                         self.world.structures[self.target_entity_id].reduce_health(self.target_current_hp)
+
+                    AudioManager().play_receive_shot()
+
+                elif data.get("type") == "ATTACK_RESULT":
+                    if data.get("status") == "accepted":
+                        self.attacker_entity_id = data["payload"]["attacker_id"]
+                        self.target_entity_id = data["payload"]["target_id"]
+
+                        attacker = self.world.get_entity(self.attacker_entity_id)
+                        target = self.world.get_entity(self.target_entity_id)
+
+                        if attacker is not None and target is not None:
+                            new_bullet = RectangularProjectile(
+                                start_x=attacker.x,
+                                start_y=attacker.y,
+                                target_entity=target,
+                                hp=0,
+                            )
+                            self.world.projectiles.append(new_bullet)
+                            AudioManager().play_shoot()
 
                 elif data.get("type") == "GAME_OVER":
                     self.winner_player_id = data["payload"]["winner_player_id"]
@@ -293,13 +487,22 @@ class GameScreen:
 
                     id = self.world.detect_death_units()
 
+                    # Play death sound when an entity is destroyed
+                    AudioManager().play_dead()
+
                     self.handle_entity_death(id)
                     self.screen_manager.network.latest_positions.pop(id,None)
+                    
+                elif data.get("type") == "DISCONNECTED":
+                    self.trigger_disconnect()
 
         else:
             # DEBUG MODE
             if self.player_gold > 100:
                 self.shop_autorization = True
+
+        if self.is_paused:
+            return
 
         keys = pygame.key.get_pressed()
 
@@ -393,3 +596,33 @@ class GameScreen:
         if self.is_game_over:
             self.winner_box.draw(self.screen)
             self.game_over_button.draw(self.screen)
+
+        # Draw pause overlay or message box
+        if self.is_paused and not self.is_game_over:
+            if self.pause_initiator and self.pause_overlay:
+                self.pause_overlay.draw(self.screen)
+            else:
+                self._draw_game_paused_message()
+
+    def _draw_game_paused_message(self):
+        """Draw a simple gray message box for the non-initiator player during pause."""
+        BASE_W, BASE_H = 1280, 720
+        sx = self.screen.get_width() / BASE_W
+        sy = self.screen.get_height() / BASE_H
+
+        box_w = int(800 * sx)
+        box_h = int(220 * sy)
+        box_x = (self.screen.get_width() - box_w) // 2
+        box_y = (self.screen.get_height() - box_h) // 2
+
+        box_surface = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+        box_surface.fill((40, 40, 50, 230))
+        self.screen.blit(box_surface, (box_x, box_y))
+
+        CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+        font_path = os.path.join(CURRENT_DIR, "..", "assets", "Anton-Regular.ttf")
+        font_size = int(85 * sy)
+        font = pygame.font.Font(font_path, font_size)
+        text_surface = font.render("GAME PAUSED", True, (255, 255, 255))
+        text_rect = text_surface.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 2))
+        self.screen.blit(text_surface, text_rect)

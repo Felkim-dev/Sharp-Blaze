@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 #include <memory>
+#include <unordered_set>
 
 #include "GameEngine.h"
 #include "GameSession.h"
@@ -11,6 +12,81 @@
 
 namespace
 {
+    constexpr int kGridCols = 100;
+    constexpr int kGridRows = 100;
+    constexpr int kReservedPaddingCells = 5;
+
+    struct CellCoordHash
+    {
+        std::size_t operator()(const games_types::CellCoord& cell) const noexcept
+        {
+            return (static_cast<std::size_t>(cell.y) << 16U) ^ static_cast<std::size_t>(cell.x);
+        }
+    };
+
+    games_types::CellCoord worldToGridCell(float x, float y)
+    {
+        return games_types::CellCoord{
+            std::max(0, std::min(kGridCols - 1, static_cast<int>(x / 50.0f))),
+            std::max(0, std::min(kGridRows - 1, static_cast<int>(y / 50.0f)))};
+    }
+
+    void addReservedFootprint(std::unordered_set<games_types::CellCoord, CellCoordHash>& reservedCells,
+                              int centerX,
+                              int centerY,
+                              int padding)
+    {
+        for (int offsetY = -padding; offsetY <= padding; ++offsetY)
+        {
+            for (int offsetX = -padding; offsetX <= padding; ++offsetX)
+            {
+                const int cellX = centerX + offsetX;
+                const int cellY = centerY + offsetY;
+                if (cellX < 0 || cellX >= kGridCols || cellY < 0 || cellY >= kGridRows)
+                {
+                    continue;
+                }
+
+                reservedCells.insert(games_types::CellCoord{cellX, cellY});
+            }
+        }
+    }
+
+    std::unordered_set<games_types::CellCoord, CellCoordHash> buildReservedCells(
+        const std::vector<games_types::UnitPosition>& structures,
+        const std::vector<games_types::ResourceNode>& resources,
+        const std::vector<games_types::UnitPosition>& units,
+        const std::vector<games_types::ShopUnit>& shops)
+    {
+        std::unordered_set<games_types::CellCoord, CellCoordHash> reservedCells;
+
+        for (const auto& structure : structures)
+        {
+            const games_types::CellCoord cell = worldToGridCell(structure.x, structure.y);
+            addReservedFootprint(reservedCells, cell.x, cell.y, kReservedPaddingCells);
+        }
+
+        for (const auto& resource : resources)
+        {
+            const games_types::CellCoord cell = worldToGridCell(resource.x, resource.y);
+            addReservedFootprint(reservedCells, cell.x, cell.y, kReservedPaddingCells);
+        }
+
+        for (const auto& unit : units)
+        {
+            const games_types::CellCoord cell = worldToGridCell(unit.x, unit.y);
+            addReservedFootprint(reservedCells, cell.x, cell.y, kReservedPaddingCells);
+        }
+
+        for (const auto& shop : shops)
+        {
+            const games_types::CellCoord cell = worldToGridCell(shop.x, shop.y);
+            addReservedFootprint(reservedCells, cell.x, cell.y, kReservedPaddingCells);
+        }
+
+        return reservedCells;
+    }
+
     void testPurchaseCollectorSuccess()
     {
         auto session = std::make_shared<GameSession>(1, 2, 1);
@@ -196,6 +272,45 @@ namespace
         {
             assert(!grid.isStaticBlocked(step));
         }
+    }
+
+    void testGeneratedMazeAvoidsStructuresAndKeepsBasePath()
+    {
+        GameSession session(1, 2, 12);
+
+        const auto structures = session.getStructuresSnapshot();
+        const auto resources = session.getResourcesSnapshot();
+        const auto units = session.getUnitsSnapshot();
+        const auto shops = session.getShopsSnapshot();
+        const auto obstacles = session.getStaticObstaclesSnapshot();
+
+        assert(!obstacles.empty());
+
+        const auto reservedCells = buildReservedCells(structures, resources, units, shops);
+        SpatialGrid grid(kGridCols, kGridRows);
+        std::size_t blockedCellCount = 0;
+
+        for (const auto& obstacle : obstacles)
+        {
+            for (const auto& cell : obstacle.cells)
+            {
+                assert(reservedCells.find(cell) == reservedCells.end());
+                assert(grid.setStaticBlocked(cell, true));
+                ++blockedCellCount;
+            }
+        }
+
+        const std::size_t totalCells = static_cast<std::size_t>(kGridCols * kGridRows);
+        assert(blockedCellCount < totalCells / 5);
+
+        const games_types::CellCoord start = worldToGridCell(structures.front().x, structures.front().y);
+        const games_types::CellCoord goal = worldToGridCell(structures.back().x, structures.back().y);
+
+        PathFinder pathFinder;
+        const auto route = pathFinder.buildRoute(start, goal, grid);
+
+        assert(!route.empty());
+        assert(route.back() == goal);
     }
 
     void testMoveOrderQueuesCellRoute()
@@ -400,6 +515,35 @@ namespace
         assert(session->getEntityHealth(6000, hpAfterReturnInRange, maxAfterReturnInRange));
         assert(hpAfterReturnInRange == hpAfterOutOfRangeTick);
     }
+
+    void testAttackCommandDeduplication()
+    {
+        auto session = std::make_shared<GameSession>(1, 2, 20);
+        GameEngine engine(session);
+
+        // Place attacker (p1) and target (p2)
+        session->upsertUnitPosition(1000, 2500.0f, 2500.0f);
+        session->upsertUnitPosition(6000, 3500.0f, 2500.0f);
+        session->registerSpawnedUnit(1000, 1, games_types::EntityType::Attacker);
+        session->registerSpawnedUnit(6000, 2, games_types::EntityType::Attacker);
+
+        games_types::PlayerCommand cmd{};
+        cmd.type = games_types::CommandType::AttackUnit;
+        cmd.playerId = 1;
+        cmd.attack.attackerId = 1000;
+        cmd.attack.targetId = 6000;
+
+        // Enqueue the same attack multiple times (simulating repeated client messages)
+        engine.tcpCommandEnqueue(cmd);
+        engine.tcpCommandEnqueue(cmd);
+        engine.tcpCommandEnqueue(cmd);
+
+        engine.commandQueueProcess();
+
+        const auto results = engine.drainAttackResults();
+        // Expect only one processed attack result for this attacker in the same batch
+        assert(results.size() == 1);
+    }
 }
 
 int main()
@@ -415,11 +559,13 @@ int main()
     testSpatialGridReservationConflict();
     testAStarFindsShortestPathWithDiagonalMoves();
     testAStarAvoidsStaticBlockedCells();
+    testGeneratedMazeAvoidsStructuresAndKeepsBasePath();
     testMoveOrderQueuesCellRoute();
     testMoveOrderAdvancesOneCellPerTick();
     testFormationSpreadAroundSharedTarget();
     testContinuousAttackRespectsCooldownAndRepeats();
     testContinuousAttackStopsAfterOutOfRange();
+    testAttackCommandDeduplication();
 
     std::cout << "server_logic_tests: all checks passed" << std::endl;
     return 0;

@@ -16,6 +16,8 @@ namespace client_protocol
         std::string playerId;
         std::string clientVersion;
         bool isReady = false;
+        int sessionId = 0;
+        std::string token;
     };
 
     struct PlayerReadyData
@@ -47,6 +49,17 @@ namespace client_protocol
         int amount = 0;
     };
 
+    struct PauseGameData
+    {
+        bool paused = false;
+        int pausedByPlayerId = -1;
+    };
+
+    struct SurrenderData
+    {
+        int surrenderingPlayerId = -1;
+    };
+
     enum class ParsedMessageType
     {
         InitialConnect,
@@ -55,6 +68,8 @@ namespace client_protocol
         Attack,
         BuyUnit,
         DepositResource,
+        PauseGame,
+        Surrender,
         Unsuported
     };
     
@@ -67,6 +82,8 @@ namespace client_protocol
         AttackData attack;
         BuyUnitData buyUnit;
         DepositResourceData deposit;
+        PauseGameData pauseGame;
+        SurrenderData surrender;
     };
     
     std::string BuildErrorResponse(const std::string& reason);
@@ -109,6 +126,9 @@ namespace client_protocol
         int ownerPlayerId,
         int attackerPlayerId);
     std::string BuildGameOverResponse(int sessionId, int playerId);
+    std::string BuildPauseBroadcast(int pausedByPlayerId);
+    std::string BuildGameOverWithReasonResponse(
+        const std::string& sessionId, int winnerPlayerId, const std::string& reason);
     bool MessageFramer(
     std::string&              carryBuffer, 
     const char*               chunk, 

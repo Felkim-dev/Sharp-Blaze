@@ -7,6 +7,7 @@
 #include <thread>
 #include <cstring>
 #include <cstdint>
+#include <cstdlib>
 #include <vector>
 
 
@@ -99,17 +100,25 @@ bool GlobalUDPDispatcher::createSocket()
         return false;
     }
 
+    // Read UDP port from environment or use default
+    int udpPort = 5556;
+    const char* udpPortEnv = std::getenv("SHARP_BLAZE_UDP_PORT");
+    if (udpPortEnv) {
+        udpPort = std::atoi(udpPortEnv);
+        std::cout << "[UDP] UDP port from env: " << udpPort << std::endl;
+    }
+
     //preparar la direccion local
 
     sockaddr_in localAddr{};
     localAddr.sin_family = AF_INET;
-    localAddr.sin_port = htons(5556);
+    localAddr.sin_port = htons(udpPort);
     localAddr.sin_addr.s_addr = htonl (INADDR_ANY);
 
-    //Bind al puerto 5556
+    //Bind al puerto dinámico
     if(bind(udpSocket, reinterpret_cast<sockaddr*>(&localAddr),sizeof(localAddr)) == SOCKET_ERROR)
     {
-        std::cerr << "[UDP][ERROR] bind failed on port 5556. code=" << net::GetLastError() << std::endl;
+        std::cerr << "[UDP][ERROR] bind failed on port " << udpPort << ". code=" << net::GetLastError() << std::endl;
         net::CloseSocket(udpSocket);
         udpSocket = INVALID_SOCKET;
         return false;
@@ -119,6 +128,7 @@ bool GlobalUDPDispatcher::createSocket()
     {
         std::cerr << "[UDP][ERROR] SetNonBlocking failed. code=" << net::GetLastError() << std::endl;
     }
+    std::cout << "[UDP] Socket created successfully on port " << udpPort << std::endl;
     return true;
 };
 
@@ -338,14 +348,6 @@ void GlobalUDPDispatcher::loopEmision() {
                         0,
                         reinterpret_cast<const sockaddr*>(&endpoint.addr),
                         sizeof(endpoint.addr));
-                    if (sentBytes != 12)
-                    {
-                        std::cout << "se envio algo pero no mide 12" << std::endl;
-                    }
-                    if (sentBytes == 12)
-                    {
-                        std::cout << "Si envio algo" << std::endl;
-                    }
                     if (sentBytes < 0)
                     {
                         const int err = net::GetLastError();

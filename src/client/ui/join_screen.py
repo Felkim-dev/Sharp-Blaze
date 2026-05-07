@@ -1,9 +1,9 @@
 import pygame
-import string
 
 from ui.component import Button, InputBox, Text,CloseButton,TextBox
 
 from utils.config import Config
+from utils.audio import AudioManager
 
 from utils.json import JSON_Manager
 class JoinScreen:
@@ -12,6 +12,11 @@ class JoinScreen:
         # SCREEN FROM THE MAIN GAME LOOP
         self.screen_manager = screen_manager
         self.screen = screen
+
+        # SCALE FACTORS relative to base resolution 1280x720
+        BASE_W, BASE_H = 1280, 720
+        sx = self.screen.get_width() / BASE_W
+        sy = self.screen.get_height() / BASE_H
 
         # COLORS
         # PRINCIPAL BG
@@ -22,14 +27,14 @@ class JoinScreen:
         GRAY = (112, 112, 112)
         RED_ERROR = (204, 5, 35)
 
-        # INPUT BOX SIXE
-        INPUT_WH = (500, 50)
+        # INPUT BOX SIZE (scaled)
+        INPUT_WH = (int(500 * sx), int(50 * sy))
 
-        # BUTTON SIZE
-        BUTTON_WH = (350, 50)
+        # BUTTON SIZE (scaled)
+        BUTTON_WH = (int(350 * sx), int(50 * sy))
 
-        # ERROR TEXT SIZE
-        ERROR_WH = (800,200)
+        # ERROR TEXT SIZE (scaled)
+        ERROR_WH = (int(800 * sx), int(200 * sy))
 
         # TEXT SIZE
         TEXT_SIZE = BUTTON_WH[1] // 2
@@ -44,7 +49,7 @@ class JoinScreen:
         center_x_input = self.screen.get_rect().centerx - (width_input // 2)
 
         init_y = self.screen.get_height() // 3
-        separation_y = 100
+        separation_y = int(100 * sy)
 
         # Button creation
         self.btn_join = Button(
@@ -57,29 +62,24 @@ class JoinScreen:
         )
 
         # INPUT BOX
-        # List of Prohibited Simbols
-        prohibited_simbols = string.punctuation
-        prohibited_simbols += " "
         # INPUT BOX CREATION
         self.inputbox_nickname = InputBox(
             (center_x_input, init_y),
             INPUT_WH,
             "ENTER USERNAME (>3 CHARACTERS)",
-            NotAllowedChars=prohibited_simbols,
         )
 
         # ID CREATION
-
-        posx_text_ID = center_x_input - 20
-        posy_text_ID = init_y + 20
+        posx_text_ID = center_x_input - int(20 * sx)
+        posy_text_ID = init_y + int(20 * sy)
         self.text_ID = Text(
             (posx_text_ID, posy_text_ID), "ID: ", INPUT_WH[1] // 2, self.WHITE
         )
 
         # EXIT MAIN MENU BUTTON
         width_screen = self.screen.get_width()
-        button_size = 30
-        margin = 50
+        button_size = int(30 * sy)
+        margin = int(50 * sx)
         # POS CALCULATION
         pos_x = width_screen - button_size - margin
         pos_y = margin
@@ -88,12 +88,18 @@ class JoinScreen:
         self.btn_close = CloseButton(pos_x, pos_y, button_size)
 
         # ERROR
-        error_text_size = 50
-        self.error_box = TextBox((240, init_y + separation_y+100),ERROR_WH,RED_ERROR,"SERVER DOES NOT RESPOND",self.WHITE,error_text_size)
+        error_text_size = int(50 * sy)
+        error_x = (self.screen.get_width() - ERROR_WH[0]) // 2
+        self.error_box = TextBox((error_x, init_y + separation_y + int(100 * sy)),ERROR_WH,RED_ERROR,"SERVER DOES NOT RESPOND",self.WHITE,error_text_size)
         # ERROR CONTROL
         self.show_error = False
         self.error_time_init = 0
-        self.duration_error = 5000 #ms
+        self.duration_error = 5000
+
+        self.backspace_ready = True
+        self.backspace_last_time = 0
+        self.backspace_initial_delay = 400
+        self.backspace_repeat_interval = 50
 
     def show_notification(self):
 
@@ -106,6 +112,7 @@ class JoinScreen:
         for event in events:
 
             if self.btn_close.handle_event(event):
+                AudioManager().play_click()
                 self.inputbox_nickname.user_input = ""
                 self.screen_manager.change_screen("MAIN")
 
@@ -113,25 +120,23 @@ class JoinScreen:
                 if event.button == 1:
                     mouse_pos = event.pos
 
-                if (
-                    self.btn_join.button_rectangle.collidepoint(mouse_pos)
-                    and len(self.inputbox_nickname.user_input) > 3
-                ):
+                    if (
+                        self.btn_join.button_rectangle.collidepoint(mouse_pos)
+                        and len(self.inputbox_nickname.user_input) > 3
+                    ):
 
-                    # ------------------ DEBUG MODE -------------------------
-                    if not Config.OFFLINE_DEBUG_MODE:
+                        # ------------------ DEBUG MODE -------------------------
+                        if not Config.OFFLINE_DEBUG_MODE:
 
-                        if self.screen_manager.network.connection_status != "CONNECTING":
+                            if self.screen_manager.network.connection_status != "CONNECTING":
+                                AudioManager().play_click()
+                                self.screen_manager.network.connect_to_broker(self.inputbox_nickname.user_input)
 
-                            data_join = JSON_Manager.get_datajoin(self.inputbox_nickname.user_input)
-
-                            self.screen_manager.network.connect(data_join)
-
-                # Comprobation that the input box is clicked
-                if self.inputbox_nickname.inputbox_rectangle.collidepoint(mouse_pos):
-                    self.inputbox_nickname.is_selected = True
-                else:
-                    self.inputbox_nickname.is_selected = False
+                    # Comprobation that the input box is clicked
+                    if self.inputbox_nickname.inputbox_rectangle.collidepoint(mouse_pos):
+                        self.inputbox_nickname.is_selected = True
+                    else:
+                        self.inputbox_nickname.is_selected = False
 
             if event.type == pygame.KEYDOWN:
 
@@ -145,12 +150,16 @@ class JoinScreen:
                         < self.inputbox_nickname.max_length
                     ):
 
-                        # Comprobation to avoid special characters
-                        if (
-                            not char in self.inputbox_nickname.notallowed_chars
-                            or self.inputbox_nickname.notallowed_chars is None
-                        ):
+                        # Comprobation to avoid special characters (alphanumeric only)
+                        if char.isalnum():
                             self.inputbox_nickname.user_input += char
+
+                # Enter key handling: trigger JOIN action
+                if event.key == pygame.K_RETURN and len(self.inputbox_nickname.user_input) > 3:
+                    if not Config.OFFLINE_DEBUG_MODE:
+                        if self.screen_manager.network.connection_status != "CONNECTING":
+                            AudioManager().play_click()
+                            self.screen_manager.network.connect_to_broker(self.inputbox_nickname.user_input)
 
             elif event.type == pygame.MOUSEMOTION and len(self.inputbox_nickname.user_input) > 3:
 
@@ -159,9 +168,20 @@ class JoinScreen:
 
                 self.btn_join.check_hover(mouse_pos)
 
-        # Deleting of characters of the string
         if keys[pygame.K_BACKSPACE]:
-            self.inputbox_nickname.user_input = self.inputbox_nickname.user_input[:-1]
+            now = pygame.time.get_ticks()
+            if self.backspace_ready:
+                if len(self.inputbox_nickname.user_input) > 0:
+                    self.inputbox_nickname.user_input = self.inputbox_nickname.user_input[:-1]
+                self.backspace_ready = False
+                self.backspace_last_time = now
+            elif now - self.backspace_last_time > self.backspace_repeat_interval:
+                if now - self.backspace_last_time > self.backspace_initial_delay or len(self.inputbox_nickname.user_input) > 0:
+                    if len(self.inputbox_nickname.user_input) > 0:
+                        self.inputbox_nickname.user_input = self.inputbox_nickname.user_input[:-1]
+                    self.backspace_last_time = now
+        else:
+            self.backspace_ready = True
 
     def update(self):
         state = self.screen_manager.network.connection_status

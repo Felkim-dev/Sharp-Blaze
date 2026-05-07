@@ -8,6 +8,7 @@
 #include <set>
 #include <utility>
 #include <vector>
+#include <unordered_set>
 
 #include "GameSession.h"
 #include "PathFinder.h"
@@ -20,9 +21,11 @@ namespace
     constexpr float kCellSize = 50.0f;
     constexpr int kBaseFootprintSize = 6;
     constexpr int kSmallStructureFootprintSize = 2;
+    constexpr int kAttackImpactDelayMinMs = 120;
+    constexpr int kAttackImpactDelayMaxMs = 600;
 
-    constexpr float kCollectorCollisionRadius = 150.0f;
-    constexpr float kBaseCollisionRadius = 1000.0f;
+    constexpr float kCollectorCollisionRadius = 25.0f;
+    constexpr float kBaseCollisionRadius = 250.0f;
 
     float distanceSquared(float x1, float y1, float x2, float y2)
     {
@@ -36,6 +39,13 @@ namespace
     {
         const float radiusSum = radius1 + radius2;
         return distanceSquared(x1, y1, x2, y2) <= (radiusSum * radiusSum);
+    }
+
+    int computeAttackImpactDelayMs(float distSq)
+    {
+        const float dist = std::sqrt(distSq);
+        const int delay = static_cast<int>(dist * 0.18f);
+        return std::clamp(delay, kAttackImpactDelayMinMs, kAttackImpactDelayMaxMs);
     }
 
     bool getPlayerBaseCenter(const std::vector<games_types::UnitPosition>& structures,
@@ -305,6 +315,9 @@ void GameEngine::commandQueueProcess()
 
     std::vector<games_types::PlayerCommand> pendingMoveCommands;
 
+    // Deduplicate attack commands per attacker within the same processing cycle.
+    std::unordered_set<int> seenAttackers;
+
     while (!pendingCommands.empty())
     {
         const games_types::PlayerCommand cmd = pendingCommands.front();
@@ -323,6 +336,19 @@ void GameEngine::commandQueueProcess()
 
         if (cmd.type == games_types::CommandType::AttackUnit)
         {
+            // If we've already seen an attack command for this attacker in the
+            // current batch, ignore subsequent ones to avoid "burst" effects
+            // when the unit later becomes able to attack.
+            const int attackerId = cmd.attack.attackerId;
+            if (attackerId > 0)
+            {
+                if (seenAttackers.find(attackerId) != seenAttackers.end())
+                {
+                    continue;
+                }
+                seenAttackers.insert(attackerId);
+            }
+
             processAttackCommand(cmd);
             continue;
         }
@@ -618,6 +644,22 @@ void GameEngine::advanceMovement(int deltaMs)
         movementGrid.placeEntity(unit.entity_id, worldToCell(unit.x, unit.y));
     }
 
+    // Decrease cooldowns
+    for (auto it = movementCooldownRemainingMs.begin(); it != movementCooldownRemainingMs.end();)
+    {
+        it->second = std::max(0, it->second - deltaMs);
+        if (it->second == 0)
+        {
+            it = movementCooldownRemainingMs.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    std::vector<int> stuckUnits;
+
     for (const auto& unit : units)
     {
         auto routeIt = movementRoutes.find(unit.entity_id);
@@ -639,19 +681,25 @@ void GameEngine::advanceMovement(int deltaMs)
             continue;
         }
 
-        movementGrid.tryReserveMove(unit.entity_id, route.front());
+        if (movementCooldownRemainingMs.count(unit.entity_id) > 0)
+        {
+            continue;
+        }
+
+        games_types::MoveResult res = movementGrid.tryReserveMove(unit.entity_id, route.front());
+        if (res.status == games_types::MoveStatus::Occupied || res.status == games_types::MoveStatus::ReservedByOther)
+        {
+            stuckUnits.push_back(unit.entity_id);
+        }
     }
 
     const auto committedMoves = movementGrid.commitReservedMoves();
-    if (committedMoves.empty())
-    {
-        return;
-    }
-
+    
     for (const auto& move : committedMoves)
     {
         const auto [worldX, worldY] = cellCenterToWorld(move.to);
         session->upsertUnitPosition(move.entityId, worldX, worldY);
+        movementCooldownRemainingMs[move.entityId] = 83; // Match 10 pixels/frame in client (~83ms per cell)
 
         auto routeIt = movementRoutes.find(move.entityId);
         if (routeIt == movementRoutes.end())
@@ -668,6 +716,16 @@ void GameEngine::advanceMovement(int deltaMs)
         if (route.empty())
         {
             movementRoutes.erase(routeIt);
+        }
+    }
+
+    // Repath stuck units to bypass dynamic blocks
+    for (int unitId : stuckUnits)
+    {
+        auto routeIt = movementRoutes.find(unitId);
+        if (routeIt != movementRoutes.end() && !routeIt->second.empty())
+        {
+            repathUnit(unitId, routeIt->second.back());
         }
     }
 }
@@ -702,6 +760,52 @@ void GameEngine::advanceCombat(int deltaMs)
         }
     }
 
+    for (auto it = attackImpactRemainingMs.begin(); it != attackImpactRemainingMs.end();)
+    {
+        it->second = std::max(0, it->second - deltaMs);
+        if (it->second > 0)
+        {
+            ++it;
+            continue;
+        }
+
+        const int attackerId = it->first;
+        it = attackImpactRemainingMs.erase(it);
+
+        auto lockIt = attackLockTargetByAttacker.find(attackerId);
+        if (lockIt == attackLockTargetByAttacker.end())
+        {
+            continue;
+        }
+
+        const int targetId = lockIt->second;
+        const int playerId = ownerFromEntityId(attackerId);
+        if (playerId == 0)
+        {
+            attackLockTargetByAttacker.erase(attackerId);
+            movementRoutes.erase(attackerId);
+            continue;
+        }
+
+        AttackRequestResult impactResult = executeAttackAttempt(playerId, attackerId, targetId, true);
+        if (!shouldKeepAttackLock(impactResult))
+        {
+            attackLockTargetByAttacker.erase(attackerId);
+            movementRoutes.erase(attackerId);
+        }
+        else if (impactResult.reason == "out_of_range")
+        {
+            if (movementRoutes.find(attackerId) == movementRoutes.end() || movementRoutes[attackerId].empty())
+            {
+                games_types::UnitPosition targetPos{};
+                if (session->getEntityPosition(targetId, targetPos))
+                {
+                    repathUnit(attackerId, worldToCell(targetPos.x, targetPos.y));
+                }
+            }
+        }
+    }
+
     if (attackLockTargetByAttacker.empty())
     {
         return;
@@ -731,6 +835,11 @@ void GameEngine::advanceCombat(int deltaMs)
             continue;
         }
 
+        if (attackImpactRemainingMs.count(attackerId) > 0)
+        {
+            continue;
+        }
+
         const int targetId = lockIt->second;
         const int playerId = ownerFromEntityId(attackerId);
         if (playerId == 0)
@@ -739,14 +848,31 @@ void GameEngine::advanceCombat(int deltaMs)
             continue;
         }
 
-        AttackRequestResult result = executeAttackAttempt(playerId, attackerId, targetId);
+        AttackRequestResult result = executeAttackAttempt(playerId, attackerId, targetId, false);
         if (!shouldKeepAttackLock(result))
         {
             attackersToUnlock.push_back(attackerId);
+            movementRoutes.erase(attackerId);
         }
+        else if (result.accepted)
+        {
+            attackImpactRemainingMs[attackerId] = result.impactDelayMs;
+            movementRoutes.erase(attackerId);
 
-        std::lock_guard<std::mutex> lock(mtxAttackResults);
-        pendingAttackResults.push_back(result);
+            std::lock_guard<std::mutex> lock(mtxAttackResults);
+            pendingAttackResults.push_back(result);
+        }
+        else if (result.reason == "out_of_range")
+        {
+            if (movementRoutes.find(attackerId) == movementRoutes.end() || movementRoutes[attackerId].empty())
+            {
+                games_types::UnitPosition targetPos{};
+                if (session->getEntityPosition(targetId, targetPos))
+                {
+                    repathUnit(attackerId, worldToCell(targetPos.x, targetPos.y));
+                }
+            }
+        }
     }
 
     for (const int attackerId : attackersToUnlock)
@@ -857,13 +983,13 @@ GameEngine::PurchaseResult GameEngine::processUnitPurchase(
         return result;
     }
 
-    //       const float angleStep = 0.55f;
-    //const float radius = 45.0f;
-    //const float angle = static_cast<float>(unitId % 11) * angleStep;
-    //const float spawnX = basePos.x + radius * std::cos(angle);
-    const float spawnX = 75.0;
-    //const float spawnY = basePos.y + radius * std::sin(angle);
-    const float spawnY = 75.0;
+    const float angleStep = 0.55f;
+    const float radius = 250.0f;
+    const float angle = static_cast<float>(unitId % 11) * angleStep;
+    const float spawnX = basePos.x + radius * std::cos(angle);
+    const float spawnY = basePos.y + radius * std::sin(angle);
+    // const float spawnX = 75.0;
+    // const float spawnY = 75.0;
 
     session->upsertUnitPosition(unitId, spawnX, spawnY);
     session->registerSpawnedUnit(unitId, playerId, unitType);
@@ -992,27 +1118,140 @@ void GameEngine::setNewRouteToCell(const games_types::PlayerCommand& cmd, const 
     routeState = std::deque<games_types::CellCoord>(routeCells.begin(), routeCells.end());
 }
 
+void GameEngine::repathUnit(int unitId, const games_types::CellCoord& destinationCell)
+{
+    if (!session)
+    {
+        return;
+    }
+    std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
+    auto unitIt = std::find_if(
+        units.begin(),
+        units.end(),
+        [unitId](const games_types::UnitPosition& unit) {
+            return unit.entity_id == unitId;
+        });
+
+    if (unitIt == units.end())
+    {
+        return;
+    }
+
+    SpatialGrid pathGrid(kGridCols, kGridRows);
+
+    const auto structures = session->getStructuresSnapshot();
+    const auto resources = session->getResourcesSnapshot();
+    const auto shops = session->getShopsSnapshot();
+    const auto obstacles = session->getStaticObstaclesSnapshot();
+    populateStaticPathGrid(pathGrid, structures, resources, shops, obstacles, unitId);
+
+    // Treat all other units as temporary static blocks so pathfinder avoids them
+    for (const auto& otherUnit : units)
+    {
+        if (otherUnit.entity_id != unitId)
+        {
+            const games_types::CellCoord otherCell = worldToCell(otherUnit.x, otherUnit.y);
+            if (pathGrid.inBounds(otherCell))
+            {
+                pathGrid.setStaticBlocked(otherCell, true);
+            }
+        }
+    }
+
+    const games_types::CellCoord startCell = worldToCell(unitIt->x, unitIt->y);
+    pathGrid.setStaticBlocked(startCell, false);
+
+    games_types::CellCoord effectiveDestination = destinationCell;
+    if (pathGrid.isStaticBlocked(effectiveDestination))
+    {
+        bool found = false;
+        for (int radius = 1; radius <= kGridCols && !found; ++radius)
+        {
+            std::vector<games_types::CellCoord> ring = buildRingCells(effectiveDestination, radius);
+            std::sort(ring.begin(), ring.end(), cellLess);
+            ring.erase(std::unique(ring.begin(),
+                                   ring.end(),
+                                   [](const games_types::CellCoord& lhs,
+                                      const games_types::CellCoord& rhs) {
+                                       return lhs.x == rhs.x && lhs.y == rhs.y;
+                                   }),
+                       ring.end());
+
+            for (const auto& candidate : ring)
+            {
+                if (!pathGrid.inBounds(candidate) || pathGrid.isStaticBlocked(candidate))
+                {
+                    continue;
+                }
+                effectiveDestination = candidate;
+                found = true;
+                break;
+            }
+        }
+    }
+
+    const std::vector<games_types::CellCoord> routeCells = pathFinder->buildRoute(
+        startCell,
+        effectiveDestination,
+        pathGrid);
+
+    auto& routeState = movementRoutes[unitId];
+    routeState.clear();
+
+    if (routeCells.empty())
+    {
+        if (startCell == destinationCell)
+        {
+            movementRoutes.erase(unitId);
+        }
+        return;
+    }
+
+    routeState = std::deque<games_types::CellCoord>(routeCells.begin(), routeCells.end());
+}
+
 void GameEngine::processAttackCommand(const games_types::PlayerCommand& cmd)
 {
     AttackRequestResult result = executeAttackAttempt(
         cmd.playerId,
         cmd.attack.attackerId,
-        cmd.attack.targetId);
+        cmd.attack.targetId,
+        false);
 
     if (shouldKeepAttackLock(result))
     {
         attackLockTargetByAttacker[cmd.attack.attackerId] = cmd.attack.targetId;
+
+        if (result.accepted && result.impactDelayMs > 0)
+        {
+            attackImpactRemainingMs[cmd.attack.attackerId] = result.impactDelayMs;
+            movementRoutes.erase(cmd.attack.attackerId);
+        }
+        
+        if (result.reason == "out_of_range")
+        {
+            games_types::UnitPosition targetPos{};
+            if (session->getEntityPosition(cmd.attack.targetId, targetPos))
+            {
+                repathUnit(cmd.attack.attackerId, worldToCell(targetPos.x, targetPos.y));
+            }
+        }
+        else
+        {
+            movementRoutes.erase(cmd.attack.attackerId);
+        }
     }
     else
     {
         attackLockTargetByAttacker.erase(cmd.attack.attackerId);
+        movementRoutes.erase(cmd.attack.attackerId);
     }
 
     std::lock_guard<std::mutex> lock(mtxAttackResults);
     pendingAttackResults.push_back(result);
 }
 
-GameEngine::AttackRequestResult GameEngine::executeAttackAttempt(int playerId, int attackerId, int targetId)
+GameEngine::AttackRequestResult GameEngine::executeAttackAttempt(int playerId, int attackerId, int targetId, bool applyDamage)
 {
     AttackRequestResult result{};
     result.playerId = playerId;
@@ -1020,6 +1259,7 @@ GameEngine::AttackRequestResult GameEngine::executeAttackAttempt(int playerId, i
     result.targetId = targetId;
     result.accepted = false;
     result.reason = "rejected";
+    result.impactDelayMs = 0;
 
     if (!session || !session->hasPlayer(playerId))
     {
@@ -1099,6 +1339,14 @@ GameEngine::AttackRequestResult GameEngine::executeAttackAttempt(int playerId, i
         return result;
     }
 
+    if (!applyDamage)
+    {
+        result.accepted = true;
+        result.reason = "launching";
+        result.impactDelayMs = computeAttackImpactDelayMs(distSq);
+        return result;
+    }
+
     games_types::DamageResolution resolution{};
     const int damage = std::max(session->getMinDamage(), session->getAttackerDamage());
     if (!session->applyDamageToEntity(attackerOwner, targetId, damage, resolution) || !resolution.applied)
@@ -1158,5 +1406,5 @@ bool GameEngine::shouldKeepAttackLock(const AttackRequestResult& result) const
         return true;
     }
 
-    return result.reason == "cooldown";
+    return result.reason == "cooldown" || result.reason == "out_of_range";
 }

@@ -6,6 +6,7 @@
 #include <sstream>
 #include <thread>
 #include <utility>
+#include <iostream>
 
 SessionOrchestrator::SessionOrchestrator() = default;
 
@@ -43,6 +44,18 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
 
         if (engine)
         {
+            // Pause check: skip all game logic while paused but keep thread alive
+            if (engine->isPaused())
+            {
+                const auto tickEnd = std::chrono::steady_clock::now();
+                const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(tickEnd - tickStart);
+                if (elapsed < std::chrono::milliseconds(kTickMs))
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(kTickMs) - elapsed);
+                }
+                continue;
+            }
+
             engine->commandQueueProcess();
             engine->advanceMovement(kTickMs);
             engine->advanceCollectors(kTickMs);
@@ -78,6 +91,15 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
                     result.reason,
                     result.targetCurrentHp);
                 matchEventCallback(targetSocket, attackResultMessage);
+
+                if (result.accepted)
+                {
+                    const SOCKET mirroredSocket = (targetSocket == p1Socket) ? p2Socket : p1Socket;
+                    if (mirroredSocket != INVALID_SOCKET && mirroredSocket != targetSocket)
+                    {
+                        matchEventCallback(mirroredSocket, attackResultMessage);
+                    }
+                }
             }
 
             const auto economyEvents = engine->drainEconomyTransactions();
@@ -261,6 +283,63 @@ int SessionOrchestrator::createMatch(const MatchCandidate& a, const MatchCandida
     return sessionId;
 }
 
+void SessionOrchestrator::createDedicatedSession(int sessionId)
+{
+    std::lock_guard<std::mutex> lock(mtx);
+    auto session = std::make_shared<GameSession>(1, 2, sessionId);
+    auto engine = std::make_shared<GameEngine>(session);
+
+    SessionRecord record;
+    record.sessionId = sessionId;
+    record.p1 = INVALID_SOCKET;
+    record.p2 = INVALID_SOCKET;
+    record.p1InternalPlayerId = 0;
+    record.p2InternalPlayerId = 0;
+    record.session = session;
+    record.engine = engine;
+    record.simulationRunning = std::make_shared<std::atomic<bool>>(false);
+    record.isDedicated = true;
+
+    sessionsById[sessionId] = std::move(record);
+    std::cout << "[SESSION] Created dedicated session " << sessionId << std::endl;
+}
+
+bool SessionOrchestrator::registerClientToSession(SOCKET clientSocket, int sessionId, int internalPlayerId)
+{
+    std::lock_guard<std::mutex> lock(mtx);
+
+    auto it = sessionsById.find(sessionId);
+    if (it == sessionsById.end())
+    {
+        std::cerr << "[SESSION] Session " << sessionId << " not found" << std::endl;
+        return false;
+    }
+
+    SessionRecord& record = it->second;
+
+    if (record.p1 == INVALID_SOCKET)
+    {
+        record.p1 = clientSocket;
+        record.p1InternalPlayerId = internalPlayerId;
+        sessionIdByClient[clientSocket] = sessionId;
+        std::cout << "[SESSION] Client registered as P1 to session " << sessionId << std::endl;
+        return true;
+    }
+    else if (record.p2 == INVALID_SOCKET)
+    {
+        record.p2 = clientSocket;
+        record.p2InternalPlayerId = internalPlayerId;
+        sessionIdByClient[clientSocket] = sessionId;
+        std::cout << "[SESSION] Client registered as P2 to session " << sessionId << std::endl;
+        return true;
+    }
+    else
+    {
+        std::cerr << "[SESSION] Session " << sessionId << " is full" << std::endl;
+        return false;
+    }
+}
+
 bool SessionOrchestrator::markReady(SOCKET clientSocket, const int& sessionId)
 {
     std::lock_guard<std::mutex> lock(mtx);
@@ -337,6 +416,12 @@ void SessionOrchestrator::closeByClient(SOCKET clientSocket)
     {
         stopSimulationNoLock(recordToStop);
         GlobalUDPDispatcher::getInstance().onSessionClosed(sessionId);
+        
+        if (recordToStop.isDedicated)
+        {
+            std::cout << "[SERVER] Dedicated session " << sessionId << " closed. Exiting process." << std::endl;
+            std::exit(0);
+        }
     }
 }
 
@@ -376,4 +461,16 @@ bool SessionOrchestrator::getPlayers(const int& sessionId, std::pair<SOCKET, SOC
 
     players = {it->second.p1, it->second.p2};
     return true;
+}
+
+SessionOrchestrator::SessionRecord* SessionOrchestrator::findSessionRecord(int sessionId)
+{
+    std::lock_guard<std::mutex> lock(mtx);
+
+    auto it = sessionsById.find(sessionId);
+    if (it == sessionsById.end())
+    {
+        return nullptr;
+    }
+    return &it->second;
 }

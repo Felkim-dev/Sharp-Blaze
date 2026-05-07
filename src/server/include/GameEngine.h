@@ -6,6 +6,7 @@
 #include <queue>
 #include <string>
 #include <unordered_map>
+#include <atomic>
 #include <vector>
 
 #include "GameTypes.h"
@@ -24,6 +25,7 @@ class GameEngine
 			bool accepted = false;
 			std::string reason;
 			int targetCurrentHp = -1;
+			int impactDelayMs = 0;
 		};
 
 		struct PurchaseResult
@@ -53,6 +55,8 @@ class GameEngine
 		bool hasShopAuthorization(int playerId) const;
 		PurchaseResult processUnitPurchase(int playerId, games_types::EntityType unitType, int quantity);
 		std::shared_ptr<GameSession> getSession() const { return session; }
+		bool isPaused() const { return isPaused_.load(); }
+		void setPaused(bool paused) { isPaused_.store(paused); }
 
 	private:
 		struct FormationAssignment
@@ -67,9 +71,10 @@ class GameEngine
 		bool propertyValidation(int playerId, int unitId) const;
 		void setNewRoute(const games_types::PlayerCommand& cmd);
 		void setNewRouteToCell(const games_types::PlayerCommand& cmd, const games_types::CellCoord& destinationCell);
+		void repathUnit(int unitId, const games_types::CellCoord& destinationCell);
 		void processMoveCommandsWithFormation(const std::vector<games_types::PlayerCommand>& moveCommands);
 		void processAttackCommand(const games_types::PlayerCommand& cmd);
-		AttackRequestResult executeAttackAttempt(int playerId, int attackerId, int targetId);
+			AttackRequestResult executeAttackAttempt(int playerId, int attackerId, int targetId, bool applyDamage = true);
 		bool shouldKeepAttackLock(const AttackRequestResult& result) const;
 
 		std::shared_ptr<GameSession> session;
@@ -77,12 +82,15 @@ class GameEngine
 		std::queue<games_types::PlayerCommand> commandQueue;
 		std::unordered_map<int, std::deque<games_types::CellCoord>> movementRoutes;
 		std::unordered_map<int, int> attackLockTargetByAttacker;
+			std::unordered_map<int, int> attackImpactRemainingMs;
 		std::unordered_map<int, FormationAssignment> formationByUnit;
 		std::uint64_t formationEpoch = 0;
 		std::unordered_map<int, int> attackerCooldownRemainingMs;
+		std::unordered_map<int, int> movementCooldownRemainingMs;
 		std::vector<games_types::CombatEvent> pendingCombatEvents;
 		std::vector<AttackRequestResult> pendingAttackResults;
 		mutable std::mutex mtxCommands;
 		mutable std::mutex mtxCombatEvents;
 		mutable std::mutex mtxAttackResults;
+		std::atomic<bool> isPaused_{false};
 };

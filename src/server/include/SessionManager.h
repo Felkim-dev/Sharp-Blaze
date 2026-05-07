@@ -24,6 +24,11 @@ public:
     ~SessionOrchestrator();
 
     int createMatch(const MatchCandidate& a, const MatchCandidate& b);
+    
+    // For dedicated sessions (created by broker)
+    void createDedicatedSession(int sessionId);
+    bool registerClientToSession(SOCKET clientSocket, int sessionId, int internalPlayerId);
+    
     bool markReady(SOCKET clientSocket, const int& sessionId);
     void closeByClient(SOCKET clientSocket);
     void setResourceBalanceCallback(std::function<void(SOCKET, int)> callback);
@@ -33,7 +38,6 @@ public:
     std::shared_ptr<GameEngine> getEngine(const int& sessionId) const;
     bool getPlayers(const int& sessionId, std::pair<SOCKET, SOCKET>& players) const;
 
-private:
     struct SessionRecord {
         int sessionId;
         SOCKET p1 = INVALID_SOCKET;
@@ -47,8 +51,13 @@ private:
         std::shared_ptr<GameEngine> engine;
         std::shared_ptr<std::atomic<bool>> simulationRunning;
         std::thread simulationThread;
+        bool isDedicated = false;
+        int pausedByPlayerId{-1};  // which player paused (1 or 2), -1 = no active pause
     };
 
+    SessionRecord* findSessionRecord(int sessionId);
+
+private:
     int makeSessionId();
     void startSimulationNoLock(SessionRecord& record);
     void stopSimulationNoLock(SessionRecord& record);

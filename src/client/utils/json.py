@@ -1,18 +1,35 @@
 class JSON_Manager:
-    def get_datajoin(nickname):
+    def get_queue_request(nickname):
 
-        datajoin = {
-            "type": "INITIAL_CONNECT",
-            "payload": {
-                "player_id": nickname,
-                "client_version": "0.0.1",
-                "is_ready": True,
-            },
+        return {
+            "action": "queue",
+            "player_id": nickname,
         }
 
-        return datajoin
+    def get_initial_connect(player_id, session_id=None, match_token=None):
 
-    def get_startgame(): 
+        payload = {
+            "player_id": player_id,
+            "client_version": "0.0.1",
+            "is_ready": True,
+        }
+
+        if session_id is not None:
+            payload["session_id"] = session_id
+
+        if match_token is not None:
+            payload["match_token"] = match_token
+
+        return {
+            "type": "INITIAL_CONNECT",
+            "payload": payload,
+        }
+
+    def get_datajoin(nickname):
+
+        return JSON_Manager.get_queue_request(nickname)
+
+    def get_startgame(session_id=None): 
 
         start = {
             "type": "START_GAME",
@@ -20,6 +37,9 @@ class JSON_Manager:
                 "start" : False,
             },
         }
+        
+        if session_id is not None:
+            start["payload"]["session_id"] = session_id
 
         return start
 
@@ -71,3 +91,19 @@ class JSON_Manager:
         }
         
         return attack_payload
+
+    @staticmethod
+    def get_pause_game(paused: bool):
+        return {
+            "type": "PAUSE_GAME",
+            "payload": {
+                "paused": paused
+            }
+        }
+
+    @staticmethod
+    def get_surrender():
+        return {
+            "type": "SURRENDER",
+            "payload": {}
+        }
