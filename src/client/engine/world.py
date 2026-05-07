@@ -300,7 +300,11 @@ class GameWorld:
                 return bomb.id
 
     def spawn_unit(self, ID, x, y):
-        if ID not in self.units:
+        if self.is_bomb_id(ID):
+            if ID not in self.bombs:
+                from entities.bomb import Bomb
+                self.bombs[ID] = Bomb(ID, x, y)
+        elif ID not in self.units:
             self.units[ID] = self.return_entities_object(ID, x, y)
             self.entity_team_changer(ID)
 

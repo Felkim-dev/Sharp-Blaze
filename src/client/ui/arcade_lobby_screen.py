@@ -100,6 +100,8 @@ class ArcadeLobbyScreen:
                     mouse_pos = event.pos
                     if self.btn_start.button_rectangle.collidepoint(mouse_pos):
                         AudioManager().play_click()
+                        game_screen = self.screen_manager.screens["GAME"]
+                        game_screen.set_arcade_mode(True)
                         self.screen_manager.change_screen("GAME")
 
             if self.btn_close.handle_event(event):

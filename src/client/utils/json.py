@@ -80,6 +80,18 @@ class JSON_Manager:
 
         return attacker_payload
 
+    def get_unit_bomb():
+
+        bomb_payload = {
+            "type": "BUY_UNIT",
+            "payload": {
+                "unit_type": "Bomb",
+                "quantity": 1,
+            },
+        }
+
+        return bomb_payload
+
     def attack(target_unit_id:int,attacker_unit_id:int):
         
         attack_payload= {

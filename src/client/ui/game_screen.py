@@ -9,6 +9,7 @@ from ui.component import InfoBox, TextBox, Button
 from entities.projectile import RectangularProjectile
 from ui.shop import Shop
 from ui.pause_overlay import PauseOverlay
+from ui.tutorial_overlay import TutorialOverlay
 
 from utils.json import JSON_Manager
 from utils.config import Config
@@ -76,6 +77,20 @@ class GameScreen:
         self.infobox_hat = InfoBox((int(250 * sx), info_y),(int(200 * sx), info_box_h),gray,"COLLECTORS",self.player_recolector_units_string,white,info_text_size,HAT_PATH)
         self.infobox_sword = InfoBox((int(470 * sx), info_y),(int(200 * sx), info_box_h),gray,"ATTACKERS",self.player_attacker_units_string,white,info_text_size,SWORD_PATH)
 
+        BOMB_PATH = os.path.join(CURRENT_DIR, "..", "assets", "bomb.png")
+        self.infobox_bomb = InfoBox((int(250 * sx), info_y),(int(200 * sx), info_box_h),gray,"BOMBS","0",white,info_text_size,BOMB_PATH)
+
+        self.is_arcade = False
+        self.timer_seconds = Config.ARCADE_GAME_DURATION
+        self.timer_font = pygame.font.Font(
+            os.path.join(CURRENT_DIR, "..", "assets", "Anton-Regular.ttf"),
+            int(48 * sy),
+        )
+        self.previous_gold = self.player_gold
+        self.last_kill_world = None
+        self.kill_gold_floats = []
+        self.tutorial = TutorialOverlay(self.screen)
+
         # UI Drag State
         self.is_dragging = False
         self.drag_start_screen = None
@@ -126,6 +141,20 @@ class GameScreen:
         # Reset Network variables
         if hasattr(self.screen_manager.network, 'latest_positions'):
             self.screen_manager.network.latest_positions.clear()
+        
+        self.is_arcade = False
+        self.timer_seconds = Config.ARCADE_GAME_DURATION
+        self.last_kill_world = None
+        self.kill_gold_floats.clear()
+        self.tutorial = TutorialOverlay(self.screen)
+
+    def set_arcade_mode(self, enabled=True):
+        self.is_arcade = enabled
+        self.shop.set_arcade_mode(enabled)
+        self.timer_seconds = Config.ARCADE_GAME_DURATION
+        if enabled:
+            self.tutorial = TutorialOverlay(self.screen)
+            self.tutorial.check_triggers("game_start")
 
     def load_initial_state(self, gold, units, structures, player_ID, obstacles, local_ID, enemy_ID):
         
@@ -243,6 +272,10 @@ class GameScreen:
                         self.screen_manager.change_screen("MAIN")
                 continue
 
+            if self.is_arcade and self.tutorial.is_active():
+                if self.tutorial.handle_event(event):
+                    continue
+
             # Delegate events to pause overlay (initiator only)
             if self.is_paused and not self.is_game_over:
                 if self.pause_initiator and self.pause_overlay:
@@ -293,7 +326,10 @@ class GameScreen:
                         elif action == "BUY_ATTACKER":
                             print("[GAME] Sending TCP command to buy Attacker...")
                             self.screen_manager.network.send_json(JSON_Manager.get_unit_attacker())
-                        
+                        elif action == "BUY_BOMB":
+                            print("[GAME] Sending TCP command to buy Bomb...")
+                            self.screen_manager.network.send_json(JSON_Manager.get_unit_bomb())
+
                         # Consume the click if inside the shop UI, preventing it from selecting world units
                         continue
                     else:
@@ -321,6 +357,8 @@ class GameScreen:
                 # -------------------------------------------------------------
 
                 elif event.button == 3:
+                    if self.is_arcade:
+                        self.tutorial.check_triggers("first_move")
                     self.world.handle_right_click(world_x, world_y)
 
             # FASE 2: Movimiento (Actualizar el dibujo)
@@ -348,6 +386,8 @@ class GameScreen:
 
                     if selected_entity and selected_entity.__class__.__name__ == "Shop":
                         self.is_shop_open = True
+                        if self.is_arcade:
+                            self.tutorial.check_triggers("shop_open")
                         print("[GAME SCREEN] Shop selected! Opening UI.")
                     else:
                         self.is_shop_open = False
@@ -420,8 +460,14 @@ class GameScreen:
                         self.new_spawn_y = data["payload"]["spawn_y"]
                         self.new_gold = data["payload"]["new_balance"]
 
+                        is_bomb = data["payload"].get("unit_type", "") == "Bomb"
+
                         self.world.spawn_unit(self.new_unit_id,self.new_spawn_x,self.new_spawn_y)
                         self.update_unit_counts()
+
+                        if is_bomb and self.is_arcade:
+                            self.infobox_bomb.update_text(str(int(self.infobox_bomb.text_variable) + 1))
+                            self.tutorial.check_triggers("bomb_purchased")
 
                         # Play shop purchase sound on successful buy
                         AudioManager().play_shop()
@@ -441,19 +487,44 @@ class GameScreen:
                     self.world.entity_team_changer(self.new_unit_id)
                     self.update_unit_counts()
 
+                elif data.get("type") == "TIMER_UPDATE":
+                    self.timer_seconds = data["payload"]["remaining_seconds"]
+
                 elif data.get("type") == "RESOURCES":
 
                     self.new_gold = data["payload"]["new_balance"]
+                    gold_diff = self.new_gold - self.player_gold
+
+                    if gold_diff > 0 and self.is_arcade and self.last_kill_world is not None:
+                        gold_per_entity = Config.ARCADE_KILL_GOLD_UNIT
+                        bomb_gold = Config.ARCADE_KILL_GOLD_BOMB
+                        if gold_diff >= bomb_gold:
+                            text = f"+{bomb_gold}"
+                        else:
+                            text = f"+{gold_diff}"
+                        world_x, world_y = self.last_kill_world
+                        self.kill_gold_floats.append({
+                            "text": text,
+                            "world_x": world_x,
+                            "world_y": world_y,
+                            "alpha": 255,
+                            "start_time": pygame.time.get_ticks(),
+                            "duration": 1000,
+                        })
 
                     self.player_gold = self.new_gold
+                    self.previous_gold = self.player_gold
                     self.infobox_gold.update_text(str(self.player_gold))
 
                 elif data.get("type") == "UNIT_DAMAGED":
 
-                    # INFORMACION SOBRE EL OBJETIVO
                     self.target_entity_id = data["payload"]["target_entity_id"]
                     self.attacker_entity_id = data["payload"]["attacker_entity_id"]
                     self.target_current_hp = data["payload"]["current_hp"]
+
+                    if self.is_arcade:
+                        if self.target_current_hp <= 0:
+                            self.tutorial.check_triggers("first_kill")
 
                     if 1000 <= self.target_entity_id <= 4999 or 6000 <= self.target_entity_id <= 9999:
                         self.world.units[self.target_entity_id].reduce_health(self.target_current_hp)
@@ -502,6 +573,9 @@ class GameScreen:
 
                     AudioManager().play_dead()
 
+                    if id is not None and id in self.world.units:
+                        self.last_kill_world = (self.world.units[id].x, self.world.units[id].y)
+
                     self.handle_entity_death(id)
                     self.screen_manager.network.latest_positions.pop(id,None)
                     
@@ -539,6 +613,12 @@ class GameScreen:
 
         if self.is_shop_open:
             self.shop.update(self.player_gold)
+
+        if self.is_arcade:
+            self.tutorial.update()
+            if self.tutorial.is_active():
+                return
+            self._check_bomb_near_base()
 
         now = pygame.time.get_ticks()
         self.explosion_effects = [
@@ -590,8 +670,40 @@ class GameScreen:
 
         # ================================== INFO BOXES========================================
         self.infobox_gold.draw(self.screen)
-        self.infobox_hat.draw(self.screen)
+        if self.is_arcade:
+            self.infobox_bomb.draw(self.screen)
+        else:
+            self.infobox_hat.draw(self.screen)
         self.infobox_sword.draw(self.screen)
+
+        if self.is_arcade:
+            minutes = self.timer_seconds // 60
+            seconds = self.timer_seconds % 60
+            timer_text = f"{minutes}:{seconds:02d}"
+            timer_surface = self.timer_font.render(timer_text, True, (255, 255, 255))
+            timer_rect = timer_surface.get_rect()
+            timer_rect.centerx = self.screen.get_width() // 2
+            timer_rect.top = int(20 * (self.screen.get_height() / 720))
+            self.screen.blit(timer_surface, timer_rect)
+
+        now = pygame.time.get_ticks()
+        for anim in self.kill_gold_floats[:]:
+            elapsed = now - anim["start_time"]
+            progress = elapsed / anim["duration"]
+            if progress >= 1.0:
+                self.kill_gold_floats.remove(anim)
+                continue
+            screen_x = int(anim["world_x"] - self.camera.x)
+            screen_y = int(anim["world_y"] - self.camera.y) - int(40 * progress)
+            alpha = int(255 * (1.0 - progress))
+            font = pygame.font.Font(
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "Anton-Regular.ttf"),
+                int(28 * (self.screen.get_height() / 720)),
+            )
+            text_surf = font.render(anim["text"], True, (50, 220, 50))
+            text_surf.set_alpha(alpha)
+            text_rect = text_surf.get_rect(center=(screen_x, screen_y))
+            self.screen.blit(text_surf, text_rect)
 
         # ================================= SELECTION BOX =======================================
         # DRAW SELECTION BOX
@@ -623,6 +735,9 @@ class GameScreen:
             else:
                 self._draw_game_paused_message()
 
+        if self.is_arcade:
+            self.tutorial.draw()
+
     def _draw_game_paused_message(self):
         """Draw a simple gray message box for the non-initiator player during pause."""
         BASE_W, BASE_H = 1280, 720
@@ -645,6 +760,26 @@ class GameScreen:
         text_surface = font.render("GAME PAUSED", True, (255, 255, 255))
         text_rect = text_surface.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 2))
         self.screen.blit(text_surface, text_rect)
+
+    def _check_bomb_near_base(self):
+        if self.tutorial.disabled or self.tutorial.is_active():
+            return
+        enemy_base = None
+        for s_id, structure in self.world.structures.items():
+            owner = self.world.get_owner_from_id(s_id)
+            if owner is not None and owner != self.player_Id:
+                if 0 <= s_id <= 999 or 5000 <= s_id <= 5999:
+                    enemy_base = structure
+                    break
+        if enemy_base is None:
+            return
+        for b_id, bomb in self.world.bombs.items():
+            dx = bomb.x - enemy_base.x
+            dy = bomb.y - enemy_base.y
+            dist = (dx * dx + dy * dy) ** 0.5
+            if dist < 500:
+                self.tutorial.check_triggers("bomb_near_base")
+                break
 
     def _draw_explosion_effects(self):
         now = pygame.time.get_ticks()
