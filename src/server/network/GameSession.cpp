@@ -1168,29 +1168,47 @@ bool GameSession::applyDamageToEntity(int attackerPlayerId,
 		collectors.erase(entityId);
 		bombs.erase(entityId);
 		recentlyDestroyedUnitIds.insert(entityId);
-		if (!games_types::id_ranges::p1Structures.contains(entityId) &&
-			!games_types::id_ranges::p2Structures.contains(entityId))
+		const bool isStructure = games_types::id_ranges::p1Structures.contains(entityId) ||
+		                        games_types::id_ranges::p2Structures.contains(entityId);
+		if (!isStructure)
 		{
 			entityCurrentHp.erase(entityId);
 			entityMaxHp.erase(entityId);
 		}
 
-		if (games_types::classifyEntityTypeFromId(entityId) == games_types::EntityType::Bomb)
+		// Arcade mode kill-gold rewards
+		if (arcadeMode)
 		{
-			auto goldIt = playerGold.find(attackerPlayerId);
-			if (goldIt != playerGold.end())
+			const games_types::EntityType destroyedType = games_types::classifyEntityTypeFromId(entityId);
+			int goldReward = 0;
+			std::string reason;
+			if (destroyedType == games_types::EntityType::Bomb)
 			{
-				goldIt->second += arcadeKillGoldPerBomb;
-				pendingEconomyTransactions.push_back(games_types::EconomyTransaction{
-					attackerPlayerId,
-					arcadeKillGoldPerBomb,
-					goldIt->second,
-					"bomb_destroyed"});
+				goldReward = arcadeKillGoldPerBomb;
+				reason = "bomb_destroyed";
+			}
+			else if (!isStructure)
+			{
+				goldReward = arcadeKillGoldPerUnit;
+				reason = "unit_killed";
+			}
+
+			if (goldReward > 0)
+			{
+				auto goldIt = playerGold.find(attackerPlayerId);
+				if (goldIt != playerGold.end())
+				{
+					goldIt->second += goldReward;
+					pendingEconomyTransactions.push_back(games_types::EconomyTransaction{
+						attackerPlayerId,
+						goldReward,
+						goldIt->second,
+						reason});
+				}
 			}
 		}
 
-		if (games_types::id_ranges::p1Structures.contains(entityId) ||
-			games_types::id_ranges::p2Structures.contains(entityId))
+		if (isStructure)
 		{
 			gameOver = true;
 			winnerPlayerId = ownerPlayerId == 1 ? 2 : 1;
@@ -1273,6 +1291,30 @@ int GameSession::getArcadeKillGoldPerBomb() const
 {
 	std::lock_guard<std::mutex> lock(sessionMutex);
 	return arcadeKillGoldPerBomb;
+}
+
+int GameSession::getArcadeKillGoldPerUnit() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return arcadeKillGoldPerUnit;
+}
+
+int GameSession::getArcadeAutoSpawnIntervalMs() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return arcadeAutoSpawnIntervalMs;
+}
+
+std::chrono::steady_clock::time_point GameSession::getLastAutoSpawnTime() const
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	return lastAutoSpawnTime;
+}
+
+void GameSession::setLastAutoSpawnTime(std::chrono::steady_clock::time_point t)
+{
+	std::lock_guard<std::mutex> lock(sessionMutex);
+	lastAutoSpawnTime = t;
 }
 
 int GameSession::getArcadeBombHp() const
@@ -1406,6 +1448,8 @@ void GameSession::initializeGameState()
         // Next attacker IDs
         nextP1AttackerId = 1000 + arcadeInitialAttackers;
         nextP2AttackerId = 6000 + arcadeInitialAttackers;
+
+        lastAutoSpawnTime = std::chrono::steady_clock::now();
 
         return;
 	}

@@ -3,6 +3,7 @@
 #include "../include/clientProtocol.h"
 
 #include <chrono>
+#include <cmath>
 #include <sstream>
 #include <thread>
 #include <utility>
@@ -60,6 +61,72 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
             engine->advanceMovement(kTickMs);
             engine->advanceCollectors(kTickMs);
             engine->advanceCombat(kTickMs);
+
+            // Arcade mode auto-spawn: 1 free attacker per player every N ms
+            {
+                auto spawnSession = engine->getSession();
+                if (spawnSession && spawnSession->isArcadeMode())
+                {
+                    const auto now = std::chrono::steady_clock::now();
+                    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        now - spawnSession->getLastAutoSpawnTime()).count();
+                    if (elapsedMs >= spawnSession->getArcadeAutoSpawnIntervalMs())
+                    {
+                        const std::vector<games_types::UnitPosition> structures =
+                            spawnSession->getStructuresSnapshot();
+
+                        for (int playerId : {p1InternalPlayerId, p2InternalPlayerId})
+                        {
+                            if (playerId == 0) continue;
+
+                            games_types::UnitPosition basePos{};
+                            bool foundBase = false;
+                            for (const auto& s : structures)
+                            {
+                                if ((playerId == 1 && games_types::id_ranges::p1Structures.contains(s.entity_id)) ||
+                                    (playerId == 2 && games_types::id_ranges::p2Structures.contains(s.entity_id)))
+                                {
+                                    basePos = s;
+                                    foundBase = true;
+                                    break;
+                                }
+                            }
+                            if (!foundBase) continue;
+
+                            int unitId = -1;
+                            if (!spawnSession->allocateUnitId(
+                                    playerId, games_types::EntityType::Attacker, unitId))
+                                continue;
+
+                            const float angleStep = 0.55f;
+                            const float radius = 250.0f;
+                            const float angle = static_cast<float>(unitId % 11) * angleStep;
+                            const float spawnX = basePos.x + radius * std::cos(angle);
+                            const float spawnY = basePos.y + radius * std::sin(angle);
+
+                            spawnSession->upsertUnitPosition(unitId, spawnX, spawnY);
+                            spawnSession->registerSpawnedUnit(
+                                unitId, playerId, games_types::EntityType::Attacker);
+
+                            if (matchEventCallback)
+                            {
+                                std::string spawnBroadcast =
+                                    std::string("{\"type\":\"UNIT_SPAWNED\",\"payload\":{") +
+                                    "\"unit_id\":" + std::to_string(unitId) + "," +
+                                    "\"unit_type\":" +
+                                    std::to_string(static_cast<int>(games_types::EntityType::Attacker)) + "," +
+                                    "\"owner_player\":" + std::to_string(playerId) +
+                                    "}}\n";
+                                matchEventCallback(p1Socket, spawnBroadcast);
+                                if (p2Socket != p1Socket)
+                                    matchEventCallback(p2Socket, spawnBroadcast);
+                            }
+                        }
+
+                        spawnSession->setLastAutoSpawnTime(now);
+                    }
+                }
+            }
 
             const auto attackResults = engine->drainAttackResults();
             for (const auto& result : attackResults)

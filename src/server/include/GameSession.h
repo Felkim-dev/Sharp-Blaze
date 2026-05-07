@@ -63,6 +63,8 @@ class GameSession
         bool arcadeBaseImmunityToAttackers = true;
         int arcadeExplosionRadius = 250;
 
+        std::chrono::steady_clock::time_point lastAutoSpawnTime;
+
         int winnerPlayerId = 0;
         int nextP1AttackerId = games_types::id_ranges::p1Attackers.minId;
         int nextP1CollectorId = games_types::id_ranges::p1Collectors.minId;
@@ -143,7 +145,11 @@ class GameSession
 
         int getArcadeExplosionRadius() const;
         int getArcadeKillGoldPerBomb() const;
+        int getArcadeKillGoldPerUnit() const;
+        int getArcadeAutoSpawnIntervalMs() const;
         int getArcadeBombHp() const;
+        std::chrono::steady_clock::time_point getLastAutoSpawnTime() const;
+        void setLastAutoSpawnTime(std::chrono::steady_clock::time_point t);
         void setGameOver(int winnerId);
 
         void clearRecentlyDestroyedUnits();
