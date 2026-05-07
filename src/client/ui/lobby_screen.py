@@ -2,10 +2,16 @@ import pygame
 
 from ui.component import Button, Text,TextBox,CloseButton
 
-import subprocess
 import threading
 import time
 import shutil
+
+try:
+    import docker
+    DOCKER_SDK_AVAILABLE = True
+except Exception:
+    docker = None
+    DOCKER_SDK_AVAILABLE = False
 
 from utils.config import Config
 from utils.json import JSON_Manager
@@ -79,6 +85,12 @@ class LobbyScreen:
         posx_text_player2 = center_x_text_player2 + width_text // 2
         posy_text_player2 = init_y - int(40 * sy)
         self.text_player2 = Text((posx_text_player2, posy_text_player2), "OPPONENT", TEXT_WH[1] // 2, self.WHITE)
+        
+        # Match state attributes (initialized for both broker and bot match flows)
+        self.player_id = None
+        self.local_player_id = None
+        self.enemy_player_id = None
+        self.session_id = None
         
         # Bot game loop state
         self.bot_game_loop = None
@@ -247,37 +259,108 @@ class LobbyScreen:
         """Spawn a local Docker container for the server and connect both player and bot to it."""
         print("[LOBBY] Spawning local server container...")
 
-        if shutil.which("docker") is None:
-            print("[LOBBY] Docker not found on PATH. Cannot spawn server.")
+        if not DOCKER_SDK_AVAILABLE:
+            print("[LOBBY] Python docker SDK not available. Install 'docker' python package.")
             return
 
         image_name = "sharp-blaze-server:latest"
         container_name = "sharp_blaze_local_server"
 
-        cmd = [
-            "docker",
-            "run",
-            "--rm",
-            "-d",
-            "-p",
-            f"{Config.TCP_PORT_SERVER}:{Config.TCP_PORT_SERVER}",
-            "-p",
-            f"{Config.GAME_SERVER_UDP_PORT}:{Config.GAME_SERVER_UDP_PORT}",
-            "--name",
-            container_name,
-            image_name,
-        ]
+        try:
+            client = docker.from_env()
+        except Exception as e:
+            print(f"[LOBBY] Failed to create docker client: {e}")
+            return
 
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True)
-            if proc.returncode != 0:
-                print(f"[LOBBY] Docker run failed: {proc.stderr}")
-                return
-            container_id = proc.stdout.strip()
-            print(f"[LOBBY] Docker container started: {container_id}")
+            # Ensure image exists (will raise if missing)
+            try:
+                client.images.get(image_name)
+            except Exception:
+                print(f"[LOBBY] Image {image_name} not found locally. Attempting to pull...")
+                try:
+                    client.images.pull(image_name)
+                except Exception as e:
+                    print(f"[LOBBY] Failed to pull image: {e}")
+                    return
 
-            # Give server a moment to initialize
-            time.sleep(2.5)
+            # If a container with the same name exists, remove it first to avoid conflict
+            existing = client.containers.list(all=True, filters={"name": container_name})
+            for c in existing:
+                try:
+                    print(f"[LOBBY] Removing existing container {c.id} with name {container_name}")
+                    c.remove(force=True)
+                except Exception as e:
+                    print(f"[LOBBY] Failed to remove existing container {c.id}: {e}")
+
+            # Run container detached and publish ports
+            ports = {
+                f"{Config.TCP_PORT_SERVER}/tcp": Config.TCP_PORT_SERVER,
+                f"{Config.GAME_SERVER_UDP_PORT}/udp": Config.GAME_SERVER_UDP_PORT,
+            }
+
+            container = client.containers.run(
+                image_name,
+                detach=True,
+                name=container_name,
+                ports=ports,
+                remove=False,
+            )
+
+            print(f"[LOBBY] Docker container started: {container.id}")
+
+            # Save container handle in screen manager for later cleanup
+            self.screen_manager.local_server_container = container
+
+            # Verify container is running and get logs if something is wrong
+            try:
+                container.reload()
+                print(f"[LOBBY] Container status: {container.status}")
+                if container.status != "running":
+                    logs = container.logs(tail=20).decode('utf-8', errors='ignore')
+                    print(f"[LOBBY] Warning: Container not running. Logs:\n{logs}")
+            except Exception as e:
+                print(f"[LOBBY] Failed to check container status: {e}")
+
+            # Wait until server TCP port is accepting connections and responding (timeout 15s)
+            import socket as _socket
+            start = time.time()
+            timeout = 15.0
+            server_ready = False
+            attempt = 0
+            while time.time() - start < timeout:
+                attempt += 1
+                try:
+                    s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+                    s.settimeout(2.0)
+                    result = s.connect_ex(("127.0.0.1", Config.TCP_PORT_SERVER))
+                    if result == 0:
+                        print(f"[LOBBY] Server TCP port ready on attempt {attempt}")
+                        s.close()
+                        server_ready = True
+                        break
+                    else:
+                        s.close()
+                except Exception as e:
+                    print(f"[LOBBY] Readiness check attempt {attempt} failed: {e}")
+                
+                if not server_ready:
+                    time.sleep(0.8)
+
+            if not server_ready:
+                print(f"[LOBBY] Error: server TCP port did not become ready after {timeout}s and {attempt} attempts")
+                # Try to get container logs to diagnose the issue
+                try:
+                    container.reload()
+                    logs = container.logs(tail=50).decode('utf-8', errors='ignore')
+                    print(f"[LOBBY] Container logs for diagnosis:\n{logs}")
+                    if container.status != "running":
+                        print(f"[LOBBY] Container is not running! Status: {container.status}")
+                except Exception as e:
+                    print(f"[LOBBY] Could not retrieve container logs: {e}")
+                # Continue anyway and let connections fail naturally
+            else:
+                print(f"[LOBBY] Server ready in {time.time() - start:.1f}s")
 
             # Build a synthetic match payload so NetworkManager can connect directly
             player_name = self.textbox_nickname1.text or "Player"
@@ -294,17 +377,37 @@ class LobbyScreen:
                 "global_player_id": 1,
             }
 
+            # Initialize lobby screen match state from synthetic payload
+            self.player_id = match_payload.get("global_player_id", 1)
+            self.local_player_id = match_payload.get("you", player_name)
+            self.enemy_player_id = match_payload.get("opponent", bot_name)
+            self.session_id = match_payload.get("session_id", 1)
+
             # Connect player (network)
             print(f"[LOBBY] Connecting player '{player_name}' to local server...")
             self.screen_manager.network.connect_to_game_server(match_payload)
+
+            # Wait a bit for player to connect before bot attempts
+            time.sleep(0.8)
 
             # Connect bot in background thread
             def connect_bot():
                 bot = self.screen_manager.bot_instance
                 if bot:
-                    print(f"[LOBBY] Bot '{bot.bot_name}' connecting to local server...")
+                    # Ensure bot is configured to use the local server endpoint
+                    bot.server_ip = "127.0.0.1"
+                    bot.tcp_port_server = Config.TCP_PORT_SERVER
+                    print(f"[LOBBY] Bot '{bot.bot_name}' connecting to local server at 127.0.0.1:{Config.TCP_PORT_SERVER}...")
                     if bot.connect():
                         print("[LOBBY] Bot connected successfully")
+                        # Both are connected; now send START_GAME to initialize the match
+                        time.sleep(0.5)
+                        print("[LOBBY] Sending START_GAME to server...")
+                        try:
+                            start_msg = JSON_Manager.get_startgame(session_id=1)
+                            self.screen_manager.network.send_json(start_msg)
+                        except Exception as e:
+                            print(f"[LOBBY] Error sending START_GAME: {e}")
                     else:
                         print("[LOBBY] Bot failed to connect")
 

@@ -10,15 +10,17 @@ from utils.config import Config
 class BotPlayer:
     """TCP connection handler for the bot player (similar to NetworkManager but simplified)"""
 
-    def __init__(self, bot_name: str):
+    def __init__(self, bot_name: str, server_ip: str = None, tcp_port: int = None):
         """Initialize bot player connection parameters
         
         Args:
             bot_name (str): Name to identify the bot (e.g., "SharpBlaze_Bot_1")
+            server_ip (str): Override default server IP (defaults to Config.SERVER_IP)
+            tcp_port (int): Override default TCP port (defaults to Config.TCP_PORT_SERVER)
         """
         self.bot_name = bot_name
-        self.server_ip = Config.SERVER_IP
-        self.tcp_port_server = Config.TCP_PORT_SERVER
+        self.server_ip = server_ip if server_ip is not None else Config.SERVER_IP
+        self.tcp_port_server = tcp_port if tcp_port is not None else Config.TCP_PORT_SERVER
         
         # Connection state
         self.client_tcp = None
@@ -70,10 +72,11 @@ class BotPlayer:
         )
         self._listen_thread.start()
         
-        # Wait for connection to establish (max 5 seconds)
-        for _ in range(50):
+        # Wait for connection to establish (max 12 seconds, more time for local server startup)
+        max_attempts = 120  # 120 * 0.1s = 12s
+        for attempt in range(max_attempts):
             if self.connected:
-                print(f"[BOT] {self.bot_name} connected to server")
+                print(f"[BOT] {self.bot_name} connected to server after {attempt * 0.1:.1f}s")
                 return True
             time.sleep(0.1)
         
