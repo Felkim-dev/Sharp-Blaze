@@ -86,9 +86,9 @@ class GameScreen:
         self.winner_player_id = None
         self.is_paused = False
         self.pause_initiator = False
-        # Phase 1: visual only, game continues running underneath
-        # Pause overlay created lazily on first ESC press
         self.pause_overlay = None
+
+        self.explosion_effects = []
         # Center the game-over UI relative to screen dimensions
         go_box_w, go_box_h = int(800 * sx), int(200 * sy)
         go_box_x = (screen_w - go_box_w) // 2
@@ -107,6 +107,8 @@ class GameScreen:
         self.world.structures.clear()
         self.world.projectiles.clear()
         self.world.obstacles.clear()
+        self.world.bombs.clear()
+        self.explosion_effects.clear()
         
         # Reset game states
         self.is_game_over = False
@@ -351,18 +353,26 @@ class GameScreen:
                         self.is_shop_open = False
 
     def handle_entity_death(self, entity_id: int):
-        """Delete the entity whe it is death."""
 
-        # Delete units
         if entity_id in self.world.units:
             del self.world.units[entity_id]
             print(f"[WORLD] Unit {entity_id} destroyed and removed.")
 
-        # Delete Structures
         elif entity_id in self.world.structures:
             del self.world.structures[entity_id]
             print(f"[WORLD] Structure {entity_id} destroyed and removed.")
-            
+
+        elif entity_id in self.world.bombs:
+            bomb = self.world.bombs[entity_id]
+            self.explosion_effects.append({
+                "x": bomb.x,
+                "y": bomb.y,
+                "start_time": pygame.time.get_ticks(),
+                "duration": 500,
+            })
+            del self.world.bombs[entity_id]
+            print(f"[WORLD] Bomb {entity_id} destroyed and removed.")
+
         self.update_unit_counts()
 
     def update(self):
@@ -487,7 +497,9 @@ class GameScreen:
 
                     id = self.world.detect_death_units()
 
-                    # Play death sound when an entity is destroyed
+                    if id is not None and self.world.is_bomb_id(id):
+                        AudioManager().play_explosion()
+
                     AudioManager().play_dead()
 
                     self.handle_entity_death(id)
@@ -528,6 +540,12 @@ class GameScreen:
         if self.is_shop_open:
             self.shop.update(self.player_gold)
 
+        now = pygame.time.get_ticks()
+        self.explosion_effects = [
+            e for e in self.explosion_effects
+            if now - e["start_time"] < e["duration"]
+        ]
+
         self.world.update()
 
     def draw(self):
@@ -543,6 +561,7 @@ class GameScreen:
 
         # ======================= MAIN ELEMENTS ============================
         self.world.draw(self.screen, self.camera)
+        self._draw_explosion_effects()
         self.minimap.draw(self.screen,self.world,self.camera)
         self.telemetry.draw(self.screen, self.screen_manager.clock , self.screen_manager.network)
         if self.is_shop_open:
@@ -626,3 +645,21 @@ class GameScreen:
         text_surface = font.render("GAME PAUSED", True, (255, 255, 255))
         text_rect = text_surface.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 2))
         self.screen.blit(text_surface, text_rect)
+
+    def _draw_explosion_effects(self):
+        now = pygame.time.get_ticks()
+        for effect in self.explosion_effects:
+            elapsed = now - effect["start_time"]
+            progress = elapsed / effect["duration"]
+
+            screen_x = int(effect["x"] - self.camera.x)
+            screen_y = int(effect["y"] - self.camera.y)
+
+            max_radius = 60
+            radius = int(max_radius * progress)
+            alpha = int(255 * (1.0 - progress))
+
+            explosion_surface = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+            color = (255, int(160 * (1.0 - progress)), 0, alpha)
+            pygame.draw.circle(explosion_surface, color, (radius, radius), radius)
+            self.screen.blit(explosion_surface, (screen_x - radius, screen_y - radius))

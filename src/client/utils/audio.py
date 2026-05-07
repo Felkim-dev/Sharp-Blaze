@@ -38,6 +38,7 @@ class AudioManager:
         self.sfx_receive_shot = self._load(os.path.join(AUDIO_DIR, "receive_shot.wav"))
         self.sfx_shoot = self._load(os.path.join(AUDIO_DIR, "shoot.wav"))
         self.sfx_shop = self._load(os.path.join(AUDIO_DIR, "shop.wav"))
+        self.sfx_explosion = self._load(os.path.join(AUDIO_DIR, "explosion.wav"))
 
         # Volume defaults (0.0 – 1.0)
         self.sfx_volume = 1.0      # Master SFX volume (0.0 – 1.0)
@@ -50,6 +51,7 @@ class AudioManager:
             'receive_shot': 0.4,
             'shoot': 0.4,
             'shop': 0.6,
+            'explosion': 0.8,
         }
 
         self._apply_sfx_volume()
@@ -72,6 +74,7 @@ class AudioManager:
             'receive_shot': self.sfx_receive_shot,
             'shoot': self.sfx_shoot,
             'shop': self.sfx_shop,
+            'explosion': self.sfx_explosion,
         }
         for key, sound in sfx_map.items():
             if sound:
@@ -138,7 +141,10 @@ class AudioManager:
             self.sfx_shoot.play()
 
     def play_shop(self):
-        """A successful purchase was made in the shop."""
         if self.sfx_shop:
             self.sfx_shop.play()
+
+    def play_explosion(self):
+        if self.sfx_explosion:
+            self.sfx_explosion.play()
 
