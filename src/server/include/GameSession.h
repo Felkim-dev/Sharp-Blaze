@@ -43,6 +43,22 @@ class GameSession
         int baseHp = 1500;
         int minDamage = 1;
         bool gameOver = false;
+        bool arcadeMode = false;
+
+        // Arcade mode config (loaded from arcade_config.json)
+        int arcadeStartingGold = 500;
+        int arcadeBombCost = 1000;
+        int arcadeAttackerCost = 200;
+        int arcadeBombHp = 200;
+        int arcadeBombSpeed = 80;
+        int arcadeKillGoldPerUnit = 100;
+        int arcadeKillGoldPerBomb = 500;
+        int arcadeAutoSpawnIntervalMs = 10000;
+        int arcadeInitialAttackers = 3;
+        int arcadeGameDurationSeconds = 300;
+        bool arcadeBaseImmunityToAttackers = true;
+        int arcadeExplosionRadius = 250;
+
         int winnerPlayerId = 0;
         int nextP1AttackerId = games_types::id_ranges::p1Attackers.minId;
         int nextP1CollectorId = games_types::id_ranges::p1Collectors.minId;
@@ -54,13 +70,15 @@ class GameSession
 
         int ownerFromEntityId(int entityId) const;
         void loadCombatConfigNoLock();
+        void loadArcadeConfigNoLock();
 
     public:
-        GameSession(int player1, int player2, int sessionId);
+        GameSession(int player1, int player2, int sessionId, bool arcadeMode = false);
         ~GameSession() = default;
 
         int getSessionId() const;
         bool hasPlayer(int playerId) const;
+        bool isArcadeMode() const { return arcadeMode; }
 
         void registerUdpClient(const std::string& clientKey, const RegisteredClient& client);
         bool isUdpClientRegistered(const std::string& clientKey) const;

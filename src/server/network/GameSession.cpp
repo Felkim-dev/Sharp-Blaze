@@ -255,8 +255,8 @@ std::vector<games_types::CellCoord> buildObstacleCells(const std::vector<std::ve
 }
 }
 
-GameSession::GameSession(int player1, int player2, int sessionId)
-	: player1(player1), player2(player2), sessionId(sessionId)
+GameSession::GameSession(int player1, int player2, int sessionId, bool arcadeMode)
+	: player1(player1), player2(player2), sessionId(sessionId), arcadeMode(arcadeMode)
 {
 	initializeGameState();
 }
@@ -283,6 +283,16 @@ int GameSession::ownerFromEntityId(int entityId) const
 	if (games_types::id_ranges::p2Structures.contains(entityId) ||
 		games_types::id_ranges::p2Attackers.contains(entityId) ||
 		games_types::id_ranges::p2Collectors.contains(entityId))
+	{
+		return 2;
+	}
+
+	if (games_types::id_ranges::p1Bombs.contains(entityId))
+	{
+		return 1;
+	}
+
+	if (games_types::id_ranges::p2Bombs.contains(entityId))
 	{
 		return 2;
 	}
@@ -362,6 +372,77 @@ void GameSession::loadCombatConfigNoLock()
 		{
 			const json& baseCfg = unitsCfg["base"];
 			baseHp = std::max(1, readIntField(baseCfg, {"hp"}, baseHp));
+		}
+	}
+}
+
+void GameSession::loadArcadeConfigNoLock()
+{
+	arcadeStartingGold = 500;
+	arcadeBombCost = 1000;
+	arcadeAttackerCost = 200;
+	arcadeBombHp = 200;
+	arcadeBombSpeed = 80;
+	arcadeKillGoldPerUnit = 100;
+	arcadeKillGoldPerBomb = 500;
+	arcadeAutoSpawnIntervalMs = 10000;
+	arcadeInitialAttackers = 3;
+	arcadeGameDurationSeconds = 300;
+	arcadeBaseImmunityToAttackers = true;
+	arcadeExplosionRadius = 250;
+
+	const std::vector<std::filesystem::path> candidates = {
+		std::filesystem::path("src/config/arcade_config.json"),
+		std::filesystem::path("../src/config/arcade_config.json"),
+		std::filesystem::path("../../src/config/arcade_config.json"),
+		std::filesystem::path("../../../src/config/arcade_config.json")
+	};
+
+	std::filesystem::path selectedPath;
+	for (const auto& p : candidates)
+	{
+		if (std::filesystem::exists(p))
+		{
+			selectedPath = p;
+			break;
+		}
+	}
+
+	if (selectedPath.empty())
+	{
+		return;
+	}
+
+	std::ifstream file(selectedPath);
+	if (!file.is_open())
+	{
+		return;
+	}
+
+	json root = json::parse(file, nullptr, false);
+	if (root.is_discarded() || !root.is_object())
+	{
+		return;
+	}
+
+	if (root.contains("arcade_mode") && root["arcade_mode"].is_object())
+	{
+		const json& mode = root["arcade_mode"];
+		arcadeStartingGold = std::max(0, readIntField(mode, {"starting_gold"}, arcadeStartingGold));
+		arcadeBombCost = std::max(0, readIntField(mode, {"bomb_cost"}, arcadeBombCost));
+		arcadeAttackerCost = std::max(0, readIntField(mode, {"attacker_cost"}, arcadeAttackerCost));
+		arcadeBombHp = std::max(0, readIntField(mode, {"bomb_hp"}, arcadeBombHp));
+		arcadeBombSpeed = std::max(0, readIntField(mode, {"bomb_speed"}, arcadeBombSpeed));
+		arcadeKillGoldPerUnit = std::max(0, readIntField(mode, {"kill_gold_per_unit"}, arcadeKillGoldPerUnit));
+		arcadeKillGoldPerBomb = std::max(0, readIntField(mode, {"kill_gold_per_bomb"}, arcadeKillGoldPerBomb));
+		arcadeAutoSpawnIntervalMs = std::max(0, readIntField(mode, {"auto_spawn_interval_ms"}, arcadeAutoSpawnIntervalMs));
+		arcadeInitialAttackers = std::max(0, readIntField(mode, {"initial_attackers"}, arcadeInitialAttackers));
+		arcadeGameDurationSeconds = std::max(0, readIntField(mode, {"game_duration_seconds"}, arcadeGameDurationSeconds));
+		arcadeExplosionRadius = std::max(0, readIntField(mode, {"explosion_radius"}, arcadeExplosionRadius));
+
+		if (mode.contains("base_immunity_to_attackers") && mode["base_immunity_to_attackers"].is_boolean())
+		{
+			arcadeBaseImmunityToAttackers = mode["base_immunity_to_attackers"].get<bool>();
 		}
 	}
 }
@@ -1106,6 +1187,7 @@ void GameSession::initializeGameState()
 {
 	std::lock_guard<std::mutex> lock(sessionMutex);
 	loadCombatConfigNoLock();
+	loadArcadeConfigNoLock();
 
 	unitGoldCostByType.clear();
 	unitGoldCostByType[games_types::EntityType::Attacker] = 200;
@@ -1121,6 +1203,71 @@ void GameSession::initializeGameState()
 	entityMaxHp.clear();
 	gameOver = false;
 	winnerPlayerId = 0;
+
+	if (arcadeMode)
+	{
+		// Arcade mode: no collectors, no mines, config-driven initial attackers per player
+		unitGoldCostByType[games_types::EntityType::Attacker] = arcadeAttackerCost;
+		playerGold[player1] = arcadeStartingGold;
+		playerGold[player2] = arcadeStartingGold;
+
+		structures[0] = UnitPosition{0, 300.0f, 4700.0f};
+		structures[5000] = UnitPosition{5000, 4700.0f, 300.0f};
+		entityCurrentHp[0] = baseHp;
+		entityCurrentHp[5000] = baseHp;
+		entityMaxHp[0] = baseHp;
+		entityMaxHp[5000] = baseHp;
+
+		for (int i = 0; i < arcadeInitialAttackers; ++i)
+		{
+			const int p1Id = 1000 + i;
+			const int p2Id = 6000 + i;
+			units[p1Id] = UnitPosition{p1Id, 700.0f, 4700.0f - i * 100.0f};
+			units[p2Id] = UnitPosition{p2Id, 4400.0f, 300.0f + i * 100.0f};
+			entityCurrentHp[p1Id] = attackerHp;
+			entityCurrentHp[p2Id] = attackerHp;
+			entityMaxHp[p1Id] = attackerHp;
+			entityMaxHp[p2Id] = attackerHp;
+		}
+
+		// Shop in the center
+		shops[11000] = ShopUnit{11000, 2500.0f, 2500.0f, 120.0f};
+
+		// Obstacles (maze)
+		{
+			std::unordered_set<games_types::CellCoord, CellCoordHash> reservedCells;
+			buildReservedCells(structures, resources, units, shops, reservedCells);
+
+			std::vector<std::vector<std::uint8_t>> openGrid;
+			std::vector<games_types::CellCoord> obstacleCells;
+			const games_types::CellCoord base1Cell = worldToGridCell(structures.at(0).x, structures.at(0).y);
+			const games_types::CellCoord base2Cell = worldToGridCell(structures.at(5000).x, structures.at(5000).y);
+
+			for (int attempt = 0; attempt < kMazeAttemptLimit; ++attempt)
+			{
+				generateObstacleField(static_cast<unsigned int>(sessionId + attempt + 1), openGrid);
+				obstacleCells = buildObstacleCells(openGrid, reservedCells);
+
+				if (hasTraversablePath(openGrid, reservedCells, base1Cell, base2Cell))
+				{
+					break;
+				}
+
+				obstacleCells.clear();
+			}
+
+			games_types::StaticObstacle obstacleLine{};
+			obstacleLine.id = 12000;
+			obstacleLine.cells = std::move(obstacleCells);
+			staticObstacles[obstacleLine.id] = obstacleLine;
+		}
+
+		// Next attacker IDs
+		nextP1AttackerId = 1000 + arcadeInitialAttackers;
+		nextP2AttackerId = 6000 + arcadeInitialAttackers;
+
+		return;
+	}
 
 	//bases de los jugadores
 	structures[0] = UnitPosition{0, 300.0f, 4700.0f};

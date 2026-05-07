@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "description": "AI Bot configuration for Sharp-Blaze. Defines difficulty levels and simplex optimization parameters.",
+  
+  "difficulties": {
+    "EASY": {
+      "description": "Easy difficulty: Bot plays cautiously with basic heuristics",
+      "decision_interval_ms": 1000,
+      "simplex_aggression": 0.3,
+      "gold_spend_ratio": 0.4,
+      "target_attacker_count": 2,
+      "target_collector_count": 3,
+      "threat_weight": 0.2,
+      "resource_weight": 0.5,
+      "position_weight": 0.3
+    },
+    "MEDIUM": {
+      "description": "Medium difficulty: Bot balances aggression and resource gathering",
+      "decision_interval_ms": 700,
+      "simplex_aggression": 0.6,
+      "gold_spend_ratio": 0.6,
+      "target_attacker_count": 3,
+      "target_collector_count": 5,
+      "threat_weight": 0.4,
+      "resource_weight": 0.4,
+      "position_weight": 0.2
+    },
+    "HARD": {
+      "description": "Hard difficulty: Bot plays aggressively with optimized simplex decisions",
+      "decision_interval_ms": 500,
+      "simplex_aggression": 0.9,
+      "gold_spend_ratio": 0.8,
+      "target_attacker_count": 5,
+      "target_collector_count": 7,
+      "threat_weight": 0.5,
+      "resource_weight": 0.3,
+      "position_weight": 0.2
+    }
+  },
+
+  "simplex_constraints": {
+    "max_units_per_player": 50,
+    "max_units_per_player_description": "Maximum number of units any player can have in play simultaneously. Prevents exponential unit spam.",
+    "max_attackers_per_decision": 10,
+    "max_attackers_per_decision_description": "Maximum Attacker units to purchase in a single decision cycle",
+    "max_collectors_per_decision": 10,
+    "max_collectors_per_decision_description": "Maximum Collector units to purchase in a single decision cycle",
+    "pathfinding_max_iterations": 1000,
+    "pathfinding_max_iterations_description": "Maximum A* iterations when computing unit movement paths. Prevents infinite loops."
+  }
+}

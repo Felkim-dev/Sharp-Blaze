@@ -8,6 +8,7 @@ from ui.join_screen import JoinScreen
 from ui.lobby_screen import LobbyScreen
 from ui.conecting_screen import ConnectingScreen
 from ui.game_screen import GameScreen
+from ui.bot_difficulty_screen import BotDifficultyScreen
 
 #IMPORT NETWORK MANAGER
 from network.network import NetworkManager
@@ -50,6 +51,7 @@ class GAME:
             "LOBBY": LobbyScreen(self, self.screen),
             "CONNECTING": ConnectingScreen(self, self.screen),
             "GAME": GameScreen(self, self.screen),
+            "BOT_DIFFICULTY": BotDifficultyScreen(self, self.screen),
         }
 
     def change_screen(self, screen_name):

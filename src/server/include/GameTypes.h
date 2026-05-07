@@ -56,7 +56,8 @@ namespace games_types
         Collector,
         ResourceMine,
         Shop,
-        Unknown
+        Unknown,
+        Bomb
     };
 
     enum class ResourceType : std::uint8_t
@@ -117,6 +118,9 @@ namespace games_types
 
         inline constexpr IdRange resourceMines{10000, 10999};
         inline constexpr IdRange shops{11000, 11999};
+
+        inline constexpr IdRange p1Bombs{12000, 12999};
+        inline constexpr IdRange p2Bombs{13000, 13999};
     }
 
     inline EntityType classifyEntityTypeFromId(int entityId)
@@ -140,6 +144,10 @@ namespace games_types
         if (id_ranges::shops.contains(entityId))
         {
             return EntityType::Shop;
+        }
+        if (id_ranges::p1Bombs.contains(entityId) || id_ranges::p2Bombs.contains(entityId))
+        {
+            return EntityType::Bomb;
         }
 
         return EntityType::Unknown;

@@ -11,6 +11,7 @@
 #include "NetworkManager.h"
 #include "clientProtocol.h"
 #include "platform_socket.h"
+#include "udpDispatcher.h"
 
 bool NetworkManager::sendText(SOCKET socket, const std::string& text)
 {
@@ -141,14 +142,14 @@ void NetworkManager::handleReadyNoLock(SOCKET socket, const int &sessionId)
     const int p1InternalPlayerId = g_players.count(players.first) ? g_players[players.first].internalPlayerId : 0;
     const int p2InternalPlayerId = g_players.count(players.second) ? g_players[players.second].internalPlayerId : 0;
 
-    // // REGISTRO UDP TEMPRANO: antes de enviar START_GAME
-    // // Garantiza que cuando el cliente mande UDP_HELLO, la sesión ya existe
-    // GlobalUDPDispatcher::getInstance().onSessionStarted(
-    //     effectiveSessionId,
-    //     p1InternalPlayerId,
-    //     p2InternalPlayerId,
-    //     session);
-    //std::cout << "[UDP] Session registered early for UDP handshake: " << effectiveSessionId << std::endl;
+    // EARLY UDP REGISTRATION: before sending START_GAME
+    // Ensures that when the client sends UDP_HELLO, the session already exists
+    GlobalUDPDispatcher::getInstance().onSessionStarted(
+        effectiveSessionId,
+        p1InternalPlayerId,
+        p2InternalPlayerId,
+        session);
+    std::cout << "[UDP] Session registered early for UDP handshake: " << effectiveSessionId << std::endl;
 
     const std::uint16_t udpPort = 5556;
     const std::string startMsgP1 = client_protocol::BuildMatchStartResponse(
@@ -254,9 +255,9 @@ NetworkManager::~NetworkManager(){
     stop();
 };
 
-void NetworkManager::initializeDedicatedSession(int sessionId)
+void NetworkManager::initializeDedicatedSession(int sessionId, bool arcadeMode)
 {
-    sessionOrchestrator.createDedicatedSession(sessionId);
+    sessionOrchestrator.createDedicatedSession(sessionId, arcadeMode);
 }
 
 void NetworkManager::stop(){
@@ -410,16 +411,24 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         // Create the session if it doesn't exist
                         if (!sessionOrchestrator.getSession(parsed.initialConnect.sessionId))
                         {
-                            sessionOrchestrator.createDedicatedSession(parsed.initialConnect.sessionId);
+                            sessionOrchestrator.createDedicatedSession(parsed.initialConnect.sessionId, arcadeMode_);
                         }
 
-                        if (!sessionOrchestrator.registerClientToSession(
+                        {
+                            int assignedId = sessionOrchestrator.registerClientToSession(
                                 clientSocket,
                                 parsed.initialConnect.sessionId,
-                                internalPlayerId))
-                        {
-                            std::cerr << "[ERROR] Failed to register client " << parsed.initialConnect.playerId
-                                      << " to dedicated session " << parsed.initialConnect.sessionId << std::endl;
+                                g_players[clientSocket].internalPlayerId);
+
+                            if (assignedId == 0)
+                            {
+                                std::cerr << "[ERROR] Failed to register client " << parsed.initialConnect.playerId
+                                          << " to dedicated session " << parsed.initialConnect.sessionId << std::endl;
+                            }
+                            else
+                            {
+                                g_players[clientSocket].internalPlayerId = assignedId;
+                            }
                         }
 
                         std::cout << "[DEDICATED] P" << playerId << " (" << parsed.initialConnect.playerId
