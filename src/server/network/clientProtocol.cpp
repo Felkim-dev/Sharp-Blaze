@@ -270,6 +270,42 @@ std::string client_protocol::BuildShopAuthorizationResponse(
     return response.dump() + '\n';
 }
 
+std::string client_protocol::BuildBuyUnitResult(
+    const std::string& status,
+    int unitId,
+    int unitType,
+    float spawnX,
+    float spawnY,
+    int newBalance,
+    const std::string& reason)
+{
+    json response = {
+        {"type", "BUY_UNIT_RESULT"},
+        {"status", status}
+    };
+
+    if (status == "accepted")
+    {
+        response["payload"] = {
+            {"unit_id", unitId},
+            {"unit_type", unitType},
+            {"spawn_x", spawnX},
+            {"spawn_y", spawnY},
+            {"new_balance", newBalance}
+        };
+    }
+    else
+    {
+        if (!reason.empty())
+        {
+            response["reason"] = reason;
+        }
+        response["new_balance"] = newBalance;
+    }
+
+    return response.dump() + '\n';
+}
+
 std::string client_protocol::BuildResourcesResponse(int newBalance)
 {
     json response = {

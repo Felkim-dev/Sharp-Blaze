@@ -75,8 +75,13 @@ namespace
         return false;
     }
 
-    bool isPurchasableTroop(games_types::EntityType unitType)
+    bool isPurchasableTroop(games_types::EntityType unitType, bool isArcadeMode)
     {
+        if (isArcadeMode)
+        {
+            return unitType == games_types::EntityType::Attacker ||
+                   unitType == games_types::EntityType::Bomb;
+        }
         return unitType == games_types::EntityType::Attacker ||
                unitType == games_types::EntityType::Collector ||
                unitType == games_types::EntityType::Bomb;
@@ -1205,6 +1210,16 @@ bool GameEngine::reconcileShopAuthorization(int playerId, games_types::ShopAutho
         return false;
     }
 
+    // Arcade mode: always authorized, no proximity check needed
+    if (session->isArcadeMode())
+    {
+        outState.authorized = true;
+        outState.shopId = 11000;
+        outState.unitId = -1;
+        session->setShopAuthorizationState(playerId, outState);
+        return true;
+    }
+
     const std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
     const std::vector<games_types::ShopUnit> shops = session->getShopsSnapshot();
     findShopAuthorizationState(units, shops, playerId, outState);
@@ -1254,7 +1269,7 @@ GameEngine::PurchaseResult GameEngine::processUnitPurchase(
         return result;
     }
 
-    if (!isPurchasableTroop(unitType))
+    if (!isPurchasableTroop(unitType, session->isArcadeMode()))
     {
         result.reason = "unit_type_not_purchasable";
         return result;

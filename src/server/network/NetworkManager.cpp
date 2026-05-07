@@ -582,25 +582,22 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         parsed.buyUnit.unitType,
                         parsed.buyUnit.quantity);
 
-                    std::string buyerMsg;
                     if (!purchase.success)
                     {
-                        buyerMsg =
-                            std::string("{\"type\":\"BUY_UNIT_RESULT\",\"status\":\"rejected\",\"reason\":\"") +
-                            purchase.reason +
-                            "\"}\n";
+                        int currentGold = engine->getSession()->getPlayerGold(internalPlayerId);
+                        std::string buyerMsg = client_protocol::BuildBuyUnitResult(
+                            "rejected", 0, 0, 0.0f, 0.0f, currentGold, purchase.reason);
                         sendText(clientSocket, buyerMsg);
                         continue;
                     }
 
-                    buyerMsg =
-                        std::string("{\"type\":\"BUY_UNIT_RESULT\",\"status\":\"accepted\",\"payload\":{") +
-                        "\"unit_id\":" + std::to_string(purchase.unitId) + "," +
-                        "\"unit_type\":" + std::to_string(static_cast<int>(purchase.unitType)) + "," +
-                        "\"spawn_x\":" + std::to_string(purchase.spawnX) + "," +
-                        "\"spawn_y\":" + std::to_string(purchase.spawnY) + "," +
-                        "\"new_balance\":" + std::to_string(purchase.newBalance) +
-                        "}}\n";
+                    std::string buyerMsg = client_protocol::BuildBuyUnitResult(
+                        "accepted",
+                        purchase.unitId,
+                        static_cast<int>(purchase.unitType),
+                        purchase.spawnX,
+                        purchase.spawnY,
+                        purchase.newBalance);
                     sendText(clientSocket, buyerMsg);
 
                     const std::string goldMessage = client_protocol::BuildResourcesResponse(

@@ -105,6 +105,14 @@ namespace client_protocol
         std::uint16_t udpPort,
         std::shared_ptr<GameSession> session);
     std::string BuildShopAuthorizationResponse(int playerId, const games_types::ShopAuthorizationState& state);
+    std::string BuildBuyUnitResult(
+        const std::string& status,
+        int unitId,
+        int unitType,
+        float spawnX,
+        float spawnY,
+        int newBalance,
+        const std::string& reason = "");
     std::string BuildResourcesResponse(int newBalance);
     std::string BuildAttackResultResponse(
         int attackerId,
