@@ -91,7 +91,7 @@ class Minimap:
         
         # B. Iterate through BOTH dictionaries (units and structures)
         # This prevents code duplication and keeps rendering efficient
-        for entity_dictionary in (world.units, world.structures):
+        for entity_dictionary in (world.units, world.structures, world.bombs):
             for entity in entity_dictionary.values():
 
                 # Scale coordinates to the minimap
@@ -150,6 +150,10 @@ class Minimap:
                         angle += angle_increment
 
                     pygame.draw.polygon(screen, entity.color, star_points)
+
+                elif entity_type == "Bomb":
+                    pygame.draw.circle(screen, (0, 0, 0), (mini_x, mini_y), icon_size)
+                    pygame.draw.circle(screen, (255, 140, 0), (mini_x, mini_y), 2)
 
                 else:
                     # Fallback just in case an unknown entity is added later

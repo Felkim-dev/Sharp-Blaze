@@ -319,7 +319,7 @@ void GlobalUDPDispatcher::loopEmision() {
             constexpr float kCellSize = 50.0f;
             constexpr int kGridMaxIndex = 99;
             
-            auto worldToGrid = [](float value) -> int {
+            auto worldToGrid = [=](float value) -> int {
                 int cell = static_cast<int>(value / kCellSize);
                 if (cell < 0)
                 {
@@ -334,7 +334,6 @@ void GlobalUDPDispatcher::loopEmision() {
 
             for (const auto& unit : units)
             {
-                // Convert world coordinates to grid before sending
                 games_types::UnitPosition gridUnit = unit;
                 gridUnit.x = static_cast<float>(worldToGrid(unit.x));
                 gridUnit.y = static_cast<float>(worldToGrid(unit.y));
@@ -344,6 +343,35 @@ void GlobalUDPDispatcher::loopEmision() {
                     const int sentBytes = sendto(
                         udpSocket,
                         reinterpret_cast<const char*>(&gridUnit),
+                        static_cast<int>(sizeof(games_types::UnitPosition)),
+                        0,
+                        reinterpret_cast<const sockaddr*>(&endpoint.addr),
+                        sizeof(endpoint.addr));
+                    if (sentBytes < 0)
+                    {
+                        const int err = net::GetLastError();
+                        if (err != NET_EWOULDBLOCK)
+                        {
+                            std::cerr << "[UDP][WARN] sendto() failed for session=" << batch.sessionId
+                                      << " player=" << endpoint.playerId
+                                      << " error=" << err << std::endl;
+                        }
+                    }
+                }
+            }
+
+            const auto bombs = batch.session->getBombsSnapshot();
+            for (const auto& bomb : bombs)
+            {
+                games_types::UnitPosition gridBomb = bomb;
+                gridBomb.x = static_cast<float>(worldToGrid(bomb.x));
+                gridBomb.y = static_cast<float>(worldToGrid(bomb.y));
+
+                for (const auto& endpoint : batch.endpoints)
+                {
+                    const int sentBytes = sendto(
+                        udpSocket,
+                        reinterpret_cast<const char*>(&gridBomb),
                         static_cast<int>(sizeof(games_types::UnitPosition)),
                         0,
                         reinterpret_cast<const sockaddr*>(&endpoint.addr),

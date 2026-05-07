@@ -1,6 +1,7 @@
 #include "NetworkManager.h"
 #include <iostream>
 #include <cstdlib>
+#include <cstring>
 #include "../include/udpDispatcher.h"
 
 int main(){
@@ -22,6 +23,14 @@ int main(){
         std::cout << "[INFO] Session ID: " << sessionIdEnv << std::endl;
     }
 
+    // Read game mode from environment (arcade / normal)
+    bool arcadeMode = false;
+    const char* gameModeEnv = std::getenv("SHARP_BLAZE_GAME_MODE");
+    if (gameModeEnv && std::strcmp(gameModeEnv, "arcade") == 0) {
+        arcadeMode = true;
+        std::cout << "[INFO] Game mode: ARCADE" << std::endl;
+    }
+
     //INICIALIZA UDP DISTPATCHER
 
     GlobalUDPDispatcher &udpDispatcher = GlobalUDPDispatcher::getInstance();
@@ -36,7 +45,7 @@ int main(){
     // If this is a dedicated session, initialize it
     if (dedicatedSessionId > 0)
     {
-        serverRTS.initializeDedicatedSession(dedicatedSessionId);
+        serverRTS.initializeDedicatedSession(dedicatedSessionId, arcadeMode);
     }
     
     serverRTS.start();

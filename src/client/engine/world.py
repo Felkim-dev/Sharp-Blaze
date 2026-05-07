@@ -2,6 +2,7 @@ import pygame
 
 from entities.units import Attacker,Recolectors
 from entities.structures import GoldMine, Shop, Base
+from entities.bomb import Bomb
 
 from utils.config import Config
 from utils.json import JSON_Manager
@@ -16,6 +17,7 @@ class GameWorld:
 
         self.units = {}
         self.structures = {}
+        self.bombs = {}
 
         self.cell_size = 50
         self.grid_cols = 100
@@ -90,6 +92,8 @@ class GameWorld:
             return GoldMine(id, net_x, net_y)
         elif 11000 <= id <= 11999:
             return Shop(id, net_x, net_y)
+        elif 12000 <= id <= 12999 or 13000 <= id <= 13999:
+            return Bomb(id, net_x, net_y)
 
     def get_owner_from_id(self, entity_id: int) -> int:
         """
@@ -178,6 +182,13 @@ class GameWorld:
                     unit.is_selected = True
                     selected_count += 1
 
+        for b_id, bomb in self.bombs.items():
+            owner = self.get_owner_from_id(b_id)
+            if owner == self.local_player_id:
+                if selection_rect.collidepoint(bomb.x, bomb.y):
+                    bomb.is_selected = True
+                    selected_count += 1
+
         print(f"[WORLD] Box selection captured {selected_count} units.")
 
     def handle_right_click(self, target_world_x, target_world_y):
@@ -199,6 +210,9 @@ class GameWorld:
         for u_id, unit in self.units.items():
             if getattr(unit, "is_selected", False):
                 selected_unit_ids.append(u_id)
+        for b_id, bomb in self.bombs.items():
+            if getattr(bomb, "is_selected", False):
+                selected_unit_ids.append(b_id)
 
         if not selected_unit_ids:
             return
@@ -254,11 +268,20 @@ class GameWorld:
 
             if entity_id2 in self.units:
                 for net_x, net_y in point_list:
-                    # Agregamos cada punto a la cola de Waypoints de la unidad
                     self.units[entity_id2].add_target_position(net_x, net_y)
+
+            elif (12000 <= entity_id2 <= 12999 or 13000 <= entity_id2 <= 13999):
+                if entity_id2 not in self.bombs:
+                    first_x, first_y = point_list[0]
+                    self.bombs[entity_id2] = Bomb(entity_id2, first_x, first_y)
+                for net_x, net_y in point_list:
+                    self.bombs[entity_id2].add_target_position(net_x, net_y)
 
         for unit in self.units.values():
             unit.update_physics()
+
+        for bomb in self.bombs.values():
+            bomb.update_physics()
 
         for bullet in self.projectiles[:]:
             bullet.update()
@@ -268,9 +291,15 @@ class GameWorld:
 
     def get_entity(self,id):
         if 0 <= id <= 999 or 5000 <= id <= 5999:
-            return self.structures[id]
+            return self.structures.get(id)
         elif 1000 <= id <= 4999 or 6000 <= id <= 9999:
-            return self.units[id]
+            return self.units.get(id)
+        elif self.is_bomb_id(id):
+            return self.bombs.get(id)
+        return None
+
+    def is_bomb_id(self, entity_id):
+        return (12000 <= entity_id <= 12999) or (13000 <= entity_id <= 13999)
 
     def detect_death_units(self):
         for unit in self.units.values():
@@ -278,8 +307,17 @@ class GameWorld:
                 print(f"BORRAR UNIDAD {unit.id}")
                 return unit.id
 
+        for bomb in self.bombs.values():
+            if bomb.hp <= 0:
+                print(f"BORRAR BOMBA {bomb.id}")
+                return bomb.id
+
     def spawn_unit(self, ID, x, y):
-        if ID not in self.units:
+        if self.is_bomb_id(ID):
+            if ID not in self.bombs:
+                from entities.bomb import Bomb
+                self.bombs[ID] = Bomb(ID, x, y)
+        elif ID not in self.units:
             self.units[ID] = self.return_entities_object(ID, x, y)
             self.entity_team_changer(ID)
 
@@ -302,13 +340,16 @@ class GameWorld:
         for bullet in self.projectiles:
             bullet.draw(screen, camera)
 
+        for bomb in self.bombs.values():
+            bomb.draw(screen, camera)
+
     def handle_left_click(self, world_x, world_y):
         """Processes a left click in world coordinates to select units."""
         # We will store the entity we clicked on to return it later
         clicked_entity = None
 
-        # Iterate through both dictionaries (units and structures)
-        for entity_dictionary in (self.units, self.structures):
+        # Iterate through all three dictionaries (units, structures and bombs)
+        for entity_dictionary in (self.units, self.structures, self.bombs):
             for entity in entity_dictionary.values():
 
                 if hasattr(entity, "check_click"):

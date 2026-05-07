@@ -3,7 +3,7 @@ import sys
 import os
 import threading
 
-from ui.component import Button, Text, Slider, Checkbox, InputBox
+from ui.component import Button, Text, Slider, Checkbox, RainbowButton, InputBox
 from ui.floating_shapes import FloatingShape
 from ia.bot_player import BotPlayer
 from ia.bot_game_loop import BotGameLoop
@@ -42,10 +42,11 @@ class MainScreen:
         separation_y = int(60 * sy)
 
         # Buttons declarations
-        self.btn_join = Button((center_x, init_y + separation_y * 0), BUTTON_WH, self.LIGHT_BLUE, "Join Game", self.BLACK, TEXT_SIZE)
-        self.btn_bot = Button((center_x, init_y + separation_y * 1), BUTTON_WH, self.LIGHT_BLUE, "Bot Match", self.BLACK, TEXT_SIZE)
-        self.btn_options = Button((center_x, init_y + separation_y * 2), BUTTON_WH, self.LIGHT_BLUE, "Options", self.BLACK, TEXT_SIZE)
-        self.btn_exit = Button((center_x, init_y + separation_y * 3), BUTTON_WH, self.RED, "Exit", self.BLACK, TEXT_SIZE)
+        self.btn_arcade = RainbowButton((center_x, init_y + separation_y * 0), BUTTON_WH, "ARCADE MODE", self.WHITE, TEXT_SIZE)
+        self.btn_join = Button((center_x, init_y + separation_y * 1), BUTTON_WH, self.LIGHT_BLUE, "Join Game", self.BLACK, TEXT_SIZE)
+        self.btn_bot = Button((center_x, init_y + separation_y * 2), BUTTON_WH, self.LIGHT_BLUE, "Bot Match", self.BLACK, TEXT_SIZE)
+        self.btn_options = Button((center_x, init_y + separation_y * 3), BUTTON_WH, self.LIGHT_BLUE, "Options", self.BLACK, TEXT_SIZE)
+        self.btn_exit = Button((center_x, init_y + separation_y * 4), BUTTON_WH, self.RED, "Exit", self.BLACK, TEXT_SIZE)
 
         # FONT
         CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -308,7 +309,11 @@ class MainScreen:
                     else:
                         # ---- MAIN MENU EVENT HANDLING ----
 
-                        if self.btn_join.button_rectangle.collidepoint(mouse_pos):
+                        if self.btn_arcade.button_rectangle.collidepoint(mouse_pos):
+                            AudioManager().play_click()
+                            self.screen_manager.change_screen("ARCADE_SETUP")
+
+                        elif self.btn_join.button_rectangle.collidepoint(mouse_pos):
                             AudioManager().play_click()
                             self.screen_manager.change_screen("JOIN")
 
@@ -348,6 +353,7 @@ class MainScreen:
                     self.btn_credits_back.check_hover(mouse_pos)
                 else:
                     # HOVER DETECTION FOR MAIN MENU BUTTONS
+                    self.btn_arcade.check_hover(mouse_pos)
                     self.btn_join.check_hover(mouse_pos)
                     self.btn_bot.check_hover(mouse_pos)
                     self.btn_options.check_hover(mouse_pos)
@@ -423,6 +429,7 @@ class MainScreen:
             self.btn_credits_back.draw(self.screen)
         else:
             # ---- MAIN MENU DRAW ----
+            self.btn_arcade.draw(self.screen)
             self.btn_join.draw(self.screen)
             self.btn_bot.draw(self.screen)
             self.btn_options.draw(self.screen)

@@ -1,0 +1,17 @@
+{
+    "version": 1,
+    "arcade_mode": {
+        "starting_gold": 500,
+        "bomb_cost": 1000,
+        "attacker_cost": 200,
+        "bomb_hp": 200,
+        "bomb_speed": 80,
+        "kill_gold_per_unit": 100,
+        "kill_gold_per_bomb": 500,
+        "auto_spawn_interval_ms": 10000,
+        "initial_attackers": 3,
+        "game_duration_seconds": 300,
+        "base_immunity_to_attackers": true,
+        "explosion_radius": 250
+    }
+}

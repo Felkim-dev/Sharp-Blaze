@@ -18,7 +18,9 @@ public:
     ~NetworkManager();        //destructor
     void start();             //para iniciar el server 
     void stop();              //para detener el server
-    void initializeDedicatedSession(int sessionId); // For broker-created sessions
+    void initializeDedicatedSession(int sessionId, bool arcadeMode = false); // For broker-created sessions
+    void setArcadeMode(bool enabled) { arcadeMode_ = enabled; }
+    bool isArcadeMode() const { return arcadeMode_; }
 
 private:
     struct PlayerState
@@ -46,6 +48,7 @@ private:
     SOCKET serverSocket;
     int port;
     std::atomic<bool> isRunning;
+    bool arcadeMode_ = false;
 };
 
 

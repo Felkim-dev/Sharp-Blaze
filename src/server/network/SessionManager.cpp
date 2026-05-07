@@ -3,6 +3,7 @@
 #include "../include/clientProtocol.h"
 
 #include <chrono>
+#include <cmath>
 #include <sstream>
 #include <thread>
 #include <utility>
@@ -53,13 +54,169 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
                 {
                     std::this_thread::sleep_for(std::chrono::milliseconds(kTickMs) - elapsed);
                 }
-                continue;
-            }
+            continue;
+        }
 
-            engine->commandQueueProcess();
+        bool shouldStop = false;
+
+        engine->commandQueueProcess();
             engine->advanceMovement(kTickMs);
             engine->advanceCollectors(kTickMs);
             engine->advanceCombat(kTickMs);
+
+            // Arcade mode auto-spawn: 1 free attacker per player every N ms
+            {
+                auto spawnSession = engine->getSession();
+                if (spawnSession && spawnSession->isArcadeMode())
+                {
+                    const auto now = std::chrono::steady_clock::now();
+                    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        now - spawnSession->getLastAutoSpawnTime()).count();
+                    if (elapsedMs >= spawnSession->getArcadeAutoSpawnIntervalMs())
+                    {
+                        const std::vector<games_types::UnitPosition> structures =
+                            spawnSession->getStructuresSnapshot();
+
+                        for (int playerId : {p1InternalPlayerId, p2InternalPlayerId})
+                        {
+                            if (playerId == 0) continue;
+
+                            games_types::UnitPosition basePos{};
+                            bool foundBase = false;
+                            for (const auto& s : structures)
+                            {
+                                if ((playerId == 1 && games_types::id_ranges::p1Structures.contains(s.entity_id)) ||
+                                    (playerId == 2 && games_types::id_ranges::p2Structures.contains(s.entity_id)))
+                                {
+                                    basePos = s;
+                                    foundBase = true;
+                                    break;
+                                }
+                            }
+                            if (!foundBase) continue;
+
+                            int unitId = -1;
+                            if (!spawnSession->allocateUnitId(
+                                    playerId, games_types::EntityType::Attacker, unitId))
+                                continue;
+
+                            const float angleStep = 0.55f;
+                            const float radius = 250.0f;
+                            const float angle = static_cast<float>(unitId % 11) * angleStep;
+                            const float spawnX = basePos.x + radius * std::cos(angle);
+                            const float spawnY = basePos.y + radius * std::sin(angle);
+
+                            spawnSession->upsertUnitPosition(unitId, spawnX, spawnY);
+                            spawnSession->registerSpawnedUnit(
+                                unitId, playerId, games_types::EntityType::Attacker);
+
+                            if (matchEventCallback)
+                            {
+                                std::string spawnBroadcast =
+                                    std::string("{\"type\":\"UNIT_SPAWNED\",\"payload\":{") +
+                                    "\"unit_id\":" + std::to_string(unitId) + "," +
+                                    "\"unit_type\":" +
+                                    std::to_string(static_cast<int>(games_types::EntityType::Attacker)) + "," +
+                                    "\"owner_player\":" + std::to_string(playerId) +
+                                    "}}\n";
+                                matchEventCallback(p1Socket, spawnBroadcast);
+                                if (p2Socket != p1Socket)
+                                    matchEventCallback(p2Socket, spawnBroadcast);
+                            }
+                        }
+
+                        spawnSession->setLastAutoSpawnTime(now);
+                    }
+                }
+            }
+
+            // Arcade mode timer check (5-minute time limit)
+            {
+                auto timerSession = engine->getSession();
+                if (timerSession && timerSession->isArcadeMode() && !timerSession->isSuddenDeath())
+                {
+                    const auto now = std::chrono::steady_clock::now();
+                    const auto elapsedSecs = std::chrono::duration_cast<std::chrono::seconds>(
+                        now - timerSession->getGameStartTime()).count();
+
+                    if (elapsedSecs >= timerSession->getGameDurationSeconds())
+                    {
+                        const int p1Gold = timerSession->getPlayerGold(p1InternalPlayerId);
+                        const int p2Gold = timerSession->getPlayerGold(p2InternalPlayerId);
+
+                        if (p1Gold > p2Gold)
+                        {
+                            timerSession->setGameOver(p1InternalPlayerId);
+                            if (matchEventCallback)
+                            {
+                                const std::string gameOverMsg = client_protocol::BuildGameOverWithReasonResponse(
+                                    std::to_string(timerSession->getSessionId()),
+                                    p1InternalPlayerId,
+                                    "time_limit");
+                                matchEventCallback(p1Socket, gameOverMsg);
+                                if (p2Socket != p1Socket)
+                                    matchEventCallback(p2Socket, gameOverMsg);
+                            }
+                            shouldStop = true;
+                        }
+                        else if (p2Gold > p1Gold)
+                        {
+                            timerSession->setGameOver(p2InternalPlayerId);
+                            if (matchEventCallback)
+                            {
+                                const std::string gameOverMsg = client_protocol::BuildGameOverWithReasonResponse(
+                                    std::to_string(timerSession->getSessionId()),
+                                    p2InternalPlayerId,
+                                    "time_limit");
+                                matchEventCallback(p1Socket, gameOverMsg);
+                                if (p2Socket != p1Socket)
+                                    matchEventCallback(p2Socket, gameOverMsg);
+                            }
+                            shouldStop = true;
+                        }
+                        else
+                        {
+                            timerSession->setSuddenDeath(true);
+                            if (matchEventCallback)
+                            {
+                                const std::string suddenDeathMsg =
+                                    "{\"type\":\"SUDDEN_DEATH\",\"payload\":{}}\n";
+                                matchEventCallback(p1Socket, suddenDeathMsg);
+                                if (p2Socket != p1Socket)
+                                    matchEventCallback(p2Socket, suddenDeathMsg);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Arcade mode TIMER_UPDATE broadcast (every ~1 second)
+            {
+                auto timerSession = engine->getSession();
+                int dummyWinner = 0;
+                if (timerSession && timerSession->isArcadeMode() &&
+                    !timerSession->isSuddenDeath() && !timerSession->isGameOver(dummyWinner))
+                {
+                    const auto now = std::chrono::steady_clock::now();
+                    const auto sinceLastUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        now - timerSession->getLastTimerUpdateTime()).count();
+
+                    if (sinceLastUpdate >= 1000 && matchEventCallback)
+                    {
+                        const int elapsedSecs = static_cast<int>(
+                            std::chrono::duration_cast<std::chrono::seconds>(
+                                now - timerSession->getGameStartTime()).count());
+                        int remaining = timerSession->getGameDurationSeconds() - elapsedSecs;
+                        if (remaining < 0) remaining = 0;
+
+                        const std::string timerMsg = client_protocol::BuildTimerUpdate(remaining);
+                        matchEventCallback(p1Socket, timerMsg);
+                        if (p2Socket != p1Socket)
+                            matchEventCallback(p2Socket, timerMsg);
+                        timerSession->setLastTimerUpdateTime(now);
+                    }
+                }
+            }
 
             const auto attackResults = engine->drainAttackResults();
             for (const auto& result : attackResults)
@@ -126,7 +283,6 @@ void SessionOrchestrator::simulationLoop(std::shared_ptr<GameEngine> engine,
                 }
             }
 
-            bool shouldStop = false;
             const auto combatEvents = engine->drainCombatEvents();
             for (const auto& event : combatEvents)
             {
@@ -283,10 +439,10 @@ int SessionOrchestrator::createMatch(const MatchCandidate& a, const MatchCandida
     return sessionId;
 }
 
-void SessionOrchestrator::createDedicatedSession(int sessionId)
+void SessionOrchestrator::createDedicatedSession(int sessionId, bool arcadeMode)
 {
     std::lock_guard<std::mutex> lock(mtx);
-    auto session = std::make_shared<GameSession>(1, 2, sessionId);
+    auto session = std::make_shared<GameSession>(1, 2, sessionId, arcadeMode);
     auto engine = std::make_shared<GameEngine>(session);
 
     SessionRecord record;
@@ -304,7 +460,7 @@ void SessionOrchestrator::createDedicatedSession(int sessionId)
     std::cout << "[SESSION] Created dedicated session " << sessionId << std::endl;
 }
 
-bool SessionOrchestrator::registerClientToSession(SOCKET clientSocket, int sessionId, int internalPlayerId)
+int SessionOrchestrator::registerClientToSession(SOCKET clientSocket, int sessionId, int internalPlayerId)
 {
     std::lock_guard<std::mutex> lock(mtx);
 
@@ -312,7 +468,7 @@ bool SessionOrchestrator::registerClientToSession(SOCKET clientSocket, int sessi
     if (it == sessionsById.end())
     {
         std::cerr << "[SESSION] Session " << sessionId << " not found" << std::endl;
-        return false;
+        return 0;
     }
 
     SessionRecord& record = it->second;
@@ -320,23 +476,23 @@ bool SessionOrchestrator::registerClientToSession(SOCKET clientSocket, int sessi
     if (record.p1 == INVALID_SOCKET)
     {
         record.p1 = clientSocket;
-        record.p1InternalPlayerId = internalPlayerId;
+        record.p1InternalPlayerId = 1;
         sessionIdByClient[clientSocket] = sessionId;
         std::cout << "[SESSION] Client registered as P1 to session " << sessionId << std::endl;
-        return true;
+        return 1;
     }
     else if (record.p2 == INVALID_SOCKET)
     {
         record.p2 = clientSocket;
-        record.p2InternalPlayerId = internalPlayerId;
+        record.p2InternalPlayerId = 2;
         sessionIdByClient[clientSocket] = sessionId;
         std::cout << "[SESSION] Client registered as P2 to session " << sessionId << std::endl;
-        return true;
+        return 2;
     }
     else
     {
         std::cerr << "[SESSION] Session " << sessionId << " is full" << std::endl;
-        return false;
+        return 0;
     }
 }
 

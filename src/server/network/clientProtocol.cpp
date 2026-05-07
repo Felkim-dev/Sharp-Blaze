@@ -15,7 +15,8 @@ namespace
     bool isPurchasableTroopType(games_types::EntityType type)
     {
         return type == games_types::EntityType::Collector ||
-               type == games_types::EntityType::Attacker;
+               type == games_types::EntityType::Attacker ||
+               type == games_types::EntityType::Bomb;
     }
     bool isAttackerTroop(int entityId)
     {
@@ -66,6 +67,11 @@ namespace
         if (typeName == "Shop")
         {
             outType = games_types::EntityType::Shop;
+            return true;
+        }
+        if (typeName == "Bomb")
+        {
+            outType = games_types::EntityType::Bomb;
             return true;
         }
 
@@ -165,7 +171,7 @@ std::string client_protocol::BuildMatchStartResponse(
     constexpr float kCellSize = 50.0f;
     constexpr int kGridMaxIndex = 99;
 
-    auto worldToGrid = [](float value) -> int {
+    auto worldToGrid = [=](float value) -> int {
         int cell = static_cast<int>(value / kCellSize);
         if (cell < 0)
         {
@@ -260,6 +266,42 @@ std::string client_protocol::BuildShopAuthorizationResponse(
             {"unit_id", state.authorized ? state.unitId : -1}
         }}
     };
+
+    return response.dump() + '\n';
+}
+
+std::string client_protocol::BuildBuyUnitResult(
+    const std::string& status,
+    int unitId,
+    int unitType,
+    float spawnX,
+    float spawnY,
+    int newBalance,
+    const std::string& reason)
+{
+    json response = {
+        {"type", "BUY_UNIT_RESULT"},
+        {"status", status}
+    };
+
+    if (status == "accepted")
+    {
+        response["payload"] = {
+            {"unit_id", unitId},
+            {"unit_type", unitType},
+            {"spawn_x", spawnX},
+            {"spawn_y", spawnY},
+            {"new_balance", newBalance}
+        };
+    }
+    else
+    {
+        if (!reason.empty())
+        {
+            response["reason"] = reason;
+        }
+        response["new_balance"] = newBalance;
+    }
 
     return response.dump() + '\n';
 }
@@ -367,6 +409,14 @@ std::string client_protocol::BuildPauseBroadcast(int pausedByPlayerId)
     json message;
     message["type"] = "GAME_PAUSED";
     message["payload"]["paused_by"] = pausedByPlayerId;
+    return message.dump() + '\n';
+}
+
+std::string client_protocol::BuildTimerUpdate(int remainingSeconds)
+{
+    json message;
+    message["type"] = "TIMER_UPDATE";
+    message["payload"]["remaining_seconds"] = remainingSeconds;
     return message.dump() + '\n';
 }
 

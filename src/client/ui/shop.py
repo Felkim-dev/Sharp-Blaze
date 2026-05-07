@@ -9,10 +9,11 @@ TITLE_FONT = os.path.join(CURRENT_DIR, "..", "assets", "Anton-Regular.ttf")
 GOLD_ICON = os.path.join(CURRENT_DIR, "..", "assets", "gold.png")
 SWORD_ICON = os.path.join(CURRENT_DIR, "..", "assets", "sword.png")
 HAT_ICON = os.path.join(CURRENT_DIR, "..", "assets", "hat.png")
+BOMB_ICON = os.path.join(CURRENT_DIR, "..", "assets", "bomb.png")
 
 
 class Shop:
-    def __init__(self):
+    def __init__(self, is_arcade=False):
 
         # 1. Panel Dimensions and Position
         self.width = 500
@@ -75,13 +76,33 @@ class Shop:
             GoldIconPath=GOLD_ICON,
         )
 
+        self.bomb_shop_button = ShopButton(
+            Position=(btn_x, btn1_y),
+            RectangleDimension=(btn_width, btn_height),
+            ButtonColor=self.button_color,
+            Text="BOMBS",
+            TextColor=self.text_color,
+            TextSize=btn_text_size,
+            CostText="1000",
+            ItemIconPath=BOMB_ICON,
+            GoldIconPath=GOLD_ICON,
+        )
+
+        self.is_arcade = is_arcade
+
         self.cross_btn = CloseButton(self.x + self.width - 50, self.y + 20)
+
+    def set_arcade_mode(self, enabled: bool):
+        self.is_arcade = enabled
 
     def update(self, gold):
         """Updates color based on gold and processes mouse hover"""
-
-        self.collector_shop_button.update_availability(gold)
-        self.attacker_shop_button.update_availability(gold)
+        if self.is_arcade:
+            self.bomb_shop_button.update_availability(gold)
+            self.attacker_shop_button.update_availability(gold)
+        else:
+            self.collector_shop_button.update_availability(gold)
+            self.attacker_shop_button.update_availability(gold)
 
 
     def handle_click(self, event,mouse_pos) -> str:
@@ -91,10 +112,15 @@ class Shop:
         """
         if self.cross_btn.handle_event(event):
             return "CLOSE"
-        # Only return the BUY command if the button is actually active
-        if self.collector_shop_button.button_rectangle.collidepoint(mouse_pos):
-            if self.collector_shop_button.is_active:
-                return "BUY_COLLECTOR"
+
+        if self.is_arcade:
+            if self.bomb_shop_button.button_rectangle.collidepoint(mouse_pos):
+                if self.bomb_shop_button.is_active:
+                    return "BUY_BOMB"
+        else:
+            if self.collector_shop_button.button_rectangle.collidepoint(mouse_pos):
+                if self.collector_shop_button.is_active:
+                    return "BUY_COLLECTOR"
 
         if self.attacker_shop_button.button_rectangle.collidepoint(mouse_pos):
             if self.attacker_shop_button.is_active:
@@ -120,6 +146,9 @@ class Shop:
         screen.blit(self.title_surface, self.title_rect)
 
         # C. Draw the Shop Buttons
-        self.collector_shop_button.draw(screen)
+        if self.is_arcade:
+            self.bomb_shop_button.draw(screen)
+        else:
+            self.collector_shop_button.draw(screen)
         self.attacker_shop_button.draw(screen)
         self.cross_btn.draw(screen)

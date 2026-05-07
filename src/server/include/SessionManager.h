@@ -26,8 +26,9 @@ public:
     int createMatch(const MatchCandidate& a, const MatchCandidate& b);
     
     // For dedicated sessions (created by broker)
-    void createDedicatedSession(int sessionId);
-    bool registerClientToSession(SOCKET clientSocket, int sessionId, int internalPlayerId);
+    void createDedicatedSession(int sessionId, bool arcadeMode = false);
+    // Register a client socket to a dedicated session. Returns assigned internalPlayerId (1 or 2), or 0 on failure.
+    int registerClientToSession(SOCKET clientSocket, int sessionId, int internalPlayerId);
     
     bool markReady(SOCKET clientSocket, const int& sessionId);
     void closeByClient(SOCKET clientSocket);

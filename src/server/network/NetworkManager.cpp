@@ -11,6 +11,7 @@
 #include "NetworkManager.h"
 #include "clientProtocol.h"
 #include "platform_socket.h"
+#include "udpDispatcher.h"
 
 bool NetworkManager::sendText(SOCKET socket, const std::string& text)
 {
@@ -141,6 +142,15 @@ void NetworkManager::handleReadyNoLock(SOCKET socket, const int &sessionId)
     const int p1InternalPlayerId = g_players.count(players.first) ? g_players[players.first].internalPlayerId : 0;
     const int p2InternalPlayerId = g_players.count(players.second) ? g_players[players.second].internalPlayerId : 0;
 
+    // EARLY UDP REGISTRATION: before sending START_GAME
+    // Ensures that when the client sends UDP_HELLO, the session already exists
+    GlobalUDPDispatcher::getInstance().onSessionStarted(
+        effectiveSessionId,
+        p1InternalPlayerId,
+        p2InternalPlayerId,
+        session);
+    std::cout << "[UDP] Session registered early for UDP handshake: " << effectiveSessionId << std::endl;
+
     const std::uint16_t udpPort = 5556;
     const std::string startMsgP1 = client_protocol::BuildMatchStartResponse(
         effectiveSessionId,
@@ -245,9 +255,9 @@ NetworkManager::~NetworkManager(){
     stop();
 };
 
-void NetworkManager::initializeDedicatedSession(int sessionId)
+void NetworkManager::initializeDedicatedSession(int sessionId, bool arcadeMode)
 {
-    sessionOrchestrator.createDedicatedSession(sessionId);
+    sessionOrchestrator.createDedicatedSession(sessionId, arcadeMode);
 }
 
 void NetworkManager::stop(){
@@ -406,16 +416,24 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         // Create the session if it doesn't exist
                         if (!sessionOrchestrator.getSession(parsed.initialConnect.sessionId))
                         {
-                            sessionOrchestrator.createDedicatedSession(parsed.initialConnect.sessionId);
+                            sessionOrchestrator.createDedicatedSession(parsed.initialConnect.sessionId, arcadeMode_);
                         }
 
-                        if (!sessionOrchestrator.registerClientToSession(
+                        {
+                            int assignedId = sessionOrchestrator.registerClientToSession(
                                 clientSocket,
                                 parsed.initialConnect.sessionId,
-                                internalPlayerId))
-                        {
-                            std::cerr << "[ERROR] Failed to register client " << parsed.initialConnect.playerId
-                                      << " to dedicated session " << parsed.initialConnect.sessionId << std::endl;
+                                g_players[clientSocket].internalPlayerId);
+
+                            if (assignedId == 0)
+                            {
+                                std::cerr << "[ERROR] Failed to register client " << parsed.initialConnect.playerId
+                                          << " to dedicated session " << parsed.initialConnect.sessionId << std::endl;
+                            }
+                            else
+                            {
+                                g_players[clientSocket].internalPlayerId = assignedId;
+                            }
                         }
 
                         std::cout << "[DEDICATED] P" << playerId << " (" << parsed.initialConnect.playerId
@@ -569,25 +587,22 @@ void NetworkManager::handleClient(SOCKET clientSocket, int playerId)
                         parsed.buyUnit.unitType,
                         parsed.buyUnit.quantity);
 
-                    std::string buyerMsg;
                     if (!purchase.success)
                     {
-                        buyerMsg =
-                            std::string("{\"type\":\"BUY_UNIT_RESULT\",\"status\":\"rejected\",\"reason\":\"") +
-                            purchase.reason +
-                            "\"}\n";
+                        int currentGold = engine->getSession()->getPlayerGold(internalPlayerId);
+                        std::string buyerMsg = client_protocol::BuildBuyUnitResult(
+                            "rejected", 0, 0, 0.0f, 0.0f, currentGold, purchase.reason);
                         sendText(clientSocket, buyerMsg);
                         continue;
                     }
 
-                    buyerMsg =
-                        std::string("{\"type\":\"BUY_UNIT_RESULT\",\"status\":\"accepted\",\"payload\":{") +
-                        "\"unit_id\":" + std::to_string(purchase.unitId) + "," +
-                        "\"unit_type\":" + std::to_string(static_cast<int>(purchase.unitType)) + "," +
-                        "\"spawn_x\":" + std::to_string(purchase.spawnX) + "," +
-                        "\"spawn_y\":" + std::to_string(purchase.spawnY) + "," +
-                        "\"new_balance\":" + std::to_string(purchase.newBalance) +
-                        "}}\n";
+                    std::string buyerMsg = client_protocol::BuildBuyUnitResult(
+                        "accepted",
+                        purchase.unitId,
+                        static_cast<int>(purchase.unitType),
+                        purchase.spawnX,
+                        purchase.spawnY,
+                        purchase.newBalance);
                     sendText(clientSocket, buyerMsg);
 
                     const std::string goldMessage = client_protocol::BuildResourcesResponse(

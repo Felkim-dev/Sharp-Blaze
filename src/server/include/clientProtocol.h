@@ -106,6 +106,14 @@ namespace client_protocol
         std::uint16_t udpPort,
         std::shared_ptr<GameSession> session);
     std::string BuildShopAuthorizationResponse(int playerId, const games_types::ShopAuthorizationState& state);
+    std::string BuildBuyUnitResult(
+        const std::string& status,
+        int unitId,
+        int unitType,
+        float spawnX,
+        float spawnY,
+        int newBalance,
+        const std::string& reason = "");
     std::string BuildResourcesResponse(int newBalance);
     std::string BuildAttackResultResponse(
         int attackerId,
@@ -128,6 +136,7 @@ namespace client_protocol
         int attackerPlayerId);
     std::string BuildGameOverResponse(int sessionId, int playerId);
     std::string BuildPauseBroadcast(int pausedByPlayerId);
+    std::string BuildTimerUpdate(int remainingSeconds);
     std::string BuildGameOverWithReasonResponse(
         const std::string& sessionId, int winnerPlayerId, const std::string& reason);
     bool MessageFramer(

@@ -76,6 +76,8 @@ class GameEngine
 		void processAttackCommand(const games_types::PlayerCommand& cmd);
 			AttackRequestResult executeAttackAttempt(int playerId, int attackerId, int targetId, bool applyDamage = true);
 		bool shouldKeepAttackLock(const AttackRequestResult& result) const;
+		void updateProjectiles(int deltaMs);
+		void applyProjectileDamage(int attackerId, int targetId);
 
 		std::shared_ptr<GameSession> session;
 		std::shared_ptr<PathFinder> pathFinder;
@@ -89,6 +91,7 @@ class GameEngine
 		std::unordered_map<int, int> movementCooldownRemainingMs;
 		std::vector<games_types::CombatEvent> pendingCombatEvents;
 		std::vector<AttackRequestResult> pendingAttackResults;
+		std::vector<games_types::Projectile> activeProjectiles;
 		mutable std::mutex mtxCommands;
 		mutable std::mutex mtxCombatEvents;
 		mutable std::mutex mtxAttackResults;
