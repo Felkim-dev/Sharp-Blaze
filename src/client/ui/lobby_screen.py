@@ -232,6 +232,11 @@ class LobbyScreen:
                     if self.screen_manager.bot_instance and not self.bot_game_loop_started:
                         print("[LOBBY] Starting bot game loop...")
                         bot_instance = self.screen_manager.bot_instance
+                        
+                        # Manually initialize bot with initial game state if needed
+                        # (Bot receives its own START_GAME over TCP so it will populate its own state)
+                        print(f"[LOBBY] Bot game loop will be started.")
+                        
                         # Use player_id 2 for bot (player is 1)
                         bot_player_id = getattr(bot_instance, 'player_id', None) or 2
                         self.bot_game_loop = BotGameLoop(
@@ -393,8 +398,10 @@ class LobbyScreen:
             if self.screen_manager.bot_instance:
                 bot = self.screen_manager.bot_instance
                 bot.player_id = 2
+                bot.player_slot = 2  # Critical: bot needs to know which team it is
                 bot.local_player_id = bot_name  # Bot's own name
                 bot.enemy_player_id = player_name  # Player's name is the enemy
+                bot.session_id = self.session_id  # Link to the dedicated session
 
             # Wait a bit for player to connect before bot attempts
             time.sleep(0.8)
@@ -408,9 +415,10 @@ class LobbyScreen:
                     bot.tcp_port_server = Config.TCP_PORT_SERVER
                     print(f"[LOBBY] Bot '{bot.bot_name}' connecting to local server at 127.0.0.1:{Config.TCP_PORT_SERVER}...")
                     if bot.connect():
-                        print("[LOBBY] Bot connected successfully")
-                        # Both are connected; now send START_GAME to initialize the match
-                        time.sleep(0.5)
+                        print(f"[LOBBY] Bot connected successfully at {time.time()}")
+                        # Wait for server to register bot in the session
+                        print("[LOBBY] Waiting 2.0s for server to register bot in session...")
+                        time.sleep(2.0)
                         print("[LOBBY] Sending START_GAME to server...")
                         try:
                             start_msg = JSON_Manager.get_startgame(session_id=1)

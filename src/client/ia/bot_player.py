@@ -100,6 +100,9 @@ class BotPlayer:
                     "is_ready": True
                 }
             }
+            if self.session_id is not None:
+                initial_message["payload"]["session_id"] = self.session_id
+                
             message = json.dumps(initial_message) + "\n"
             self.client_tcp.send(message.encode("utf-8"))
             
@@ -184,6 +187,7 @@ class BotPlayer:
             
             # Parse initial units
             units = payload.get("units", {})
+            print(f"[BOT DEBUG] START_GAME raw units payload: {units}")
             self.own_units.clear()
             self.enemy_units.clear()
             for unit_id_str, pos in units.items():
