@@ -96,7 +96,7 @@ class ArcadeSetupScreen:
             client = docker.from_env()
             client.ping()
             return True
-        except:
+        except Exception:
             return False
 
     def handle_events(self, events, keys):
