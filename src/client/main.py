@@ -32,6 +32,12 @@ class GAME:
 
         #OBJECT NETWORK
         self.network = NetworkManager()
+        
+        # Bot match state
+        self.bot_instance = None
+        self.bot_game_loop = None
+        # Local server container handle (docker SDK container object)
+        self.local_server_container = None
 
         #DICTIONARY OF THE VALID SCREENS
         self._build_screens()
@@ -66,6 +72,41 @@ class GAME:
             self.current_screen = self.screens[screen_name]
         else:
             print("ERROR: Screen Does not Exists")
+
+    def stop_local_server_container(self):
+        """Stop and remove the local docker container if it was started by the client."""
+        if getattr(self, 'local_server_container', None) is None:
+            return
+
+        try:
+            container = self.local_server_container
+            # Container may be either a docker.models.containers.Container or an id string
+            try:
+                # Stop container gently
+                container.stop(timeout=3)
+            except Exception:
+                # Try using client API if object is not a container
+                try:
+                    import docker
+                    cli = docker.from_env()
+                    cli.containers.get(str(container)).stop()
+                except Exception:
+                    pass
+
+            try:
+                container.remove()
+            except Exception:
+                try:
+                    import docker
+                    cli = docker.from_env()
+                    cli.containers.get(str(container)).remove()
+                except Exception:
+                    pass
+
+        except Exception as e:
+            print(f"[MAIN] Error stopping local server container: {e}")
+        finally:
+            self.local_server_container = None
 
     def change_resolution(self, width, height):
         """Resize the game window and rebuild all screens for the new resolution."""
@@ -123,6 +164,7 @@ class GAME:
                 
                 #IF THE USER CLOSES THE GAME
                 if event.type == pygame.QUIT:
+                    self.stop_local_server_container()
                     self.network.disconnect()
                     pygame.quit()
                     sys.exit()

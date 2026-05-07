@@ -118,9 +118,12 @@ class NetworkManager:
             thread.start()
 
     def _ping_loop(self):
+        # The server does not implement a PING message; avoid sending unsupported messages.
+        # Keep this loop so that RTT bookkeeping remains compatible, but do not send unknown types.
         while self.is_ping_running:
             try:
                 if self.connected and self.client_tcp:
+                    
                     ping_msg = json.dumps({"type": "PING", "payload": {}}) + "\n"
                     self.client_tcp.send(ping_msg.encode("utf-8"))
                     self._ping_start_time = time.time()

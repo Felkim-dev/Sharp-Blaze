@@ -184,6 +184,13 @@ class GameScreen:
 
         self.screen_manager.network.disconnect()
 
+        # Stop and remove local server container if we started one
+        try:
+            if hasattr(self.screen_manager, 'stop_local_server_container'):
+                self.screen_manager.stop_local_server_container()
+        except Exception as e:
+            print(f"[GAME] Error cleaning up local server container: {e}")
+
         # ¡Aquí es donde inyectas el nombre real para que se actualice en pantalla!
         nuevo_texto = f"SHARP BLAZE\n{self.winner_player_id} VICTORY!"
         self.winner_box.update_text(nuevo_texto)
@@ -196,6 +203,13 @@ class GameScreen:
         self.is_game_over = True
         nuevo_texto = f"GAME\nDISCONNECTED!"
         self.winner_box.update_text(nuevo_texto)
+
+        # Clean up container if present
+        try:
+            if hasattr(self.screen_manager, 'stop_local_server_container'):
+                self.screen_manager.stop_local_server_container()
+        except Exception as e:
+            print(f"[GAME] Error cleaning up local server container on disconnect: {e}")
 
     def handle_events(self, events, keys):
         """Processes one-time events like mouse clicks."""
