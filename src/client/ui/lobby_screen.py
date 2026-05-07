@@ -232,10 +232,12 @@ class LobbyScreen:
                     if self.screen_manager.bot_instance and not self.bot_game_loop_started:
                         print("[LOBBY] Starting bot game loop...")
                         bot_instance = self.screen_manager.bot_instance
+                        # Use player_id 2 for bot (player is 1)
+                        bot_player_id = getattr(bot_instance, 'player_id', None) or 2
                         self.bot_game_loop = BotGameLoop(
                             bot_player=bot_instance,
                             session_id=self.session_id,
-                            player_id=bot_instance.player_id,
+                            player_id=bot_player_id,
                             local_player_id=bot_instance.local_player_id,
                             enemy_player_id=bot_instance.enemy_player_id,
                             difficulty="normal",
@@ -304,7 +306,7 @@ class LobbyScreen:
                 detach=True,
                 name=container_name,
                 ports=ports,
-                remove=False,
+                remove=True,
             )
 
             print(f"[LOBBY] Docker container started: {container.id}")
@@ -386,6 +388,13 @@ class LobbyScreen:
             # Connect player (network)
             print(f"[LOBBY] Connecting player '{player_name}' to local server...")
             self.screen_manager.network.connect_to_game_server(match_payload)
+
+            # Set bot player ID to 2 (since player is 1)
+            if self.screen_manager.bot_instance:
+                bot = self.screen_manager.bot_instance
+                bot.player_id = 2
+                bot.local_player_id = bot_name  # Bot's own name
+                bot.enemy_player_id = player_name  # Player's name is the enemy
 
             # Wait a bit for player to connect before bot attempts
             time.sleep(0.8)

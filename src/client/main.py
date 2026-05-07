@@ -164,6 +164,7 @@ class GAME:
                 
                 #IF THE USER CLOSES THE GAME
                 if event.type == pygame.QUIT:
+                    self.stop_local_server_container()
                     self.network.disconnect()
                     pygame.quit()
                     sys.exit()
