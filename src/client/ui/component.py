@@ -58,6 +58,27 @@ class Button:
         # Draw the text (text_surface) on a invisible rectangle (text_rect)
         screen.blit(self.text_surface, self.text_rect)
 
+class RainbowButton(Button):
+    """A button with an animated rainbow gradient background that cycles continuously."""
+
+    def __init__(self, Position, Dimension, Text, TextColor, TextSize):
+        super().__init__(Position, Dimension, (0, 0, 0), Text, TextColor, TextSize)
+
+    def draw(self, screen):
+        import colorsys
+        t = pygame.time.get_ticks() / 1000.0  # seconds
+        rect = self.button_rectangle
+        # Create rainbow gradient across button width
+        for x in range(rect.width):
+            hue = ((x / rect.width) + (t * 0.3)) % 1.0
+            r, g, b = colorsys.hsv_to_rgb(hue, 0.7, 0.9)
+            color = (int(r * 255), int(g * 255), int(b * 255))
+            pygame.draw.rect(screen, color, (rect.x + x, rect.y, 1, rect.height))
+        # Draw text centered
+        text_surface = self.button_font.render(self.text, True, self.text_color)
+        text_rect = text_surface.get_rect(center=rect.center)
+        screen.blit(text_surface, text_rect)
+
 class InputBox:
 
     def __init__(
