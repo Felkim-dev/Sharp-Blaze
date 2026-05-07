@@ -555,7 +555,19 @@ void GameEngine::advanceCollectors(int deltaMs)
 
         if (collector.state == games_types::CollectorState::Idle)
         {
-            if (collector.targetResourceId <= 0)
+            bool shouldUpdateTarget = (collector.targetResourceId <= 0);
+            
+            // If moving or not intersecting the current target, re-evaluate closest resource
+            if (!shouldUpdateTarget)
+            {
+                bool isMoving = movementRoutes.find(collector.entityId) != movementRoutes.end() && !movementRoutes[collector.entityId].empty();
+                if (isMoving)
+                {
+                    shouldUpdateTarget = true;
+                }
+            }
+
+            if (shouldUpdateTarget)
             {
                 float nearestDistSq = std::numeric_limits<float>::max();
                 for (const auto& node : resources)
@@ -588,6 +600,14 @@ void GameEngine::advanceCollectors(int deltaMs)
                 {
                     collector.state = games_types::CollectorState::Gathering;
                     collector.stateTimeRemainingMs = collector.gatherDurationMs;
+                }
+                else
+                {
+                    bool isMoving = movementRoutes.find(collector.entityId) != movementRoutes.end() && !movementRoutes[collector.entityId].empty();
+                    if (!isMoving)
+                    {
+                        repathUnit(collector.entityId, worldToCell(targetIt->x, targetIt->y));
+                    }
                 }
             }
         }
