@@ -48,7 +48,7 @@ class BotAI:
         self.wave_interval_ms = 3500
         self.wave_index = 0
         self.shop_runner_id = None
-        self.initial_attack_delay_ms = 120000  # 2 minutes delay before attacking
+        self.initial_attack_delay_ms = 0  # No delay before attacking
         
         # Decision history (for logging)
         self.decision_history = []
@@ -137,7 +137,6 @@ class BotAI:
         
         if current_time_ms > self.initial_attack_delay_ms:
             self._issue_attack_orders(state)
-            self._issue_wave_movement_orders(state, current_time_ms)
         else:
             print(f"[BOT-AI] Attack delayed. Waiting {int((self.initial_attack_delay_ms - current_time_ms) / 1000)}s...")
 

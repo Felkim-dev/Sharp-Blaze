@@ -545,6 +545,12 @@ void GameEngine::advanceCollectors(int deltaMs)
                 collector.carriedAmount = 0;
             }
             collector.state = games_types::CollectorState::Returning;
+
+            games_types::UnitPosition basePos{};
+            if (getPlayerBaseCenter(structures, collector.ownerPlayerId, basePos))
+            {
+                repathUnit(collector.entityId, worldToCell(basePos.x, basePos.y));
+            }
         }
 
         if (collector.state == games_types::CollectorState::Idle)
@@ -607,7 +613,22 @@ void GameEngine::advanceCollectors(int deltaMs)
             }
             collector.carriedAmount = 0;
             collector.state = games_types::CollectorState::Idle;
-            collector.targetResourceId = -1;
+            
+            auto targetIt = std::find_if(
+                resources.begin(),
+                resources.end(),
+                [targetId = collector.targetResourceId](const games_types::ResourceNode& node) {
+                    return node.entityId == targetId;
+                });
+
+            if (targetIt != resources.end() && targetIt->remainingCapacity > 0)
+            {
+                repathUnit(collector.entityId, worldToCell(targetIt->x, targetIt->y));
+            }
+            else
+            {
+                collector.targetResourceId = -1;
+            }
         }
     }
 
