@@ -48,6 +48,7 @@ class BotAI:
         self.wave_interval_ms = 3500
         self.wave_index = 0
         self.shop_runner_id = None
+        self.initial_attack_delay_ms = 120000  # 2 minutes delay before attacking
         
         # Decision history (for logging)
         self.decision_history = []
@@ -55,6 +56,7 @@ class BotAI:
         
         # State caching
         self.last_state = None
+        self.assigned_collectors = set()
 
     def _get_wave_waypoints(self):
         # Waypoints from each spawn corner toward center and enemy base.
@@ -132,8 +134,12 @@ class BotAI:
 
         self._move_unit_to_shop_for_authorization(state)
         self._issue_collector_resource_orders(state)
-        self._issue_attack_orders(state)
-        self._issue_wave_movement_orders(state, current_time_ms)
+        
+        if current_time_ms > self.initial_attack_delay_ms:
+            self._issue_attack_orders(state)
+            self._issue_wave_movement_orders(state, current_time_ms)
+        else:
+            print(f"[BOT-AI] Attack delayed. Waiting {int((self.initial_attack_delay_ms - current_time_ms) / 1000)}s...")
 
     def _move_unit_to_shop_for_authorization(self, state: dict):
         if state.get("shop_authorized", False):
@@ -170,11 +176,18 @@ class BotAI:
             if not collectors:
                 return
 
+        # Clean up dead collectors
+        self.assigned_collectors = {cid for cid in self.assigned_collectors if cid in state["own_units"]}
+
         resource_cells = state.get("resource_cells", [(70, 70), (42, 58), (58, 42), (30, 30)])
         issued = 0
         for idx, collector_id in enumerate(collectors):
+            if collector_id in self.assigned_collectors:
+                continue
+            
             target = resource_cells[idx % len(resource_cells)]
             if self.bot_player.send_move_unit(collector_id, target[0], target[1]):
+                self.assigned_collectors.add(collector_id)
                 issued += 1
 
         if issued > 0:
