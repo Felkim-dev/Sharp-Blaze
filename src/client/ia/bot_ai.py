@@ -133,7 +133,7 @@ class BotAI:
         self.last_tactical_update_ms = current_time_ms
 
         self._move_unit_to_shop_for_authorization(state)
-        self._issue_collector_resource_orders(state)
+        self._issue_collector_resource_orders(state, current_time_ms)
         
         if current_time_ms > self.initial_attack_delay_ms:
             self._issue_attack_orders(state)
@@ -161,7 +161,7 @@ class BotAI:
             if self.bot_player.send_move_unit(self.shop_runner_id, shop_cell[0], shop_cell[1]):
                 print(f"[BOT-AI] Moving unit {self.shop_runner_id} to shop for authorization")
 
-    def _issue_collector_resource_orders(self, state: dict):
+    def _issue_collector_resource_orders(self, state: dict, current_time_ms: float):
         collectors = [
             unit_id
             for unit_id, unit in state["own_units"].items()
@@ -175,19 +175,52 @@ class BotAI:
             if not collectors:
                 return
 
+        if not hasattr(self, "collector_states"):
+            self.collector_states = {}
+
         # Clean up dead collectors
-        self.assigned_collectors = {cid for cid in self.assigned_collectors if cid in state["own_units"]}
+        own_units = state["own_units"]
+        self.collector_states = {cid: cstate for cid, cstate in self.collector_states.items() if cid in own_units}
 
         resource_cells = state.get("resource_cells", [(70, 70), (42, 58), (58, 42), (30, 30)])
+        
+        base_structs = self.bot_player.structures
+        if base_structs:
+            base_pos = list(base_structs.values())[0]
+            base_cell = (int(base_pos["x"] / 50), int(base_pos["y"] / 50))
+        else:
+            base_cell = (75, 75)
+
+        TRIP_TIME_MS = 14000  # 14 seconds one-way trip
         issued = 0
+
         for idx, collector_id in enumerate(collectors):
-            if collector_id in self.assigned_collectors:
+            if collector_id not in self.collector_states:
+                # Initial assignment
+                target = resource_cells[idx % len(resource_cells)]
+                self.collector_states[collector_id] = {
+                    "state": "mining",
+                    "target_node": target,
+                    "last_order_time": current_time_ms
+                }
+                if self.bot_player.send_move_unit(collector_id, target[0], target[1]):
+                    issued += 1
                 continue
             
-            target = resource_cells[idx % len(resource_cells)]
-            if self.bot_player.send_move_unit(collector_id, target[0], target[1]):
-                self.assigned_collectors.add(collector_id)
-                issued += 1
+            c_state = self.collector_states[collector_id]
+            time_since_order = current_time_ms - c_state["last_order_time"]
+
+            if c_state["state"] == "mining" and time_since_order > TRIP_TIME_MS:
+                c_state["state"] = "returning"
+                c_state["last_order_time"] = current_time_ms
+                if self.bot_player.send_move_unit(collector_id, base_cell[0], base_cell[1]):
+                    issued += 1
+            elif c_state["state"] == "returning" and time_since_order > TRIP_TIME_MS:
+                c_state["state"] = "mining"
+                c_state["last_order_time"] = current_time_ms
+                target = c_state["target_node"]
+                if self.bot_player.send_move_unit(collector_id, target[0], target[1]):
+                    issued += 1
 
         if issued > 0:
             print(f"[BOT-AI] Collector resource orders sent: {issued}")
