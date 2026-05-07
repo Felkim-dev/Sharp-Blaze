@@ -89,6 +89,7 @@ class GameScreen:
         self.previous_gold = self.player_gold
         self.last_kill_world = None
         self.kill_gold_floats = []
+        self.immune_floats = []
         self.tutorial = TutorialOverlay(self.screen)
 
         # UI Drag State
@@ -146,6 +147,7 @@ class GameScreen:
         self.timer_seconds = Config.ARCADE_GAME_DURATION
         self.last_kill_world = None
         self.kill_gold_floats.clear()
+        self.immune_floats.clear()
         self.tutorial = TutorialOverlay(self.screen)
 
     def set_arcade_mode(self, enabled=True):
@@ -215,7 +217,9 @@ class GameScreen:
 
         self.screen_manager.network.disconnect()
 
-        # ¡Aquí es donde inyectas el nombre real para que se actualice en pantalla!
+        if hasattr(self.screen_manager, "container_manager") and self.screen_manager.container_manager:
+            self.screen_manager.container_manager.stop()
+
         nuevo_texto = f"SHARP BLAZE\n{self.winner_player_id} VICTORY!"
         self.winner_box.update_text(nuevo_texto)
         
@@ -227,6 +231,9 @@ class GameScreen:
         self.is_game_over = True
         nuevo_texto = f"GAME\nDISCONNECTED!"
         self.winner_box.update_text(nuevo_texto)
+
+        if hasattr(self.screen_manager, "container_manager") and self.screen_manager.container_manager:
+            self.screen_manager.container_manager.stop()
 
     def handle_events(self, events, keys):
         """Processes one-time events like mouse clicks."""
@@ -267,6 +274,8 @@ class GameScreen:
                         AudioManager().play_click()
                         print("[GAME SCREEN] Return to Menu clicked!")
                         self.screen_manager.network.disconnect()
+                        if hasattr(self.screen_manager, "container_manager") and self.screen_manager.container_manager:
+                            self.screen_manager.container_manager.stop()
                         self.is_game_over = False
                         self.winner_player_id = None
                         self.screen_manager.change_screen("MAIN")
@@ -550,7 +559,17 @@ class GameScreen:
                                 hp=0,
                             )
                             self.world.projectiles.append(new_bullet)
-                            AudioManager().play_shoot()
+                            if self.is_arcade and self.target_entity_id in (0, 5000):
+                                self.immune_floats.append({
+                                    "world_x": target.x,
+                                    "world_y": target.y,
+                                    "alpha": 255,
+                                    "start_time": pygame.time.get_ticks(),
+                                    "duration": 800,
+                                })
+                                AudioManager().play_immune()
+                            else:
+                                AudioManager().play_shoot()
 
                 elif data.get("type") == "GAME_OVER":
                     self.winner_player_id = data["payload"]["winner_player_id"]
@@ -623,6 +642,10 @@ class GameScreen:
         now = pygame.time.get_ticks()
         self.explosion_effects = [
             e for e in self.explosion_effects
+            if now - e["start_time"] < e["duration"]
+        ]
+        self.immune_floats = [
+            e for e in self.immune_floats
             if now - e["start_time"] < e["duration"]
         ]
 
@@ -701,6 +724,24 @@ class GameScreen:
                 int(28 * (self.screen.get_height() / 720)),
             )
             text_surf = font.render(anim["text"], True, (50, 220, 50))
+            text_surf.set_alpha(alpha)
+            text_rect = text_surf.get_rect(center=(screen_x, screen_y))
+            self.screen.blit(text_surf, text_rect)
+
+        for anim in self.immune_floats[:]:
+            elapsed = now - anim["start_time"]
+            progress = elapsed / anim["duration"]
+            if progress >= 1.0:
+                self.immune_floats.remove(anim)
+                continue
+            screen_x = int(anim["world_x"] - self.camera.x)
+            screen_y = int(anim["world_y"] - self.camera.y) - int(40 * progress)
+            alpha = int(255 * (1.0 - progress))
+            font = pygame.font.Font(
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "Anton-Regular.ttf"),
+                int(32 * (self.screen.get_height() / 720)),
+            )
+            text_surf = font.render("IMMUNE", True, (255, 50, 50))
             text_surf.set_alpha(alpha)
             text_rect = text_surf.get_rect(center=(screen_x, screen_y))
             self.screen.blit(text_surf, text_rect)

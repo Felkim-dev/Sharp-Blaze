@@ -16,6 +16,9 @@ from .game_state_analyzer import GameStateAnalyzer
 from .unit_commander import UnitCommander
 from .game_config_loader import GameConfigLoader
 from .bot_config import BotConfig
+from .arcade_bot_ai import ArcadeBotAI
+from .arcade_decision_engine import ArcadeDecisionEngine
+from .arcade_game_state_analyzer import ArcadeGameStateAnalyzer
 
 __all__ = [
     "BotAI",
@@ -24,4 +27,7 @@ __all__ = [
     "UnitCommander",
     "GameConfigLoader",
     "BotConfig",
+    "ArcadeBotAI",
+    "ArcadeDecisionEngine",
+    "ArcadeGameStateAnalyzer",
 ]

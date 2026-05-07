@@ -93,9 +93,10 @@ class ArcadeSetupScreen:
     def _check_docker_available(self):
         try:
             import docker
-            docker.from_env()
+            client = docker.from_env()
+            client.ping()
             return True
-        except (ImportError, Exception):
+        except:
             return False
 
     def handle_events(self, events, keys):
@@ -118,6 +119,15 @@ class ArcadeSetupScreen:
                         AudioManager().play_click()
 
                         if self._check_docker_available():
+                            from ia.infra.arcade_match_controller import ArcadeMatchController
+                            controller = ArcadeMatchController(
+                                "MEDIUM",
+                                self.screen_manager.network,
+                                self.screen_manager,
+                            )
+                            self.screen_manager.arcade_controller = controller
+                            self.screen_manager.container_manager = controller
+                            controller.start_match()
                             self.screen_manager.change_screen("ARCADE_LOBBY")
                         else:
                             self.show_notification()
@@ -144,6 +154,15 @@ class ArcadeSetupScreen:
                     AudioManager().play_click()
 
                     if self._check_docker_available():
+                        from ia.infra.arcade_match_controller import ArcadeMatchController
+                        controller = ArcadeMatchController(
+                            "MEDIUM",
+                            self.screen_manager.network,
+                            self.screen_manager,
+                        )
+                        self.screen_manager.arcade_controller = controller
+                        self.screen_manager.container_manager = controller
+                        controller.start_match()
                         self.screen_manager.change_screen("ARCADE_LOBBY")
                     else:
                         self.show_notification()

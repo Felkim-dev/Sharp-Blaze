@@ -3,6 +3,7 @@ import os
 
 from ui.component import Button, Text, TextBox, CloseButton
 
+from utils.json import JSON_Manager
 from utils.audio import AudioManager
 
 
@@ -51,7 +52,7 @@ class ArcadeLobbyScreen:
         self.btn_start = Button(
             (center_x_button, init_y + int(100 * sy)),
             BUTTON_WH,
-            self.LIGHT_BLUE,
+            self.GRAY,
             "START GAME",
             self.BLACK,
             TEXT_SIZE,
@@ -70,8 +71,8 @@ class ArcadeLobbyScreen:
             (center_x_text_player2, init_y),
             TEXT_WH,
             self.BLACK,
-            "BOT",
-            self.WHITE,
+            "WAITING...",
+            self.GRAY,
             size_text_boxes,
         )
 
@@ -93,27 +94,63 @@ class ArcadeLobbyScreen:
             self.WHITE,
         )
 
+        self.session_id = None
+        self.player_id = None
+        self.local_player_id = None
+        self.enemy_player_id = None
+        self.connected = False
+
     def handle_events(self, events, keys):
         for event in events:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     mouse_pos = event.pos
-                    if self.btn_start.button_rectangle.collidepoint(mouse_pos):
+                    if self.btn_start.button_rectangle.collidepoint(mouse_pos) and self.connected:
                         AudioManager().play_click()
-                        game_screen = self.screen_manager.screens["GAME"]
-                        game_screen.set_arcade_mode(True)
-                        self.screen_manager.change_screen("GAME")
+                        session_id = getattr(self, 'session_id', None)
+                        self.screen_manager.network.send_json(JSON_Manager.get_startgame(session_id))
 
             if self.btn_close.handle_event(event):
                 AudioManager().play_click()
+                self.screen_manager.network.disconnect()
+                if hasattr(self.screen_manager, "container_manager") and self.screen_manager.container_manager:
+                    self.screen_manager.container_manager.stop()
                 self.screen_manager.change_screen("MAIN")
 
             elif event.type == pygame.MOUSEMOTION:
                 mouse_pos = event.pos
-                self.btn_start.check_hover(mouse_pos)
+                if self.connected:
+                    self.btn_start.check_hover(mouse_pos)
 
     def update(self):
-        pass
+        data = self.screen_manager.network.receive_json()
+        if data:
+            print(data)
+            message_type = data.get("type") or data.get("action")
+
+            if message_type == "BROKER_MATCH_FOUND":
+                self.local_player_id = data["payload"]["you"]
+                self.enemy_player_id = data["payload"]["opponent"]
+                self.session_id = data["payload"]["session_id"]
+                self.player_id = data["payload"]["global_player_id"]
+                self.textbox_you.text = self.local_player_id
+                self.textbox_bot.text = self.enemy_player_id
+                self.textbox_bot.text_color = self.WHITE
+                self.screen_manager.network.connect_to_game_server(data["payload"])
+                self.connected = True
+                self.btn_start.ButtonColor = self.LIGHT_BLUE
+                self.btn_start.ButtonColor_copy = self.LIGHT_BLUE
+
+            elif message_type == "START_GAME" and data["payload"]["start"]:
+                units = data["payload"]["units"]
+                structures = data["payload"]["structures"]
+                gold = data["payload"]["gold"]
+                obstacles = data["payload"]["obstacles"]
+                game_screen = self.screen_manager.screens["GAME"]
+                game_screen.set_arcade_mode(True)
+                game_screen.load_initial_state(gold, units, structures, self.player_id, obstacles, self.local_player_id, self.enemy_player_id)
+                self.screen_manager.network.init_udp_connection(self.session_id, self.player_id)
+                self.screen_manager.change_screen("GAME")
 
     def draw(self):
         self.screen.fill(self.MAINDARK)

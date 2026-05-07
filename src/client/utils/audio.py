@@ -148,3 +148,7 @@ class AudioManager:
         if self.sfx_explosion:
             self.sfx_explosion.play()
 
+    def play_immune(self):
+        if self.sfx_receive_shot:
+            self.sfx_receive_shot.play()
+

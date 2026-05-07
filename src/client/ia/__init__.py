@@ -24,6 +24,9 @@ from .core import (
     UnitCommander,
     GameConfigLoader,
     BotConfig,
+    ArcadeBotAI,
+    ArcadeDecisionEngine,
+    ArcadeGameStateAnalyzer,
 )
 
 # ── Infrastructure: networking & Docker ──
@@ -31,6 +34,7 @@ from .infra import (
     BotNetworkClient,
     BotMatchSpawner,
     BotMatchController,
+    ArcadeMatchController,
 )
 
 __all__ = [
@@ -41,8 +45,12 @@ __all__ = [
     "UnitCommander",
     "GameConfigLoader",
     "BotConfig",
+    "ArcadeBotAI",
+    "ArcadeDecisionEngine",
+    "ArcadeGameStateAnalyzer",
     # Infra
     "BotNetworkClient",
     "BotMatchSpawner",
     "BotMatchController",
+    "ArcadeMatchController",
 ]
