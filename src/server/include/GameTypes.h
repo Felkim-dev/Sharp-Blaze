@@ -196,6 +196,18 @@ namespace games_types
         float x, y;
     };
 
+    struct Projectile
+    {
+        float posX = 0.0f;
+        float posY = 0.0f;
+        float velX = 0.0f;
+        float velY = 0.0f;
+        int sourceEntityId = 0;
+        int targetEntityId = 0;
+        int damage = 0;
+        float lifetimeMs = 0.0f;
+    };
+
     struct EntityRef
     {
         int entityId          = 0;

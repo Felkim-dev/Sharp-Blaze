@@ -27,6 +27,11 @@ namespace
     constexpr float kCollectorCollisionRadius = 25.0f;
     constexpr float kBaseCollisionRadius = 250.0f;
 
+    constexpr float kProjectileSpeed = 600.0f;
+    constexpr float kProjectileMaxLifetimeMs = 3000.0f;
+    constexpr float kProjectileHitRadius = 25.0f;
+    constexpr float kStructureCollisionRadius = 50.0f;
+
     float distanceSquared(float x1, float y1, float x2, float y2)
     {
         const float dx = x1 - x2;
@@ -828,6 +833,182 @@ std::vector<games_types::EconomyTransaction> GameEngine::drainEconomyTransaction
     return session->drainEconomyTransactions();
 }
 
+void GameEngine::updateProjectiles(int deltaMs)
+{
+    if (!session || activeProjectiles.empty() || deltaMs <= 0)
+    {
+        return;
+    }
+
+    const std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
+    const std::vector<games_types::UnitPosition> bombs = session->getBombsSnapshot();
+    const std::vector<games_types::UnitPosition> structures = session->getStructuresSnapshot();
+    const std::vector<games_types::StaticObstacle> obstacles = session->getStaticObstaclesSnapshot();
+
+    SpatialGrid projectileGrid(kGridCols, kGridRows);
+    for (const auto& obstacle : obstacles)
+    {
+        for (const auto& cell : obstacle.cells)
+        {
+            if (projectileGrid.inBounds(cell))
+            {
+                projectileGrid.setStaticBlocked(cell, true);
+            }
+        }
+    }
+
+    for (const auto& unit : units)
+    {
+        projectileGrid.placeEntity(unit.entity_id, worldToCell(unit.x, unit.y));
+    }
+
+    for (const auto& bomb : bombs)
+    {
+        projectileGrid.placeEntity(bomb.entity_id, worldToCell(bomb.x, bomb.y));
+    }
+
+    for (auto& projectile : activeProjectiles)
+    {
+        const float dt = static_cast<float>(deltaMs) / 1000.0f;
+        projectile.posX += projectile.velX * dt;
+        projectile.posY += projectile.velY * dt;
+        projectile.lifetimeMs -= static_cast<float>(deltaMs);
+
+        const bool outOfBounds = projectile.posX < 0.0f ||
+                                 projectile.posX >= kGridCols * kCellSize ||
+                                 projectile.posY < 0.0f ||
+                                 projectile.posY >= kGridRows * kCellSize;
+
+        if (outOfBounds || projectile.lifetimeMs <= 0.0f)
+        {
+            projectile.lifetimeMs = 0.0f;
+            continue;
+        }
+
+        const games_types::CellCoord cell = worldToCell(projectile.posX, projectile.posY);
+        if (!projectileGrid.inBounds(cell))
+        {
+            projectile.lifetimeMs = 0.0f;
+            continue;
+        }
+
+        if (projectileGrid.isStaticBlocked(cell))
+        {
+            projectile.lifetimeMs = 0.0f;
+            continue;
+        }
+
+        const int occupantId = projectileGrid.getOccupant(cell);
+        if (occupantId >= 0 && occupantId != projectile.sourceEntityId)
+        {
+            const games_types::EntityType occupantType = games_types::classifyEntityTypeFromId(occupantId);
+            if (occupantType == games_types::EntityType::Attacker ||
+                occupantType == games_types::EntityType::Bomb)
+            {
+                applyProjectileDamage(projectile.sourceEntityId, occupantId);
+                projectile.lifetimeMs = 0.0f;
+                continue;
+            }
+        }
+
+        for (const auto& structure : structures)
+        {
+            if (structure.entity_id == projectile.sourceEntityId)
+            {
+                continue;
+            }
+
+            const float collisionRadius = isBaseStructureId(structure.entity_id)
+                                              ? kBaseCollisionRadius
+                                              : kStructureCollisionRadius;
+            if (circlesIntersect(projectile.posX, projectile.posY, kProjectileHitRadius,
+                                 structure.x, structure.y, collisionRadius))
+            {
+                applyProjectileDamage(projectile.sourceEntityId, structure.entity_id);
+                projectile.lifetimeMs = 0.0f;
+                break;
+            }
+        }
+
+        if (projectile.lifetimeMs <= 0.0f)
+        {
+            continue;
+        }
+
+        games_types::UnitPosition targetPos{};
+        if (session->getEntityPosition(projectile.targetEntityId, targetPos))
+        {
+            if (distanceSquared(projectile.posX, projectile.posY, targetPos.x, targetPos.y) <=
+                (kProjectileHitRadius * kProjectileHitRadius))
+            {
+                applyProjectileDamage(projectile.sourceEntityId, projectile.targetEntityId);
+                projectile.lifetimeMs = 0.0f;
+                continue;
+            }
+        }
+    }
+
+    activeProjectiles.erase(
+        std::remove_if(activeProjectiles.begin(), activeProjectiles.end(),
+                       [](const games_types::Projectile& p) { return p.lifetimeMs <= 0.0f; }),
+        activeProjectiles.end());
+}
+
+void GameEngine::applyProjectileDamage(int attackerId, int targetId)
+{
+    if (!session)
+    {
+        return;
+    }
+
+    const int attackerOwner = ownerFromEntityId(attackerId);
+    if (attackerOwner == 0)
+    {
+        return;
+    }
+
+    games_types::DamageResolution resolution{};
+    const int damage = std::max(session->getMinDamage(), session->getAttackerDamage());
+    if (!session->applyDamageToEntity(attackerOwner, targetId, damage, resolution) || !resolution.applied)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(mtxCombatEvents);
+
+    games_types::CombatEvent damagedEvent{};
+    damagedEvent.type = games_types::CombatEventType::UnitDamaged;
+    damagedEvent.sessionId = session->getSessionId();
+    damagedEvent.attackerPlayerId = attackerOwner;
+    damagedEvent.attackerEntityId = attackerId;
+    damagedEvent.targetEntityId = resolution.entityId;
+    damagedEvent.targetPlayerId = resolution.ownerPlayerId;
+    damagedEvent.currentHp = resolution.currentHp;
+    damagedEvent.maxHp = resolution.maxHp;
+    pendingCombatEvents.push_back(damagedEvent);
+
+    if (resolution.destroyed)
+    {
+        games_types::CombatEvent destroyedEvent{};
+        destroyedEvent.type = games_types::CombatEventType::EntityDestroyed;
+        destroyedEvent.sessionId = session->getSessionId();
+        destroyedEvent.attackerPlayerId = attackerOwner;
+        destroyedEvent.targetEntityId = resolution.entityId;
+        destroyedEvent.targetPlayerId = resolution.ownerPlayerId;
+        destroyedEvent.attackerEntityId = attackerId;
+        pendingCombatEvents.push_back(destroyedEvent);
+    }
+
+    if (resolution.gameOver)
+    {
+        games_types::CombatEvent gameOverEvent{};
+        gameOverEvent.type = games_types::CombatEventType::GameOver;
+        gameOverEvent.sessionId = session->getSessionId();
+        gameOverEvent.winnerPlayerId = resolution.winnerPlayerId;
+        pendingCombatEvents.push_back(gameOverEvent);
+    }
+}
+
 void GameEngine::advanceCombat(int deltaMs)
 {
     if (deltaMs <= 0)
@@ -847,6 +1028,8 @@ void GameEngine::advanceCombat(int deltaMs)
             ++it;
         }
     }
+
+    updateProjectiles(deltaMs);
 
     for (auto it = attackImpactRemainingMs.begin(); it != attackImpactRemainingMs.end();)
     {
@@ -944,7 +1127,36 @@ void GameEngine::advanceCombat(int deltaMs)
         }
         else if (result.accepted)
         {
-            attackImpactRemainingMs[attackerId] = result.impactDelayMs;
+            if (session && session->isArcadeMode())
+            {
+                games_types::UnitPosition attackerPos{};
+                games_types::UnitPosition targetPos{};
+                if (session->getEntityPosition(attackerId, attackerPos) &&
+                    session->getEntityPosition(targetId, targetPos))
+                {
+                    const float dx = targetPos.x - attackerPos.x;
+                    const float dy = targetPos.y - attackerPos.y;
+                    const float dist = std::sqrt(dx * dx + dy * dy);
+                    if (dist > 0.0f)
+                    {
+                        games_types::Projectile projectile{};
+                        projectile.posX = attackerPos.x;
+                        projectile.posY = attackerPos.y;
+                        projectile.velX = (dx / dist) * kProjectileSpeed;
+                        projectile.velY = (dy / dist) * kProjectileSpeed;
+                        projectile.sourceEntityId = attackerId;
+                        projectile.targetEntityId = targetId;
+                        projectile.damage = std::max(session->getMinDamage(), session->getAttackerDamage());
+                        projectile.lifetimeMs = kProjectileMaxLifetimeMs;
+                        activeProjectiles.push_back(projectile);
+                    }
+                }
+                attackerCooldownRemainingMs[attackerId] = session->getAttackerCooldownMs();
+            }
+            else
+            {
+                attackImpactRemainingMs[attackerId] = result.impactDelayMs;
+            }
             movementRoutes.erase(attackerId);
 
             std::lock_guard<std::mutex> lock(mtxAttackResults);
@@ -1323,12 +1535,42 @@ void GameEngine::processAttackCommand(const games_types::PlayerCommand& cmd)
     {
         attackLockTargetByAttacker[cmd.attack.attackerId] = cmd.attack.targetId;
 
-        if (result.accepted && result.impactDelayMs > 0)
+        if (result.accepted)
         {
-            attackImpactRemainingMs[cmd.attack.attackerId] = result.impactDelayMs;
-            movementRoutes.erase(cmd.attack.attackerId);
+            if (session && session->isArcadeMode())
+            {
+                games_types::UnitPosition attackerPos{};
+                games_types::UnitPosition targetPos{};
+                if (session->getEntityPosition(cmd.attack.attackerId, attackerPos) &&
+                    session->getEntityPosition(cmd.attack.targetId, targetPos))
+                {
+                    const float dx = targetPos.x - attackerPos.x;
+                    const float dy = targetPos.y - attackerPos.y;
+                    const float dist = std::sqrt(dx * dx + dy * dy);
+                    if (dist > 0.0f)
+                    {
+                        games_types::Projectile projectile{};
+                        projectile.posX = attackerPos.x;
+                        projectile.posY = attackerPos.y;
+                        projectile.velX = (dx / dist) * kProjectileSpeed;
+                        projectile.velY = (dy / dist) * kProjectileSpeed;
+                        projectile.sourceEntityId = cmd.attack.attackerId;
+                        projectile.targetEntityId = cmd.attack.targetId;
+                        projectile.damage = std::max(session->getMinDamage(), session->getAttackerDamage());
+                        projectile.lifetimeMs = kProjectileMaxLifetimeMs;
+                        activeProjectiles.push_back(projectile);
+                    }
+                }
+                attackerCooldownRemainingMs[cmd.attack.attackerId] = session->getAttackerCooldownMs();
+                movementRoutes.erase(cmd.attack.attackerId);
+            }
+            else if (result.impactDelayMs > 0)
+            {
+                attackImpactRemainingMs[cmd.attack.attackerId] = result.impactDelayMs;
+                movementRoutes.erase(cmd.attack.attackerId);
+            }
         }
-        
+
         if (result.reason == "out_of_range")
         {
             games_types::UnitPosition targetPos{};
@@ -1337,7 +1579,7 @@ void GameEngine::processAttackCommand(const games_types::PlayerCommand& cmd)
                 repathUnit(cmd.attack.attackerId, worldToCell(targetPos.x, targetPos.y));
             }
         }
-        else
+        else if (!result.accepted || !session || !session->isArcadeMode())
         {
             movementRoutes.erase(cmd.attack.attackerId);
         }
@@ -1444,7 +1686,14 @@ GameEngine::AttackRequestResult GameEngine::executeAttackAttempt(int playerId, i
     {
         result.accepted = true;
         result.reason = "launching";
-        result.impactDelayMs = computeAttackImpactDelayMs(distSq);
+        if (session->isArcadeMode())
+        {
+            result.impactDelayMs = 0;
+        }
+        else
+        {
+            result.impactDelayMs = computeAttackImpactDelayMs(distSq);
+        }
         return result;
     }
 
