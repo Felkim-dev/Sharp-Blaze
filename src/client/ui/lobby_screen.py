@@ -2,6 +2,11 @@ import pygame
 
 from ui.component import Button, Text,TextBox,CloseButton
 
+import subprocess
+import threading
+import time
+import shutil
+
 from utils.config import Config
 from utils.json import JSON_Manager
 from ia.bot_game_loop import BotGameLoop
@@ -90,17 +95,20 @@ class LobbyScreen:
                     if self.textbox_nickname2.text != "WAITING..." and self.btn_Start.button_rectangle.collidepoint(mouse_pos):
                         AudioManager().play_click()
 
-                        if Config.OFFLINE_DEBUG_MODE: # DEBUG MODE
+                        # If this is a bot match (bot instance present), spawn local server and connect both
+                        if self.screen_manager.bot_instance and not Config.OFFLINE_DEBUG_MODE:
+                            self._spawn_local_server_and_connect()
 
+                        elif Config.OFFLINE_DEBUG_MODE: # DEBUG MODE
                             units = {
-                            1000: (450, 4550),
-                            1001: (550, 4450),
-                            3002: (350, 4450),
-                            
-                            6000: (4550,450),
-                            6001: (4450,550),
-                            8002: (4650,550)
-                                }
+                                1000: (450, 4550),
+                                1001: (550, 4450),
+                                3002: (350, 4450),
+
+                                6000: (4550,450),
+                                6001: (4450,550),
+                                8002: (4650,550)
+                            }
 
                             structures = {
                                 100: (300, 4700),
@@ -114,6 +122,7 @@ class LobbyScreen:
                             game_screen = self.screen_manager.screens["GAME"]
                             game_screen.load_initial_state(units,structures)
                             self.screen_manager.change_screen("GAME")
+
                         else:
                             # Send START_GAME with session_id if available (dedicated session)
                             session_id = getattr(self, 'session_id', None)
@@ -233,6 +242,77 @@ class LobbyScreen:
             # ======================= DEBUG MODE =======================
             self.textbox_nickname1.text = "Player1"
             self.textbox_nickname2.text = "Player2"
+
+    def _spawn_local_server_and_connect(self):
+        """Spawn a local Docker container for the server and connect both player and bot to it."""
+        print("[LOBBY] Spawning local server container...")
+
+        if shutil.which("docker") is None:
+            print("[LOBBY] Docker not found on PATH. Cannot spawn server.")
+            return
+
+        image_name = "sharp-blaze-server:latest"
+        container_name = "sharp_blaze_local_server"
+
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "-d",
+            "-p",
+            f"{Config.TCP_PORT_SERVER}:{Config.TCP_PORT_SERVER}",
+            "-p",
+            f"{Config.GAME_SERVER_UDP_PORT}:{Config.GAME_SERVER_UDP_PORT}",
+            "--name",
+            container_name,
+            image_name,
+        ]
+
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            if proc.returncode != 0:
+                print(f"[LOBBY] Docker run failed: {proc.stderr}")
+                return
+            container_id = proc.stdout.strip()
+            print(f"[LOBBY] Docker container started: {container_id}")
+
+            # Give server a moment to initialize
+            time.sleep(2.5)
+
+            # Build a synthetic match payload so NetworkManager can connect directly
+            player_name = self.textbox_nickname1.text or "Player"
+            bot_name = self.textbox_nickname2.text or "BOT"
+
+            match_payload = {
+                "ip": "127.0.0.1",
+                "port": Config.TCP_PORT_SERVER,
+                "udp_port": Config.GAME_SERVER_UDP_PORT,
+                "session_id": 1,
+                "token": "",
+                "you": player_name,
+                "opponent": bot_name,
+                "global_player_id": 1,
+            }
+
+            # Connect player (network)
+            print(f"[LOBBY] Connecting player '{player_name}' to local server...")
+            self.screen_manager.network.connect_to_game_server(match_payload)
+
+            # Connect bot in background thread
+            def connect_bot():
+                bot = self.screen_manager.bot_instance
+                if bot:
+                    print(f"[LOBBY] Bot '{bot.bot_name}' connecting to local server...")
+                    if bot.connect():
+                        print("[LOBBY] Bot connected successfully")
+                    else:
+                        print("[LOBBY] Bot failed to connect")
+
+            t = threading.Thread(target=connect_bot, daemon=True)
+            t.start()
+
+        except Exception as e:
+            print(f"[LOBBY] Exception while spawning local server: {e}")
 
     def draw(self):
         # SCREEN DRAW

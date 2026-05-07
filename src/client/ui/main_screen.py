@@ -3,7 +3,7 @@ import sys
 import os
 import threading
 
-from ui.component import Button, Text, Slider, Checkbox
+from ui.component import Button, Text, Slider, Checkbox, InputBox
 from ui.floating_shapes import FloatingShape
 from ia.bot_player import BotPlayer
 from ia.bot_game_loop import BotGameLoop
@@ -434,31 +434,76 @@ class MainScreen:
 
     def _start_bot_match(self):
         """Initialize bot and connect both bot and player to server for bot match"""
-        print("[MAIN_SCREEN] Starting Bot Match...")
-        
-        # Create bot player instance
-        self.bot_instance = BotPlayer("SharpBlaze_Bot_1")
-        
-        # Connect bot in background thread
-        def connect_bot():
-            print("[MAIN_SCREEN] Bot connecting to server...")
-            if self.bot_instance.connect():
-                print("[MAIN_SCREEN] Bot connected successfully")
-                # Store bot reference in screen manager for other screens
-                self.screen_manager.bot_instance = self.bot_instance
-            else:
-                print("[MAIN_SCREEN] Bot connection failed")
-        
-        # Launch bot connection in thread to avoid blocking UI
-        bot_thread = threading.Thread(target=connect_bot, daemon=True)
-        bot_thread.start()
-        
-        # Now connect the player as well (using same protocol as join_screen)
-        from utils.json import JSON_Manager
-        player_join_data = JSON_Manager.get_datajoin("Player")
-        
-        print("[MAIN_SCREEN] Player connecting to server...")
-        self.screen_manager.network.connect(player_join_data)
-        
-        # Move to connecting screen (player will wait there)
-        self.screen_manager.change_screen("CONNECTING")
+        print("[MAIN_SCREEN] Starting Bot Match (prompting for Bot ID)...")
+
+        # Create an InputBox modal to get the bot id from the user
+        WIDTH, HEIGHT = self.screen.get_size()
+        box_w, box_h = int(600 * (WIDTH / 1280)), int(60 * (HEIGHT / 720))
+        box_x = (WIDTH - box_w) // 2
+        box_y = (HEIGHT // 3)
+
+        input_box = InputBox((box_x, box_y), (box_w, box_h), "ENTER BOT ID (e.g. BOTSITO)")
+        ok_btn = Button(((WIDTH // 2) - 80, box_y + box_h + 40), (160, 50), self.LIGHT_BLUE, "OK", self.BLACK, 24)
+        cancel_btn = Button(((WIDTH // 2) + 120, box_y + box_h + 40), (160, 50), self.RED, "CANCEL", self.BLACK, 24)
+
+        # Modal loop (blocks until user enters ID or cancels)
+        modal_done = False
+        bot_name = None
+        clock = pygame.time.Clock()
+
+        while not modal_done:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if ok_btn.button_rectangle.collidepoint(event.pos) and len(input_box.user_input) > 0:
+                        bot_name = input_box.user_input
+                        modal_done = True
+                    elif cancel_btn.button_rectangle.collidepoint(event.pos):
+                        modal_done = True
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN and len(input_box.user_input) > 0:
+                        bot_name = input_box.user_input
+                        modal_done = True
+                    # forward to input box
+                    if input_box.inputbox_rectangle.collidepoint(pygame.mouse.get_pos()):
+                        if event.unicode.isalnum() and len(input_box.user_input) < input_box.max_length:
+                            input_box.user_input += event.unicode
+                        elif event.key == pygame.K_BACKSPACE:
+                            input_box.user_input = input_box.user_input[:-1]
+
+            # Draw modal
+            self.screen.fill(self.MAINDARK)
+            for shape in self.background_shapes:
+                shape.draw(self.screen)
+
+            # Draw input and buttons
+            input_box.draw(self.screen)
+            ok_btn.draw(self.screen)
+            cancel_btn.draw(self.screen)
+
+            pygame.display.flip()
+            clock.tick(30)
+
+        # If canceled, return to main menu
+        if not bot_name:
+            print("[MAIN_SCREEN] Bot match canceled by user")
+            return
+
+        print(f"[MAIN_SCREEN] Bot ID entered: {bot_name}")
+
+        # Create bot player instance but do NOT connect yet (we'll start it once server is up)
+        self.bot_instance = BotPlayer(bot_name)
+        # Store bot reference in screen manager for other screens
+        self.screen_manager.bot_instance = self.bot_instance
+
+        # Prepare lobby: show player and bot
+        lobby = self.screen_manager.screens.get("LOBBY")
+        if lobby:
+            lobby.textbox_nickname1.text = "YOU"
+            lobby.textbox_nickname2.text = bot_name
+            lobby.textbox_nickname2.text_color = self.WHITE
+
+        # Move to Lobby screen
+        self.screen_manager.change_screen("LOBBY")
