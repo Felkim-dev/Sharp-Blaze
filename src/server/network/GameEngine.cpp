@@ -378,16 +378,21 @@ void GameEngine::processMoveCommandsWithFormation(const std::vector<games_types:
     }
 
     std::vector<games_types::UnitPosition> units = session->getUnitsSnapshot();
+    std::vector<games_types::UnitPosition> bombs = session->getBombsSnapshot();
     std::vector<games_types::UnitPosition> structures = session->getStructuresSnapshot();
     std::vector<games_types::ResourceNode> resources = session->getResourcesSnapshot();
     std::vector<games_types::ShopUnit> shops = session->getShopsSnapshot();
     std::vector<games_types::StaticObstacle> obstacles = session->getStaticObstaclesSnapshot();
 
     std::unordered_map<int, games_types::CellCoord> currentCellByUnit;
-    currentCellByUnit.reserve(units.size());
+    currentCellByUnit.reserve(units.size() + bombs.size());
     for (const auto& unit : units)
     {
         currentCellByUnit[unit.entity_id] = worldToCell(unit.x, unit.y);
+    }
+    for (const auto& bomb : bombs)
+    {
+        currentCellByUnit[bomb.entity_id] = worldToCell(bomb.x, bomb.y);
     }
 
     std::map<std::int64_t, std::vector<games_types::PlayerCommand>> groups;
@@ -713,7 +718,7 @@ void GameEngine::advanceMovement(int deltaMs)
     {
         const auto [worldX, worldY] = cellCenterToWorld(move.to);
         session->upsertUnitPosition(move.entityId, worldX, worldY);
-        movementCooldownRemainingMs[move.entityId] = 83; // Match 10 pixels/frame in client (~83ms per cell)
+        movementCooldownRemainingMs[move.entityId] = 150;
 
         auto routeIt = movementRoutes.find(move.entityId);
         if (routeIt == movementRoutes.end())
@@ -813,7 +818,7 @@ void GameEngine::advanceMovement(int deltaMs)
 
             const auto [worldX, worldY] = cellCenterToWorld(nextCell);
             session->upsertBombPosition(bomb.entity_id, worldX, worldY);
-            movementCooldownRemainingMs[bomb.entity_id] = 83;
+                movementCooldownRemainingMs[bomb.entity_id] = 150;
             route.pop_front();
 
             if (enemyBase.entity_id != 0)
@@ -821,7 +826,53 @@ void GameEngine::advanceMovement(int deltaMs)
                 const float explosionRadius = static_cast<float>(session->getArcadeExplosionRadius());
                 if (circlesIntersect(worldX, worldY, 25.0f, enemyBase.x, enemyBase.y, explosionRadius))
                 {
-                    session->setGameOver(ownerId);
+                    const int enemyPlayerId = (ownerId == 1) ? 2 : 1;
+                    constexpr int bombExplosionDamage = 1500;
+
+                    games_types::DamageResolution bombRes{};
+                    session->applyDamageToEntity(enemyPlayerId, bomb.entity_id, 200, bombRes);
+
+                    games_types::DamageResolution baseRes{};
+                    session->applyDamageToEntity(ownerId, enemyBase.entity_id, bombExplosionDamage, baseRes);
+
+                    {
+                        std::lock_guard<std::mutex> lock(mtxCombatEvents);
+
+                        if (baseRes.applied)
+                        {
+                            games_types::CombatEvent damagedEvent{};
+                            damagedEvent.type = games_types::CombatEventType::UnitDamaged;
+                            damagedEvent.sessionId = session->getSessionId();
+                            damagedEvent.attackerPlayerId = ownerId;
+                            damagedEvent.attackerEntityId = bomb.entity_id;
+                            damagedEvent.targetEntityId = baseRes.entityId;
+                            damagedEvent.targetPlayerId = baseRes.ownerPlayerId;
+                            damagedEvent.currentHp = baseRes.currentHp;
+                            damagedEvent.maxHp = baseRes.maxHp;
+                            pendingCombatEvents.push_back(damagedEvent);
+
+                            if (baseRes.destroyed)
+                            {
+                                games_types::CombatEvent destroyedEvent{};
+                                destroyedEvent.type = games_types::CombatEventType::EntityDestroyed;
+                                destroyedEvent.sessionId = session->getSessionId();
+                                destroyedEvent.attackerPlayerId = ownerId;
+                                destroyedEvent.targetEntityId = baseRes.entityId;
+                                destroyedEvent.targetPlayerId = baseRes.ownerPlayerId;
+                                destroyedEvent.attackerEntityId = bomb.entity_id;
+                                pendingCombatEvents.push_back(destroyedEvent);
+                            }
+
+                            if (baseRes.gameOver)
+                            {
+                                games_types::CombatEvent gameOverEvent{};
+                                gameOverEvent.type = games_types::CombatEventType::GameOver;
+                                gameOverEvent.sessionId = session->getSessionId();
+                                gameOverEvent.winnerPlayerId = baseRes.winnerPlayerId;
+                                pendingCombatEvents.push_back(gameOverEvent);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -970,6 +1021,17 @@ void GameEngine::applyProjectileDamage(int attackerId, int targetId)
     if (attackerOwner == 0)
     {
         return;
+    }
+
+    if (session->isArcadeMode() && session->isBaseImmuneToAttackers())
+    {
+        const games_types::EntityType sourceType = games_types::classifyEntityTypeFromId(attackerId);
+        const games_types::EntityType targetType = games_types::classifyEntityTypeFromId(targetId);
+        if (sourceType == games_types::EntityType::Attacker &&
+            targetType == games_types::EntityType::Structure)
+        {
+            return;
+        }
     }
 
     games_types::DamageResolution resolution{};
@@ -1695,6 +1757,19 @@ GameEngine::AttackRequestResult GameEngine::executeAttackAttempt(int playerId, i
     {
         result.reason = "out_of_range";
         return result;
+    }
+
+    // Arcade mode: attacker units cannot damage structures (base immunity)
+    if (session->isArcadeMode() && session->isBaseImmuneToAttackers())
+    {
+        const games_types::EntityType attackerType = games_types::classifyEntityTypeFromId(attackerId);
+        const games_types::EntityType targetType = games_types::classifyEntityTypeFromId(targetId);
+        if (attackerType == games_types::EntityType::Attacker &&
+            targetType == games_types::EntityType::Structure)
+        {
+            result.reason = "base_immune_to_attackers";
+            return result;
+        }
     }
 
     if (!applyDamage)

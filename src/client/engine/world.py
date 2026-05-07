@@ -182,6 +182,13 @@ class GameWorld:
                     unit.is_selected = True
                     selected_count += 1
 
+        for b_id, bomb in self.bombs.items():
+            owner = self.get_owner_from_id(b_id)
+            if owner == self.local_player_id:
+                if selection_rect.collidepoint(bomb.x, bomb.y):
+                    bomb.is_selected = True
+                    selected_count += 1
+
         print(f"[WORLD] Box selection captured {selected_count} units.")
 
     def handle_right_click(self, target_world_x, target_world_y):
@@ -203,6 +210,9 @@ class GameWorld:
         for u_id, unit in self.units.items():
             if getattr(unit, "is_selected", False):
                 selected_unit_ids.append(u_id)
+        for b_id, bomb in self.bombs.items():
+            if getattr(bomb, "is_selected", False):
+                selected_unit_ids.append(b_id)
 
         if not selected_unit_ids:
             return
@@ -264,12 +274,14 @@ class GameWorld:
                 if entity_id2 not in self.bombs:
                     first_x, first_y = point_list[0]
                     self.bombs[entity_id2] = Bomb(entity_id2, first_x, first_y)
-                else:
-                    for net_x, net_y in point_list:
-                        self.bombs[entity_id2].update_position(net_x, net_y)
+                for net_x, net_y in point_list:
+                    self.bombs[entity_id2].add_target_position(net_x, net_y)
 
         for unit in self.units.values():
             unit.update_physics()
+
+        for bomb in self.bombs.values():
+            bomb.update_physics()
 
         for bullet in self.projectiles[:]:
             bullet.update()
@@ -279,11 +291,12 @@ class GameWorld:
 
     def get_entity(self,id):
         if 0 <= id <= 999 or 5000 <= id <= 5999:
-            return self.structures[id]
+            return self.structures.get(id)
         elif 1000 <= id <= 4999 or 6000 <= id <= 9999:
-            return self.units[id]
+            return self.units.get(id)
         elif self.is_bomb_id(id):
             return self.bombs.get(id)
+        return None
 
     def is_bomb_id(self, entity_id):
         return (12000 <= entity_id <= 12999) or (13000 <= entity_id <= 13999)
@@ -335,8 +348,8 @@ class GameWorld:
         # We will store the entity we clicked on to return it later
         clicked_entity = None
 
-        # Iterate through both dictionaries (units and structures)
-        for entity_dictionary in (self.units, self.structures):
+        # Iterate through all three dictionaries (units, structures and bombs)
+        for entity_dictionary in (self.units, self.structures, self.bombs):
             for entity in entity_dictionary.values():
 
                 if hasattr(entity, "check_click"):

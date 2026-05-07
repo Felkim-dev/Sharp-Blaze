@@ -23,11 +23,11 @@ class Unit:
         # SELECTION
         self.is_selected = False
         self.is_targeted = False
-        self.hitbox_radius = 20  # How forgiving the click detection is
+        self.hitbox_radius = 30
 
         # LERP
         self.path_queue = []
-        self.speed = 10.0
+        self.speed = 5.5
 
     def change_color(self,color):
         self.color = color

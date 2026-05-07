@@ -147,8 +147,8 @@ class ArcadeLobbyScreen:
                 gold = data["payload"]["gold"]
                 obstacles = data["payload"]["obstacles"]
                 game_screen = self.screen_manager.screens["GAME"]
-                game_screen.set_arcade_mode(True)
                 game_screen.load_initial_state(gold, units, structures, self.player_id, obstacles, self.local_player_id, self.enemy_player_id)
+                game_screen.set_arcade_mode(True)
                 self.screen_manager.network.init_udp_connection(self.session_id, self.player_id)
                 self.screen_manager.change_screen("GAME")
 

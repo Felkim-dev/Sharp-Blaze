@@ -304,7 +304,7 @@ void GameSession::loadCombatConfigNoLock()
 {
 	attackerHp = 100;
 	attackerDamage = 20;
-	attackerRange = 1000;
+	attackerRange = 400;
 	attackerCooldownMs = 500;
 	collectorHp = 100;
 	baseHp = 1500;

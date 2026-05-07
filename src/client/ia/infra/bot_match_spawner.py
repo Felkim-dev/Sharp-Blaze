@@ -131,6 +131,7 @@ class BotMatchSpawner:
         self._token = secrets.token_hex(16)
 
         # Environment variables — identical to DockerMatchSpawner
+        # plus arcade mode flag so the C++ server initializes with arcade rules
         environment = {
             "SHARP_BLAZE_SESSION_ID": str(self._session_id),
             "SHARP_BLAZE_SESSION_TOKEN": self._token,
@@ -138,6 +139,7 @@ class BotMatchSpawner:
             "SHARP_BLAZE_PLAYER_TWO": bot_player_id,
             "SHARP_BLAZE_TCP_PORT": str(self._internal_tcp_port),
             "SHARP_BLAZE_UDP_PORT": str(self._internal_udp_port),
+            "SHARP_BLAZE_GAME_MODE": "arcade",
         }
 
         # Bind mapped ports to the specific host IP (like the broker does).

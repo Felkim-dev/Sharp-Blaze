@@ -429,6 +429,11 @@ class GameScreen:
         if self.is_game_over:
             return
 
+        if self.is_arcade:
+            self.tutorial.update()
+            if self.tutorial.is_active():
+                return
+
         if not Config.OFFLINE_DEBUG_MODE:
             while True:
                 data = self.screen_manager.network.receive_json()
@@ -634,9 +639,6 @@ class GameScreen:
             self.shop.update(self.player_gold)
 
         if self.is_arcade:
-            self.tutorial.update()
-            if self.tutorial.is_active():
-                return
             self._check_bomb_near_base()
 
         now = pygame.time.get_ticks()

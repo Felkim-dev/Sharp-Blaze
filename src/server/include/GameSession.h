@@ -37,7 +37,7 @@ class GameSession
         std::unordered_map<int, games_types::ShopAuthorizationState> shopAuthorizationByPlayer;
         int attackerHp = 100;
         int attackerDamage = 20;
-        int attackerRange = 1000;
+        int attackerRange = 400;
         int attackerCooldownMs = 500;
         int collectorHp = 100;
         int baseHp = 1500;
@@ -91,6 +91,7 @@ class GameSession
         int getSessionId() const;
         bool hasPlayer(int playerId) const;
         bool isArcadeMode() const { return arcadeMode; }
+        bool isBaseImmuneToAttackers() const { return arcadeBaseImmunityToAttackers; }
 
         void registerUdpClient(const std::string& clientKey, const RegisteredClient& client);
         bool isUdpClientRegistered(const std::string& clientKey) const;

@@ -1,9 +1,10 @@
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple, Optional
 import time
 import math
 from utils.json import JSON_Manager
-from .arcade_game_state_analyzer import ArcadeGameStateAnalyzer
-from .arcade_decision_engine import ArcadeDecisionEngine
+
+ATTACK_RANGE = 400
+ENGAGE_RANGE = 500
 
 class ArcadeBotAI:
     def __init__(self, player_id: int, difficulty: str,
@@ -20,6 +21,13 @@ class ArcadeBotAI:
         self.last_decision = None
         self.enemy_id = 2 if player_id == 1 else 1
         self.base_positions = {1: (300, 4700), 2: (4700, 300)}
+
+        self._attacker_range = range(1000, 3000) if player_id == 1 else range(6000, 8000)
+        self._own_bomb_range = range(12000, 13000) if player_id == 1 else range(13000, 14000)
+        self._enemy_bomb_range = range(13000, 14000) if player_id == 1 else range(12000, 13000)
+
+        self._patrol_phase = 0
+        self._patrol_cycle_length = 4
 
     def update(self, game_world, game_screen) -> bool:
         current_time_ms = time.time() * 1000
@@ -44,38 +52,39 @@ class ArcadeBotAI:
 
         self.last_decision_time = current_time_ms
         self.decision_count += 1
+        self._patrol_phase = (self._patrol_phase + 1) % self._patrol_cycle_length
         return True
 
-    def _generate_commands(self, decision, game_state, game_world):
+    def _generate_commands(self, decision, game_state, game_world) -> List[Dict]:
         commands = []
-        remaining_budget = 6
-
-        for _ in range(decision.get("build_attackers", 0)):
-            if remaining_budget <= 0:
-                break
-            cmd = JSON_Manager.get_unit_attacker()
-            commands.append(cmd)
-            remaining_budget -= 1
-
-        for _ in range(decision.get("build_bombs", 0)):
-            if remaining_budget <= 0:
-                break
-            cmd = JSON_Manager.get_unit_bomb()
-            commands.append(cmd)
-            remaining_budget -= 1
+        remaining_budget = 8
 
         priority = decision.get("priority", "attack")
         aggression = decision.get("aggression", 0.5)
+        build_attackers = decision.get("build_attackers", 0)
+        build_bombs = decision.get("build_bombs", 0)
 
-        move_cmds = self._generate_movement_orders(priority, aggression, game_state, game_world)
-        for cmd in move_cmds:
+        for _ in range(min(build_attackers, 3)):
+            if remaining_budget <= 0:
+                break
+            commands.append(JSON_Manager.get_unit_attacker())
+            remaining_budget -= 1
+
+        for _ in range(build_bombs):
+            if remaining_budget <= 0:
+                break
+            commands.append(JSON_Manager.get_unit_bomb())
+            remaining_budget -= 1
+
+        attack_cmds = self._generate_attack_orders(priority, game_state, game_world)
+        for cmd in attack_cmds[:3]:
             if remaining_budget <= 0:
                 break
             commands.append(cmd)
             remaining_budget -= 1
 
-        attack_cmds = self._generate_attack_orders(priority, game_state, game_world)
-        for cmd in attack_cmds:
+        move_cmds = self._generate_movement_orders(priority, aggression, game_state, game_world)
+        for cmd in move_cmds[:3]:
             if remaining_budget <= 0:
                 break
             commands.append(cmd)
@@ -83,115 +92,179 @@ class ArcadeBotAI:
 
         return commands
 
-    def _generate_movement_orders(self, priority, aggression, game_state, game_world):
+    def _generate_movement_orders(self, priority, aggression, game_state, game_world) -> List[Dict]:
         commands = []
-        my_attackers = []
-        target_range = range(1000, 3000) if self.player_id == 1 else range(6000, 8000)
-        for unit_id, unit in game_world.units.items():
-            if unit_id in target_range and game_world.get_owner_from_id(unit_id) == self.player_id:
-                my_attackers.append((unit_id, unit))
-
+        my_attackers = self._get_my_attackers(game_world)
         if not my_attackers:
             return commands
+
+        enemy_units = game_state.get("enemy_units", [])
+        nearest_shop_pos = game_state.get("nearest_shop_pos")
+        nearest_enemy_pos = game_state.get("nearest_enemy_pos")
 
         if priority == "escort":
             own_bombs = self._get_own_bombs(game_world)
             if own_bombs:
                 bomb_x, bomb_y = own_bombs[0][1], own_bombs[0][2]
-                for unit_id, _ in my_attackers[:3]:
+                for unit_id, _ in my_attackers[:min(4, len(my_attackers))]:
                     commands.append(self._create_move_command(unit_id, bomb_x, bomb_y))
-        elif priority == "intercept":
-            enemy_bombs = self._get_enemy_bombs(game_world)
-            if enemy_bombs:
-                bomb_x, bomb_y = enemy_bombs[0][1], enemy_bombs[0][2]
-                for unit_id, _ in my_attackers[:3]:
-                    commands.append(self._create_move_command(unit_id, bomb_x, bomb_y))
-            else:
-                enemy_base = self.base_positions[self.enemy_id]
-                for unit_id, _ in my_attackers[:3]:
-                    commands.append(self._create_move_command(unit_id, enemy_base[0], enemy_base[1]))
-        elif priority == "buy_bomb" or priority == "attack":
-            if aggression > 0.4:
-                enemy_base = self.base_positions[self.enemy_id]
-                for unit_id, _ in my_attackers[:3]:
-                    commands.append(self._create_move_command(unit_id, enemy_base[0], enemy_base[1]))
-            else:
-                my_base = self.base_positions[self.player_id]
-                for unit_id, _ in my_attackers[:2]:
-                    offset_x = (hash((unit_id, "x")) % 400) - 200
-                    offset_y = (hash((unit_id, "y")) % 400) - 200
-                    tx = max(0, min(5000, my_base[0] + offset_x))
-                    ty = max(0, min(5000, my_base[1] + offset_y))
-                    commands.append(self._create_move_command(unit_id, tx, ty))
-
-        return commands
-
-    def _generate_attack_orders(self, priority, game_state, game_world):
-        commands = []
-        my_attackers = []
-        target_range = range(1000, 3000) if self.player_id == 1 else range(6000, 8000)
-        for unit_id, unit in game_world.units.items():
-            if unit_id in target_range and game_world.get_owner_from_id(unit_id) == self.player_id:
-                my_attackers.append((unit_id, unit))
-
-        if not my_attackers:
             return commands
-
-        enemy_units = []
-        for unit_id, unit in game_world.units.items():
-            if game_world.get_owner_from_id(unit_id) == self.enemy_id:
-                enemy_units.append((unit_id, unit))
 
         if priority == "intercept":
             enemy_bombs = self._get_enemy_bombs(game_world)
             if enemy_bombs:
-                target_id = enemy_bombs[0][0]
-                for attacker_id, _ in my_attackers[:2]:
-                    commands.append(JSON_Manager.attack(target_id, attacker_id))
+                bomb_x, bomb_y = enemy_bombs[0][1], enemy_bombs[0][2]
+                for unit_id, _ in my_attackers[:min(4, len(my_attackers))]:
+                    commands.append(self._create_move_command(unit_id, bomb_x, bomb_y))
                 return commands
 
-        if enemy_units:
-            for i, (attacker_id, _) in enumerate(my_attackers[:2]):
-                target = enemy_units[i % len(enemy_units)]
-                commands.append(JSON_Manager.attack(target[0], attacker_id))
-        else:
-            enemy_base_id = self._get_enemy_base_id(game_world)
-            if enemy_base_id is not None:
-                for attacker_id, _ in my_attackers[:2]:
-                    commands.append(JSON_Manager.attack(enemy_base_id, attacker_id))
+        engaged_enemies = self._get_enemies_in_range(my_attackers, enemy_units, ENGAGE_RANGE)
+
+        if engaged_enemies and nearest_enemy_pos:
+            shop_pos = nearest_shop_pos if nearest_shop_pos else self.base_positions[self.player_id]
+            count = len(my_attackers)
+            for i, (unit_id, _) in enumerate(my_attackers):
+                if count > 2 and i == 0:
+                    commands.append(self._create_move_command(unit_id, shop_pos[0], shop_pos[1]))
+                else:
+                    target = engaged_enemies[i % len(engaged_enemies)]
+                    commands.append(self._create_move_command(unit_id, target[1], target[2]))
+            return commands
+
+        patrol_points = self._get_patrol_points(nearest_shop_pos)
+        for i, (unit_id, _) in enumerate(my_attackers[:min(3, len(my_attackers))]):
+            point = patrol_points[i % len(patrol_points)]
+            commands.append(self._create_move_command(unit_id, point[0], point[1]))
 
         return commands
 
-    def _get_own_bombs(self, game_world):
-        bomb_range = range(12000, 13000) if self.player_id == 1 else range(13000, 14000)
+    def _generate_attack_orders(self, priority, game_state, game_world) -> List[Dict]:
+        commands = []
+        my_attackers = self._get_my_attackers(game_world)
+        if not my_attackers:
+            return commands
+
+        enemy_bombs = self._get_enemy_bombs(game_world)
+        if enemy_bombs:
+            count = 0
+            for attacker_id, _ in my_attackers:
+                if count >= 2:
+                    break
+                bomb = enemy_bombs[0]
+                dist = math.sqrt(
+                    (self._get_attacker_pos(my_attackers, attacker_id)[0] - bomb[1]) ** 2 +
+                    (self._get_attacker_pos(my_attackers, attacker_id)[1] - bomb[2]) ** 2
+                )
+                if dist < ATTACK_RANGE + 50:
+                    commands.append(JSON_Manager.attack(bomb[0], attacker_id))
+                    count += 1
+            if commands:
+                return commands
+
+        enemy_units = game_state.get("enemy_units", [])
+        if not enemy_units:
+            return commands
+
+        engaged = []
+        for eu_id, eu_x, eu_y in enemy_units:
+            for _, unit in my_attackers:
+                if math.sqrt((unit.x - eu_x) ** 2 + (unit.y - eu_y) ** 2) < ATTACK_RANGE:
+                    engaged.append((eu_id, eu_x, eu_y))
+                    break
+
+        sorted_engaged = sorted(
+            engaged,
+            key=lambda eu: min(
+                math.sqrt((u.x - eu[1]) ** 2 + (u.y - eu[2]) ** 2)
+                for _, u in my_attackers
+            )
+        )
+
+        used_attackers = set()
+        for target in sorted_engaged:
+            best_attacker = None
+            best_dist = float('inf')
+            for attacker_id, unit in my_attackers:
+                if attacker_id in used_attackers:
+                    continue
+                dist = math.sqrt((unit.x - target[1]) ** 2 + (unit.y - target[2]) ** 2)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_attacker = attacker_id
+            if best_attacker is not None:
+                commands.append(JSON_Manager.attack(target[0], best_attacker))
+                used_attackers.add(best_attacker)
+
+        return commands
+
+    def _get_attacker_pos(self, my_attackers, attacker_id):
+        for aid, unit in my_attackers:
+            if aid == attacker_id:
+                return (unit.x, unit.y)
+        return (0, 0)
+
+    def _get_enemies_in_range(self, my_attackers, enemy_units, max_dist):
+        result = []
+        for eu_id, eu_x, eu_y in enemy_units:
+            for _, unit in my_attackers:
+                if math.sqrt((unit.x - eu_x) ** 2 + (unit.y - eu_y) ** 2) < max_dist:
+                    result.append((eu_id, eu_x, eu_y))
+                    break
+        return result
+
+    def _get_my_attackers(self, game_world) -> List[Tuple[int, any]]:
+        attackers = []
+        for unit_id, unit in game_world.units.items():
+            if unit_id in self._attacker_range and game_world.get_owner_from_id(unit_id) == self.player_id:
+                attackers.append((unit_id, unit))
+        return attackers
+
+    def _get_own_bombs(self, game_world) -> List[Tuple[int, float, float]]:
         bombs = []
         for unit_id, unit in game_world.units.items():
-            if unit_id in bomb_range:
+            if unit_id in self._own_bomb_range:
                 bombs.append((unit_id, unit.x, unit.y))
         return bombs
 
-    def _get_enemy_bombs(self, game_world):
-        bomb_range = range(13000, 14000) if self.player_id == 1 else range(12000, 13000)
+    def _get_enemy_bombs(self, game_world) -> List[Tuple[int, float, float]]:
         bombs = []
         for unit_id, unit in game_world.units.items():
-            if unit_id in bomb_range:
+            if unit_id in self._enemy_bomb_range:
                 bombs.append((unit_id, unit.x, unit.y))
         return bombs
 
-    def _get_enemy_base_id(self, game_world):
-        enemy_range = range(5000, 6000) if self.enemy_id == 2 else range(0, 1000)
-        for struct_id in game_world.structures:
-            if struct_id in enemy_range:
-                return struct_id
-        return None
+    def _get_patrol_points(self, nearest_shop_pos) -> List[Tuple[float, float]]:
+        shop = nearest_shop_pos if nearest_shop_pos else (2500.0, 2500.0)
+        my_base = self.base_positions[self.player_id]
 
-    def _create_move_command(self, unit_id, target_x, target_y):
+        mid_x = (shop[0] + my_base[0]) / 2
+        mid_y = (shop[1] + my_base[1]) / 2
+
+        forward_x = shop[0] + (shop[0] - my_base[0]) * 0.3
+        forward_y = shop[1] + (shop[1] - my_base[1]) * 0.3
+        forward_x = max(100, min(4900, forward_x))
+        forward_y = max(100, min(4900, forward_y))
+
+        points = [shop, (mid_x, mid_y)]
+
+        if self._patrol_phase == 0:
+            points.append(shop)
+        elif self._patrol_phase == 1:
+            points.append((mid_x, mid_y))
+        elif self._patrol_phase == 2:
+            points.append((forward_x, forward_y))
+        else:
+            points.append(shop)
+
+        return points
+
+    def _create_move_command(self, unit_id: int, target_x: float, target_y: float) -> Dict:
         cell_size = 50
         grid_x = max(0, min(99, int(target_x // cell_size)))
         grid_y = max(0, min(99, int(target_y // cell_size)))
         return JSON_Manager.get_moveorder(unit_id, grid_x, grid_y)
 
-    def _send_commands(self, commands):
+    def _send_commands(self, commands: List[Dict]) -> None:
         if not commands:
             return
         for cmd in commands:
@@ -200,7 +273,7 @@ class ArcadeBotAI:
             except Exception as e:
                 print(f"[ArcadeBotAI] Error sending command: {e}")
 
-    def get_stats(self):
+    def get_stats(self) -> Dict[str, Any]:
         return {
             "player_id": self.player_id,
             "difficulty": self.difficulty,
