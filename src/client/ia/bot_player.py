@@ -234,7 +234,11 @@ class BotPlayer:
         
         elif msg_type == "RESOURCES":
             payload = message.get("payload", {})
+            old_gold = self.gold
             self.gold = payload.get("new_balance", self.gold)
+            delta = self.gold - old_gold
+            sign = "+" if delta >= 0 else ""
+            print(f"[BOT-GOLD] {old_gold} → {self.gold} ({sign}{delta})")
         
         elif msg_type == "UNIT_SPAWNED":
             payload = message.get("payload", {})
