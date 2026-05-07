@@ -548,6 +548,10 @@ bool client_protocol::MessageProtocol(
         {
             outMessage.initialConnect.token = payload["match_token"].get<std::string>();
         }
+        if (payload.contains("internal_player_id") && payload["internal_player_id"].is_number_integer())
+        {
+            outMessage.initialConnect.internalPlayerId = payload["internal_player_id"].get<int>();
+        }
         
         responseToSend = BuildOkResponse();
         return true;

@@ -217,9 +217,13 @@ class GameScreen:
 
         self.screen_manager.network.disconnect()
 
-        if hasattr(self.screen_manager, "container_manager") and self.screen_manager.container_manager:
-            self.screen_manager.container_manager.stop()
-
+        try:
+            if hasattr(self.screen_manager, 'stop_local_server_container'):
+                self.screen_manager.stop_local_server_container()
+            elif hasattr(self.screen_manager, "container_manager") and self.screen_manager.container_manager:
+                self.screen_manager.container_manager.stop()
+        except Exception as e:
+            print(f"[GAME] Error cleaning up local server container: {e}")
         nuevo_texto = f"SHARP BLAZE\n{self.winner_player_id} VICTORY!"
         self.winner_box.update_text(nuevo_texto)
         
@@ -232,8 +236,13 @@ class GameScreen:
         nuevo_texto = f"GAME\nDISCONNECTED!"
         self.winner_box.update_text(nuevo_texto)
 
-        if hasattr(self.screen_manager, "container_manager") and self.screen_manager.container_manager:
-            self.screen_manager.container_manager.stop()
+        try:
+            if hasattr(self.screen_manager, 'stop_local_server_container'):
+                self.screen_manager.stop_local_server_container()
+            elif hasattr(self.screen_manager, "container_manager") and self.screen_manager.container_manager:
+                self.screen_manager.container_manager.stop()
+        except Exception as e:
+            print(f"[GAME] Error cleaning up local server container on disconnect: {e}")
 
     def handle_events(self, events, keys):
         """Processes one-time events like mouse clicks."""

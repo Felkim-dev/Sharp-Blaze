@@ -6,7 +6,7 @@ class JSON_Manager:
             "player_id": nickname,
         }
 
-    def get_initial_connect(player_id, session_id=None, match_token=None):
+    def get_initial_connect(player_id, session_id=None, match_token=None, internal_player_id=None):
 
         payload = {
             "player_id": player_id,
@@ -19,6 +19,9 @@ class JSON_Manager:
 
         if match_token is not None:
             payload["match_token"] = match_token
+
+        if internal_player_id is not None:
+            payload["internal_player_id"] = internal_player_id
 
         return {
             "type": "INITIAL_CONNECT",
