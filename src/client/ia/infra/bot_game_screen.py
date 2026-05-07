@@ -20,7 +20,7 @@ class BotGameScreen:
             self.player_id = payload.get("player_id")
             
         elif msg_type == "RESOURCES":
-            self.player_gold = payload.get("gold", self.player_gold)
+            self.player_gold = payload.get("new_balance", self.player_gold)
             
         elif msg_type == "BUY_UNIT_RESULT" and data.get("status") == "accepted":
             self.player_gold = payload.get("new_balance", self.player_gold)
