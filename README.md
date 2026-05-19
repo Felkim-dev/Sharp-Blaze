@@ -49,7 +49,7 @@ Sharp Blaze is a multiplayer RTS built as an academic integration project. Two p
 
 **Arcade** — A fast 5-minute timed match. Bombs replace collectors, kills grant gold, and a 6-step tutorial guides new players through popups. Fully functional.
 
-**Bot Match** — Play against AI at three difficulty levels. Requires Docker so the broker can spawn a server container with bot support.
+**Bot Match** — Play against AI. Requires Docker so the broker can spawn a server container with bot support.
 
 ### Units & Structures
 
