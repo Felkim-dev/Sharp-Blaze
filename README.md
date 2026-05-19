@@ -1,33 +1,16 @@
-# Sharp Blaze | Distributed RTS Simulator 🎮🛰️
+# Sharp Blaze
 
-**Sharp Blaze** is a real-time strategy (RTS) game built as a multidisciplinary integration platform covering five core Computer Science subjects. Two players compete on a shared grid world managing units and resources, with all game state synchronized through an authoritative C++ server. The system is fully containerized and uses a broker service for automatic matchmaking.
+A real-time strategy game where two players battle for base supremacy.
 
----
+![Main Menu](docs/screenshots/main-menu.png)
 
-## 📖 Project Overview
+## What is Sharp Blaze?
 
-The architecture is composed of three independent services that work together:
+Sharp Blaze is a multiplayer RTS built as an academic integration project. Two players queue through a matchmaking broker, get paired into a dedicated game server, and compete to destroy each other's base. The authoritative game logic runs in C++, the client uses Python with Pygame, and the whole system can be containerized with Docker.
 
-1. **Broker** (`src/broker`) — A Python matchmaking server (port **6000**). Clients connect here to enter the matchmaking queue. When two players are waiting, the broker automatically spawns a dedicated game-server Docker container and sends both clients the connection details.
+![Lobby with Two Players](docs/screenshots/lobby-two-players.png)
 
-2. **Game Server** (`src/server`) — An authoritative C++ server. Handles TCP (port **5555**) for game logic messages and UDP (port **5556**) for high-frequency position broadcasts. Built with CMake and packaged as a Docker image (`sharp-blaze-server:latest`).
-
-3. **Client** (`src/client`) — A Python/Pygame application (1280×720). Manages all game screens (Main → Join → Lobby → Connecting → Game), sends player input over TCP, and receives real-time position updates over UDP.
-
-### Connection Flow
-```
-Client ──TCP──▶ Broker (6000)
-                  │ match found → spawns container
-                  │
-Client ◀──TCP── Broker (server IP:TCP port)
-                  │
-Client ──TCP──▶ Game Server (5555)
-Client ──UDP──▶ Game Server (5556)
-```
-
----
-
-## 🎓 Academic Integration
+## Academic Integration
 
 | Subject | Implementation |
 |---|---|
@@ -37,9 +20,212 @@ Client ──UDP──▶ Game Server (5556)
 | **Service Administration** | Full containerization with Docker and Docker Compose. The broker manages dynamic container lifecycle via the Docker SDK. |
 | **Software Engineering** | Agile/Scrum workflow with Git, formal technical documentation in `docs/`, and modular screen/component architecture in the client. |
 
----
+## How to Play
 
-## 🛠️ Tech Stack
+### Game Flow
+
+1. **Main Menu** — Launch the client and choose your mode.
+2. **Lobby** — Enter the matchmaking queue. Wait for a second player to join.
+3. **Connecting** — The broker pairs you and spawns a game server.
+4. **Game** — Build units, gather resources, and attack.
+
+![Arcade Mode](docs/screenshots/arcade-mode.png)
+
+### Controls
+
+| Input | Action |
+|---|---|
+| Left-click | Select a unit or structure |
+| Drag | Box-select multiple units |
+| Right-click (ground) | Move selected units |
+| Right-click (enemy) | Attack target |
+| WASD | Pan the camera |
+| ESC | Pause / open menu |
+| Minimap click | Jump camera to location |
+
+### Game Modes
+
+**Normal** — Full multiplayer experience. Collectors gather gold from mines, shops let you buy units, and the matchmaking broker pairs two players. For solo testing, enable `OFFLINE_DEBUG_MODE` in `src/client/utils/config.py` to skip the broker and load a local game with pre-placed units.
+
+**Arcade** — A fast 5-minute timed match. Bombs replace collectors, kills grant gold, and a 6-step tutorial guides new players through popups. Fully functional.
+
+**Bot Match** — Play against AI at three difficulty levels. Requires Docker so the broker can spawn a server container with bot support.
+
+### Units & Structures
+
+| Name | Cost | Role |
+|---|---|---|
+| Attacker | 200g | Combat unit, shoots projectiles |
+| Collector | 100g | Gathers gold from resource mines |
+| Bomb | 1000g | Arcade-only, high damage |
+| Base | Free | Your headquarters. If it falls, you lose. |
+| Shop | Free | Buy units and collectors |
+| Resource Mine | Neutral | Gold source for collectors |
+
+### How to Win
+
+1. Destroy the enemy base.
+2. Outlast the opponent in Arcade mode (highest score when the timer expires).
+3. Force a surrender.
+
+![Victory Screen](docs/screenshots/victory.png)
+
+![Combat](docs/screenshots/combat.png)
+
+## Installation & Setup
+
+### Prerequisites
+
+- Python 3.12 or newer
+- CMake 3.20 or newer
+- C++17 compiler (GCC, Clang, or MSYS2 UCRT64 on Windows)
+- Docker (optional, for containerized setup)
+
+### Quick Start with Docker
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/Felkim-dev/Sharp-Blaze.git
+cd Sharp-Blaze
+
+# 2. Create a .env file with your server IP
+echo SERVER_IP=127.0.0.1 > .env
+
+# 3. Build and start the broker + game server image
+docker-compose up --build
+
+# 4. In a second terminal, install client dependencies and launch
+cd src/client
+pip install -r requirements.txt
+python main.py
+```
+
+You need **two client instances** to trigger matchmaking. Open a third terminal and run the same `python main.py` command again. Both clients will enter the queue and get paired.
+
+![Paused Game](docs/screenshots/paused-game.png)
+
+### Local Setup (Without Docker)
+
+**Step 1: Create the `.env` file**
+
+Create a file named `.env` in the project root:
+
+```
+SERVER_IP=127.0.0.1
+BROKER_PORT=6000
+GAME_TCP_PORT=5555
+GAME_UDP_PORT=5556
+```
+
+**Step 2: Build the game server**
+
+On Linux:
+```bash
+cd src/server
+cmake -S Makefile -B build/linux -DCMAKE_BUILD_TYPE=Release
+cmake --build build/linux -j
+./build/linux/sharp_blaze_server
+```
+
+On Windows (MSYS2 UCRT64 shell):
+```bash
+cd src/server
+cmake -S Makefile -B build/win -DCMAKE_BUILD_TYPE=Release -G "MSYS Makefiles"
+cmake --build build/win -j
+./build/win/sharp_blaze_server.exe
+```
+
+**Step 3: Start the broker in stub mode**
+
+The broker package needs an `__init__.py` file to be importable. Create it first:
+
+```bash
+touch src/broker/__init__.py
+```
+
+Then start the broker with stub matchmaking (skips Docker, returns local endpoints):
+
+```bash
+cd src/broker
+pip install -r requirements.txt
+BROKER_ALLOW_STUB=1 python -m broker.app
+```
+
+On PowerShell:
+```powershell
+cd src/broker
+pip install -r requirements.txt
+$env:BROKER_ALLOW_STUB="1"; python -m broker.app
+```
+
+**Step 4: Launch the client**
+
+```bash
+cd src/client
+pip install -r requirements.txt
+python main.py
+```
+
+Open a second terminal and run the same command to get a second player for matchmaking.
+
+### Offline Debug Mode
+
+For solo testing without networking, set `OFFLINE_DEBUG_MODE = True` in `src/client/utils/config.py`. This skips the broker and loads a local game with pre-placed units so you can test the UI and controls alone.
+
+## Running the Server
+
+### Environment Variables
+
+**Broker:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `SERVER_IP` | `127.0.0.1` | Host IP for spawned game servers |
+| `BROKER_PORT` | `6000` | Broker listening port |
+| `GAME_TCP_PORT` | `5555` | Game server TCP port |
+| `GAME_UDP_PORT` | `5556` | Game server UDP port |
+| `BROKER_ALLOW_STUB` | `0` | Set to `1` to skip Docker and use stub endpoints |
+
+**Game Server:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `SHARP_BLAZE_TCP_PORT` | `5555` | TCP listening port |
+| `SHARP_BLAZE_UDP_PORT` | `5556` | UDP broadcast port |
+| `SHARP_BLAZE_SESSION_ID` | `0` | Session identifier |
+| `SHARP_BLAZE_GAME_MODE` | `normal` | Game mode (`normal` or `arcade`) |
+
+### Startup Options
+
+| Method | Broker | Game Server | Best For |
+|---|---|---|---|
+| Docker | Full matchmaking | Auto-spawned per match | Production, LAN parties |
+| Manual + Stub | Stub mode (local endpoints) | Run by hand | Development, debugging |
+| Manual + Docker | Full matchmaking | Auto-spawned | Testing without full Docker compose |
+
+## Troubleshooting
+
+**"ModuleNotFoundError: No module named 'broker'"**
+
+The broker package is missing `__init__.py`. Create it: `touch src/broker/__init__.py`. Then restart with `python -m broker.app`.
+
+**"Port 6000 already in use"**
+
+Another process is using the broker port. Change `BROKER_PORT` in your `.env` file, or stop the existing process with `netstat -ano | findstr :6000` (Windows) or `lsof -i :6000` (Linux).
+
+**"Stuck in matchmaking queue"**
+
+You need a second client instance to trigger a match. Open another terminal and run `python main.py` again. Both clients must be in the queue at the same time.
+
+**Docker daemon not running**
+
+Start Docker Desktop on Windows or run `sudo systemctl start docker` on Linux. Verify with `docker ps`.
+
+**CMake not found**
+
+Install CMake 3.20 or newer. On Ubuntu: `sudo apt install cmake`. On Windows with MSYS2: `pacman -S mingw-w64-ucrt-x86_64-cmake`.
+
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -49,122 +235,7 @@ Client ──UDP──▶ Game Server (5556)
 | Infrastructure | Docker, Docker Compose |
 | Networking | TCP (game logic) + UDP (position updates) |
 
----
-
-## 🚀 Quick Start — Docker (Recommended)
-
-> **Requirements:** Docker Engine with access to the Docker socket.
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Felkim-dev/Sharp-Blaze.git
-cd Sharp-Blaze
-
-# 2. Build the game-server image and start the broker
-docker-compose up --build
-```
-
-The broker will be listening on port **6000**. Start the client separately on any machine (see below).
-
----
-
-## ▶️ Running the Client
-
-> **Requirements:** Python 3.12+
-
-```bash
-cd src/client
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the client
-python main.py
-```
-
-The client connects to the broker at `127.0.0.1:6000` by default. To connect to a remote broker, edit `src/client/utils/config.py`:
-
-```python
-BROKER_IP   = "127.0.0.1"   # Change to the broker's IP address
-BROKER_PORT = 6000
-```
-
----
-
-## 🖥️ Running the Server Manually (without Docker)
-
-### Broker
-
-> **Requirements:** Python 3.12+, Docker daemon running
-
-```bash
-cd src/broker
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start the broker
-python app.py
-```
-
-### Game Server
-
-> **Requirements:** CMake 3.x, GCC/Clang with C++17 support
-
-```bash
-cd src/server
-
-# Configure and build
-cmake -S Makefile -B build/linux -DCMAKE_BUILD_TYPE=Release
-cmake --build build/linux -j
-
-# Run the server
-./build/linux/sharp_blaze_server
-```
-
-The server reads its configuration from environment variables:
-
-| Variable | Default | Description |
-|---|---|---|
-| `SHARP_BLAZE_TCP_PORT` | `5555` | TCP listening port |
-| `SHARP_BLAZE_SESSION_ID` | `0` | Session ID for dedicated instances |
-| `SHARP_BLAZE_SESSION_TOKEN` | — | Auth token issued by the broker |
-
----
-
-## 📁 Project Structure
-
-```
-Sharp-Blaze/
-├── docker-compose.yml          # Starts the broker; builds game-server image
-├── src/
-│   ├── broker/                 # Python matchmaking service (port 6000)
-│   │   ├── app.py
-│   │   └── Dockerfile
-│   ├── server/                 # C++ authoritative game server (TCP 5555 / UDP 5556)
-│   │   ├── main.cpp
-│   │   ├── network/            # TCP session management
-│   │   ├── transport/          # UDP dispatcher
-│   │   ├── infrastructure/     # Spatial grid
-│   │   ├── include/            # Header files
-│   │   └── Dockerfile
-│   ├── client/                 # Python/Pygame client
-│   │   ├── main.py
-│   │   ├── ui/                 # Screens: Main, Join, Lobby, Connecting, Game
-│   │   ├── network/            # TCP + UDP network manager
-│   │   ├── engine/             # World grid and camera
-│   │   ├── entities/           # Units, structures, projectiles
-│   │   ├── ia/                 # AI module (A* / FSM)
-│   │   ├── optimization/       # Simplex decision engine
-│   │   └── utils/              # Config, JSON helpers
-│   └── config/
-│       └── combat_stats.json   # Shared unit stats
-└── docs/                       # Architecture diagrams, sprint records, requirements
-```
-
----
-
-## 📅 Development Roadmap (12 Weeks)
+## Development Roadmap
 
 | Sprint | Focus |
 |---|---|
@@ -175,12 +246,8 @@ Sharp-Blaze/
 | S9–S10 | Strategic Optimization: Simplex model for bot decisions |
 | S11–S12 | QA & Polish: load testing, bug fixes, final documentation |
 
----
-
-## 👥 Contributors
+## Contributors
 
 - **Steve Tene** — Lead Developer A · Backend, Networking & Infrastructure
 - **Felipe Quilumbango** — Lead Developer B · Frontend
 - **Kevin Sánchez** — Lead Developer C · AI Implementation
-
----
